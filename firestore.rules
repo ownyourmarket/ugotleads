@@ -1,0 +1,505 @@
+rules_version = '2';
+
+// LeadStack — agency / sub-account multi-tenant rules.
+//
+// Roles live in two places:
+//   - Custom claims (set by /api/auth/signup and /api/auth/refresh-claims)
+//     carry coarse identity: `role`, `status`, `agencyId`, `agencyRole`.
+//   - Per-sub-account memberships live in
+//     subAccounts/{saId}/subAccountMembers/{uid} — the JWT can't fit a
+//     variable-length list of memberships, so rules reach for them via
+//     `get()` once per request.
+//
+// Cost model:
+//   - Agency-owner shortcut: 0 `get()`s — claim comparison only.
+//   - Sub-account member: 1 `get()` for the membership doc.
+//   - Nested paths (contacts/{id}/notes, forms/{id}/submissions): 1 extra
+//     `get()` for the parent's tenancy fields. These are admin/user-action
+//     paths, not tight loops.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---------- helpers ----------
+    function isAuthed() {
+      return request.auth != null;
+    }
+    function isActive() {
+      return isAuthed() && request.auth.token.status == "active";
+    }
+    function inAgency(agencyId) {
+      return isActive() && request.auth.token.agencyId == agencyId;
+    }
+    function isAgencyOwner(agencyId) {
+      return inAgency(agencyId) && request.auth.token.agencyRole == "owner";
+    }
+
+    function getSubMember(saId) {
+      return get(
+        /databases/$(database)/documents/subAccounts/$(saId)/subAccountMembers/$(request.auth.uid)
+      ).data;
+    }
+    function isSubMemberActive(saId) {
+      return isActive() && getSubMember(saId).status == "active";
+    }
+    function isSubAdmin(saId) {
+      return isSubMemberActive(saId) && getSubMember(saId).role == "admin";
+    }
+
+    function canAccessSub(saId, agencyId) {
+      return isAgencyOwner(agencyId) || isSubMemberActive(saId);
+    }
+    function canAdminSub(saId, agencyId) {
+      return isAgencyOwner(agencyId) || isSubAdmin(saId);
+    }
+
+    function tenantFieldsLockedOnUpdate() {
+      return request.resource.data.subAccountId == resource.data.subAccountId
+        && request.resource.data.agencyId == resource.data.agencyId;
+    }
+
+    // ---------- bootstrap config ----------
+    // /appConfig/foundersCohort — public marketing counter read by the
+    // unauthenticated landing page. Server-only writes (Firebase console
+    // edits use the Admin SDK so they bypass these rules).
+    match /appConfig/foundersCohort {
+      allow read: if true;
+      allow write: if false;
+    }
+    // /appConfig/landingMetrics — public pageView + ctaClick counter read
+    // by the LeadStack landing footer. Incremented by /api/landing/metrics
+    // via the Admin SDK (bypasses these rules); clients only read.
+    match /appConfig/landingMetrics {
+      allow read: if true;
+      allow write: if false;
+    }
+    // /appConfig/main — singleton written by /api/auth/signup once on the
+    // first signup. Active members read it to know which agency was minted.
+    match /appConfig/{docId} {
+      allow read: if isActive();
+      allow write: if false;
+    }
+
+    // ---------- system / telemetry ----------
+    // system/heartbeat — server-only. Stores the deployment's stable
+    // instanceId for gitpage telemetry. Never exposed to clients.
+    // system/gitpageStatus — server-written cache of gitpage's response
+    // to the heartbeat. Active members can read so the website-builder
+    // UI can render the "subscribe to gitpage agency" CTA when needed.
+    match /system/{docId} {
+      allow read: if docId == "gitpageStatus" && isActive();
+      allow write: if false;
+    }
+
+    // ---------- agencies ----------
+    match /agencies/{agencyId} {
+      // Anyone in the agency can read the doc (owner uses it for billing,
+      // members for the brand strip in the header).
+      allow read: if inAgency(agencyId);
+      // Mutations are server-only via the Admin SDK (Stripe webhook,
+      // /api/agency/* routes).
+      allow write: if false;
+
+      match /agencyMembers/{uid} {
+        // Read peers' membership rows so /agency/members can render.
+        allow read: if inAgency(agencyId);
+        allow write: if false;
+      }
+    }
+
+    // ---------- sub-accounts ----------
+    match /subAccounts/{subAccountId} {
+      // Read: agency owner (claim) OR active sub-account member (one get()).
+      allow read: if
+        isAgencyOwner(resource.data.agencyId) ||
+        isSubMemberActive(subAccountId);
+      // Mutations are server-only (creation, archive, settings).
+      allow write: if false;
+
+      match /subAccountMembers/{uid} {
+        // List members: agency owner of the parent agency, OR a sub-account
+        // admin. We have to read the parent sub-account doc for the agency
+        // owner check because rules can't see the path's parent agency
+        // directly.
+        allow read: if
+          isAgencyOwner(
+            get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+          ) ||
+          isSubAdmin(subAccountId);
+        allow write: if false;
+      }
+
+      // Singleton website doc (gitpage.site integration). One per sub-account.
+      // Read by any active member; writes happen server-side only via the
+      // /api/sub-accounts/[id]/website/* routes (Admin SDK bypasses rules).
+      match /website/{docId} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+      }
+
+      // AI Agents — shared profile + per-channel config docs. Profile
+      // lives at aiAgent/profile; each channel (sms, voice, etc.) is
+      // aiAgent/{channelId}. Sub-account members can read so the
+      // Overview / channel pages hydrate; writes go through
+      // /api/sub-accounts/[id]/ai-agent/* routes via the Admin SDK so
+      // the server can validate + sanitise + enforce "no enable without
+      // a persona" before persisting.
+      match /aiAgent/{docId} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+      }
+
+      // Legacy AI replies config — pre-refactor. New configs go to
+      // aiAgent/* above; this rule stays so the lazy migration helper can
+      // still read the old doc on the next webhook hit. Safe to remove
+      // after all sub-accounts have been migrated.
+      match /aiConfig/{docId} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+      }
+
+      // Web Chat sessions + messages. Created and mutated by the public
+      // /api/web-chat/* routes via the Admin SDK (origin-validated, rate-
+      // limited). Sub-account members can READ both so the operator
+      // console can render threads; all client writes are blocked.
+      match /webChatSessions/{sessionId} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+        match /messages/{messageId} {
+          allow read: if canAccessSub(
+            subAccountId,
+            get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+          );
+          allow write: if false;
+        }
+      }
+    }
+
+    // ---------- per-user denormalized membership index ----------
+    // /userMemberships/{uid}/subAccounts/{subAccountId}
+    // /userMemberships/{uid}/agencies/{agencyId}
+    // The server writes these alongside the canonical membership rows so the
+    // sub-account switcher can do a single self-only listen.
+    match /userMemberships/{uid} {
+      allow read: if isAuthed() && request.auth.uid == uid;
+      allow write: if false;
+      match /{document=**} {
+        allow read: if isAuthed() && request.auth.uid == uid;
+        allow write: if false;
+      }
+    }
+
+    // ---------- invites ----------
+    // Server-only. Read access for the agency owner / sub-account admin who
+    // issued the invite, so the team-management UI can list pending invites.
+    // (Acceptance is server-side via /api/auth/signup using the Admin SDK.)
+    match /invites/{inviteId} {
+      allow read: if
+        isAgencyOwner(resource.data.agencyId) ||
+        (
+          resource.data.subAccountId != null &&
+          isSubAdmin(resource.data.subAccountId)
+        );
+      allow write: if false;
+    }
+
+    // ---------- users ----------
+    // Slim profile doc. Self-read + self-update (display name, photo URL).
+    // Role/agency fields are server-only.
+    match /users/{userId} {
+      allow read: if isAuthed() && request.auth.uid == userId;
+      allow update: if isAuthed() && request.auth.uid == userId;
+      allow create, delete: if false;
+    }
+
+    // ---------- mail queue ----------
+    // Reserved for the Firebase Trigger-Email extension. Server-only.
+    match /mail/{mailId} {
+      allow read, write: if false;
+    }
+
+    // ---------- purchases ----------
+    // Anonymous one-time purchases (founders cohort). Written by the
+    // Stripe webhook handler via the Admin SDK; never read or written by
+    // any client. Doc id = Stripe checkout session id (acts as natural
+    // dedup key for retried webhook deliveries).
+    match /purchases/{sessionId} {
+      allow read, write: if false;
+    }
+
+    // ---------- affiliate program ----------
+    // Active only on deployments where LANDING_VARIANT === "leadstack"
+    // (i.e. the leadstack.dev demo). On buyer clones (LANDING_VARIANT
+    // === "custom") nothing ever writes to these collections — the rules
+    // below are inert. Both collections are server-only; the affiliate
+    // dashboard reads happen via Admin SDK behind a magic-link session.
+    match /affiliates/{affiliateId} {
+      allow read, write: if false;
+    }
+    match /referrals/{referralId} {
+      allow read, write: if false;
+    }
+    match /clicks/{clickId} {
+      allow read, write: if false;
+    }
+
+    // ---------- tenant data ----------
+    // Every doc carries `agencyId` (for the owner shortcut) and
+    // `subAccountId` (the primary tenancy key, used in client where()
+    // queries). Updates must not change either.
+
+    match /contacts/{contactId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAccessSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+
+      match /notes/{noteId} {
+        allow read, write: if canAccessSub(
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+        );
+      }
+      match /activities/{activityId} {
+        allow read, write: if canAccessSub(
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+        );
+      }
+      // SMS chat thread — populated server-side by the inbound webhook + the
+      // sms/send route when the sub-account has dedicated Twilio enabled.
+      // Reads are member-scoped; creates + deletes are server-only so a
+      // malicious client can't spoof inbound messages. The mark-as-read
+      // path is the one client-side mutation we allow: an update is only
+      // permitted when the sole diff is the `readAt` field.
+      match /messages/{messageId} {
+        allow read: if canAccessSub(
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+        );
+        allow update: if canAccessSub(
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.subAccountId,
+          get(/databases/$(database)/documents/contacts/$(contactId)).data.agencyId
+        ) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['readAt']);
+        allow create, delete: if false;
+      }
+    }
+
+    match /deals/{dealId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAccessSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+    }
+
+    match /tasks/{taskId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAccessSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+    }
+
+    match /events/{eventId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAccessSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+    }
+
+    match /forms/{formId} {
+      // Forms are configuration; admin-only to mutate (they wire up public
+      // pages). Reads are visible to every active member of the sub-account
+      // because the dashboard pages list them.
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAdminSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+
+      match /submissions/{submissionId} {
+        // Reads visible to active members; writes happen server-side via
+        // the Admin SDK (the public form submit route).
+        allow read: if canAccessSub(
+          get(/databases/$(database)/documents/forms/$(formId)).data.subAccountId,
+          get(/databases/$(database)/documents/forms/$(formId)).data.agencyId
+        );
+        allow write: if false;
+      }
+    }
+
+    // ---------- automations ----------
+    // Configurations (one per attach point). Sub-account admins manage them;
+    // every active member can read so dashboards can show "this form is
+    // automated".
+    match /automations/{automationId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAdminSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+    }
+
+    // Reusable email + SMS templates. Same access pattern as automations.
+    match /message_templates/{templateId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAdminSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      ) && tenantFieldsLockedOnUpdate();
+      allow delete: if canAdminSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+    }
+
+    // Per-contact execution rows — created and mutated server-side only by
+    // the trigger helper and the QStash step executor (Admin SDK bypasses
+    // these rules). Active members can read for debugging / activity drill-
+    // down.
+    match /automation_executions/{executionId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow write: if false;
+    }
+
+    // ---------- broadcasts (bulk email) ----------
+    // Top-level send batches. Created + mutated server-side only by the
+    // /api/broadcasts/email/* routes (Admin SDK bypasses these rules).
+    // Active members of the sub-account can read so the broadcasts list +
+    // detail pages can render.
+    match /broadcasts/{broadcastId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow write: if false;
+
+      // Per-recipient send rows. Reads inherit the parent's tenancy via a
+      // single get(); writes are server-only because the QStash callback
+      // is the only legitimate writer.
+      match /sends/{contactId} {
+        allow read: if canAccessSub(
+          get(/databases/$(database)/documents/broadcasts/$(broadcastId)).data.subAccountId,
+          get(/databases/$(database)/documents/broadcasts/$(broadcastId)).data.agencyId
+        );
+        allow write: if false;
+      }
+    }
+
+    // Usage counters — keyed by sub-account, then user.
+    // Reads: the user reads their own; agency owners can audit any user in
+    // any sub-account they own.
+    match /usage/{subAccountId}/users/{uid} {
+      allow read: if isAuthed() && (
+        request.auth.uid == uid ||
+        isAgencyOwner(
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        )
+      );
+      allow write: if false;
+    }
+    match /usage/{subAccountId}/totals/{docId} {
+      allow read: if canAccessSub(
+        subAccountId,
+        get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+      );
+      allow write: if false;
+    }
+
+    // Default: deny everything else.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
