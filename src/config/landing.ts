@@ -75,23 +75,23 @@ export interface ResolvedBrand {
  */
 export const CUSTOM_BRAND: CustomBrand = {
   /** Displayed in navbar, hero, footer copyright, page title — everywhere. */
-  name: "YourCRM",
+  name: "UGotLeads",
 
   /** One-line positioning, surfaced in hero subtitle + meta description. */
-  tagline: "All-in-one CRM for modern teams",
+  tagline: "The done-for-you growth CRM for local business operators",
 
   /**
    * Short (~140 char) description used under the hero headline. Should
    * read like a tweet — what the product does, for whom.
    */
   shortDescription:
-    "Contacts, pipeline, automations, and a website builder — all in one branded workspace your team actually wants to use.",
+    "Lead capture, pipeline, AI follow-up, and your own branded marketing sites — built and run for you, so you focus on closing deals.",
 
   /** Used on CTA buttons + the FAQ "talk to us" line + footer. */
-  supportEmail: "hello@yourbrand.com",
+  supportEmail: "myusalocal@gmail.com",
 
   /** Used in footer, og:url, canonical. No https://, no trailing slash. */
-  primaryDomain: "yourbrand.com",
+  primaryDomain: "ugotleads.io",
 
   /**
    * Pricing tiers. HIDDEN BY DEFAULT — the custom landing is wired for
@@ -117,51 +117,50 @@ export const CUSTOM_BRAND: CustomBrand = {
    */
   pricing: {
     starter: {
-      name: "Starter",
-      priceMonthly: 0,
-      priceAnnual: 0,
-      blurb: "For solo operators kicking the tyres.",
+      name: "DFY Local",
+      priceMonthly: 997,
+      priceAnnual: 997,
+      blurb: "Done-for-you local marketing system. One-time, 7-day build.",
       features: [
-        "Up to 100 contacts",
-        "1 sub-account",
-        "Pipeline + tasks + calendar",
-        "Forms with public hosted page",
-        "Community support",
+        "Optimized directory listing + SEO",
+        "Feature in the MyUSA Local newsletter",
+        "30 days of AI-generated social content",
+        "Automated lead follow-up sequences",
+        "Monthly performance report (3 months)",
       ],
-      cta: "Get started free",
+      cta: "Claim your spot",
       highlighted: false,
     },
     pro: {
-      name: "Pro",
-      priceMonthly: 97,
-      priceAnnual: 77,
-      blurb: "For growing teams with serious volume.",
+      name: "DFY + CRM",
+      priceMonthly: 197,
+      priceAnnual: 197,
+      blurb: "DFY Local plus your own branded CRM workspace.",
       features: [
-        "Unlimited contacts",
-        "Unlimited sub-accounts",
-        "Pipeline + Kanban + automations",
-        "Email + SMS shared sender",
-        "Built-in website builder",
-        "Up to 5 team seats",
-        "Priority email support",
+        "Everything in DFY Local",
+        "Your own UGotLeads sub-account",
+        "Unlimited contacts + pipeline",
+        "Web Chat + AI auto-reply on your site",
+        "Built-in marketing site builder",
+        "Ongoing $197/mo after first month",
       ],
-      cta: "Start 14-day trial",
+      cta: "Talk to us",
       highlighted: true,
     },
     scale: {
-      name: "Scale",
-      priceMonthly: 297,
-      priceAnnual: 237,
-      blurb: "For teams running multi-account workspaces.",
+      name: "Operator Partner",
+      priceMonthly: 497,
+      priceAnnual: 497,
+      blurb: "For independent operators running their own local market.",
       features: [
-        "Everything in Pro",
-        "Unlimited team seats",
-        "Advanced automations",
-        "Audit logs + SSO",
-        "Dedicated onboarding",
-        "SLA-backed support",
+        "Everything in DFY + CRM",
+        "Multi-client management",
+        "MyUSA territory partner access",
+        "Performance-based affiliate commissions",
+        "Quarterly strategy sessions",
+        "Priority support",
       ],
-      cta: "Talk to sales",
+      cta: "Talk to us",
       highlighted: false,
     },
   },
