@@ -6,6 +6,11 @@ import {
   type ConfiguredChannelId,
 } from "@/lib/comms/ai/agent";
 import { aiIsConfigured, callAi } from "@/lib/comms/ai/openrouter";
+import {
+  resolveAiCallContext,
+  CapExceededError,
+  ByokKeyMissingError,
+} from "@/lib/comms/ai/provider-resolver";
 import { buildSystemPrompt } from "@/lib/comms/ai/prompt";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { DEFAULT_AI_CHANNEL_CONFIG } from "@/types/ai";
@@ -102,20 +107,43 @@ export async function POST(
   });
 
   try {
+    const aiCtx = await resolveAiCallContext(id);
     const completion = await callAi({
       model: channel?.modelOverride ?? undefined,
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: message },
       ],
+      apiKey: aiCtx.apiKey,
     });
+    void aiCtx.recordUsage(completion.totalTokens);
     return NextResponse.json({
       ok: true,
       reply: completion.text,
       model: completion.model,
       tokens: completion.totalTokens,
+      mode: aiCtx.mode,
     });
   } catch (err) {
+    if (err instanceof CapExceededError) {
+      return NextResponse.json(
+        {
+          error: "cap_exceeded",
+          message: `Monthly token cap reached (${err.usedTokens.toLocaleString()}/${err.capTokens.toLocaleString()}). Upgrade tier or switch to BYOK in Settings → AI Provider.`,
+          resetsAt: err.resetsAt.toISOString(),
+        },
+        { status: 402 },
+      );
+    }
+    if (err instanceof ByokKeyMissingError) {
+      return NextResponse.json(
+        {
+          error: "byok_missing",
+          message: "BYOK mode is on but no OpenRouter key is configured. Add one in Settings → AI Provider.",
+        },
+        { status: 400 },
+      );
+    }
     const msg = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 500 });
   }

@@ -5,6 +5,11 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { sendSmsForSubAccount } from "@/lib/comms/twilio";
 import { callAi, type AiChatMessage } from "@/lib/comms/ai/openrouter";
 import {
+  resolveAiCallContext,
+  CapExceededError,
+  ByokKeyMissingError,
+} from "@/lib/comms/ai/provider-resolver";
+import {
   incrementChannelTokens,
   type ConfiguredChannelId,
 } from "@/lib/comms/ai/agent";
@@ -309,11 +314,30 @@ export async function maybeRespondWithAi(
       ...history,
       { role: "user", content: incomingMessage },
     ];
+    const aiCtx = await resolveAiCallContext(subAccountId);
     completion = await callAi({
       model: eff.modelOverride ?? undefined,
       messages,
+      apiKey: aiCtx.apiKey,
     });
+    void aiCtx.recordUsage(completion.totalTokens);
   } catch (err) {
+    if (err instanceof CapExceededError || err instanceof ByokKeyMissingError) {
+      const reason = err.kind;
+      console.warn(`[ai/respond] AI provider check failed (${reason}) for sa=${subAccountId}`);
+      await logActivity({
+        contactId: contact.id,
+        agencyId: subAccount.agencyId,
+        subAccountId,
+        type: "ai_skipped",
+        content:
+          reason === "cap_exceeded"
+            ? "AI reply skipped — monthly token cap reached. Upgrade tier or add a BYOK key."
+            : "AI reply skipped — BYOK mode is on but no OpenRouter key is set.",
+        meta: { reason },
+      });
+      return { kind: "skipped", reason: "llm_failed" };
+    }
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error(`[ai/respond] LLM call failed for sa=${subAccountId}: ${msg}`);
     await logActivity({

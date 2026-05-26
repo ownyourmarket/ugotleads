@@ -4,6 +4,11 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { callAi, type AiChatMessage } from "@/lib/comms/ai/openrouter";
 import {
+  resolveAiCallContext,
+  CapExceededError,
+  ByokKeyMissingError,
+} from "@/lib/comms/ai/provider-resolver";
+import {
   incrementChannelTokens,
   resolveAgent,
 } from "@/lib/comms/ai/agent";
@@ -275,11 +280,33 @@ export async function respondToWebChat(
 
   let completion;
   try {
+    const aiCtx = await resolveAiCallContext(input.subAccountId);
     completion = await callAi({
       model: eff.modelOverride ?? undefined,
       messages,
+      apiKey: aiCtx.apiKey,
     });
+    void aiCtx.recordUsage(completion.totalTokens);
   } catch (err) {
+    if (err instanceof CapExceededError) {
+      console.warn(
+        `[web-chat/respond] cap exceeded sa=${input.subAccountId} (${err.usedTokens}/${err.capTokens})`,
+      );
+      return finalize(input, session, {
+        kind: "skipped",
+        reason: "llm_failed",
+        fallbackReply:
+          "Thanks for reaching out — I'm offline at the moment. Someone from our team will get back to you shortly.",
+      });
+    }
+    if (err instanceof ByokKeyMissingError) {
+      console.warn(`[web-chat/respond] BYOK key missing sa=${input.subAccountId}`);
+      return finalize(input, session, {
+        kind: "skipped",
+        reason: "llm_failed",
+        fallbackReply: FALLBACK_REPLY,
+      });
+    }
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error(
       `[web-chat/respond] LLM call failed sa=${input.subAccountId}: ${msg}`,

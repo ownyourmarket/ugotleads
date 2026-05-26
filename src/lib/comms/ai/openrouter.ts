@@ -63,6 +63,7 @@ export async function callAi({
   messages,
   maxTokens = 400,
   temperature = 0.5,
+  apiKey: apiKeyOverride,
 }: {
   model?: string;
   messages: AiChatMessage[];
@@ -70,11 +71,18 @@ export async function callAi({
    *  segments. SMS replies should be short anyway. */
   maxTokens?: number;
   temperature?: number;
+  /**
+   * Optional per-call API key override. Provided by the AI Provider
+   * Resolver so each sub-account uses either the hosted env key OR the
+   * operator's BYOK key. When omitted, falls back to OPENROUTER_API_KEY
+   * env (for legacy callers + health checks).
+   */
+  apiKey?: string;
 }): Promise<AiCompletionResult> {
-  const apiKey = process.env.OPENROUTER_API_KEY;
+  const apiKey = apiKeyOverride ?? process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "OPENROUTER_API_KEY is not set — AI replies require it. Get a key at openrouter.ai.",
+      "OpenRouter API key missing — pass one to callAi() or set OPENROUTER_API_KEY.",
     );
   }
 

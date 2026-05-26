@@ -92,6 +92,52 @@ export interface SubAccountDoc {
    * as a slim header strip and edited from Settings.
    */
   accountContact: AccountContact | null;
+  /**
+   * AI provider configuration — chooses between the agency's hosted
+   * OpenRouter key (default, subject to monthly token cap baked into tier
+   * price) and the operator's own OpenRouter key (BYOK, no cap).
+   * Null on legacy docs; the resolver treats null as `{ mode: "hosted" }`.
+   * See docs/ai-provider-billing-spec.md for full design.
+   */
+  aiProvider: AiProviderConfig | null;
+  /**
+   * Rolling token usage for the current billing period. The
+   * /api/cron/ai-usage-reset job snapshots + zeroes this every ~30 days.
+   * Null on legacy docs; the resolver lazy-initialises on first read.
+   */
+  aiUsage: AiUsageState | null;
+}
+
+export type AiProviderMode = "hosted" | "byok";
+
+export interface AiProviderConfig {
+  mode: AiProviderMode;
+  /**
+   * Operator-provided OpenRouter key when mode === "byok". v1 stores
+   * plaintext — encryption (KMS or Vercel symmetric) is a follow-up.
+   * NEVER returned to clients in API responses; UI shows `byokKeyLast4`.
+   */
+  byokKey: string | null;
+  /** Last 4 chars of the BYOK key for UI display. Safe to expose. */
+  byokKeyLast4: string | null;
+  /** Last successful validation against OpenRouter. */
+  byokKeyValidatedAt: Date | null;
+}
+
+export interface AiUsageState {
+  /** Tokens used in the current billing period. Reset monthly by cron. */
+  currentPeriodTokens: number;
+  /** Start of the current rolling period. */
+  currentPeriodStart: Date;
+  /**
+   * Cached cap for the current tier. Refreshed by the monthly reset cron
+   * + on tier upgrade via Stripe webhook. Hosted mode only.
+   */
+  monthlyCapTokens: number;
+  /** Lifetime tokens across all periods. Never reset. */
+  lifetimeTokens: number;
+  /** Last time we sent the "near cap" / "cap reached" warning email. */
+  lastWarningAt: Date | null;
 }
 
 export interface AccountContact {
