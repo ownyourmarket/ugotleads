@@ -14,6 +14,7 @@ const PUBLIC_PATHS = [
   "/api/auth/signup",
   "/api/automations/step",
   "/api/broadcasts/email/step",
+  "/api/social-content/generate-step",
   "/api/checkout",
   "/api/cron/gitpage-heartbeat",
   "/api/landing/metrics",
