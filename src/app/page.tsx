@@ -46,7 +46,7 @@ export default async function HomePage() {
         <main className="flex-1">
           <CustomHero brand={brand} />
           <CustomFeatures />
-          <CustomPricing brand={brand} />
+          <CustomPricing />
           <CustomFAQ brand={brand} />
           <CustomCTA brand={brand} />
         </main>
