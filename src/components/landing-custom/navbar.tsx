@@ -29,6 +29,12 @@ export function Navbar({ brand }: { brand: ResolvedBrand }) {
         Features
       </a>
       <a
+        href="#pricing"
+        className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+      >
+        Pricing
+      </a>
+      <a
         href="#faq"
         className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
       >
@@ -102,6 +108,12 @@ export function Navbar({ brand }: { brand: ResolvedBrand }) {
                 className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
               >
                 Features
+              </SheetClose>
+              <SheetClose
+                render={<a href="#pricing" />}
+                className="text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+              >
+                Pricing
               </SheetClose>
               <SheetClose
                 render={<a href="#faq" />}

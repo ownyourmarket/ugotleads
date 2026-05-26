@@ -19,6 +19,7 @@ import { ExitIntentModal } from "@/components/landing/exit-intent-modal";
 import { Navbar as CustomNavbar } from "@/components/landing-custom/navbar";
 import { Hero as CustomHero } from "@/components/landing-custom/hero";
 import { Features as CustomFeatures } from "@/components/landing-custom/features";
+import { Pricing as CustomPricing } from "@/components/landing-custom/pricing";
 import { FAQ as CustomFAQ } from "@/components/landing-custom/faq";
 import { CTA as CustomCTA } from "@/components/landing-custom/cta";
 import { Footer as CustomFooter } from "@/components/landing-custom/footer";
@@ -45,6 +46,7 @@ export default async function HomePage() {
         <main className="flex-1">
           <CustomHero brand={brand} />
           <CustomFeatures />
+          <CustomPricing brand={brand} />
           <CustomFAQ brand={brand} />
           <CustomCTA brand={brand} />
         </main>
