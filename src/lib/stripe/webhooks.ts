@@ -136,8 +136,9 @@ export async function handleSubscriptionUpdated(
   subscription: Stripe.Subscription,
 ) {
   const customerId = subscription.customer as string;
+  const db = getAdminDb();
 
-  const usersSnapshot = await getAdminDb()
+  const usersSnapshot = await db
     .collection("users")
     .where("stripeCustomerId", "==", customerId)
     .limit(1)
@@ -149,10 +150,67 @@ export async function handleSubscriptionUpdated(
   }
 
   const userDoc = usersSnapshot.docs[0];
+  const newPriceId = subscription.items?.data?.[0]?.price?.id ?? null;
   await userDoc.ref.update({
     subscriptionStatus: subscription.status as SubscriptionStatus,
+    subscriptionPriceId: newPriceId,
     updatedAt: new Date(),
   });
+
+  // Refresh AI usage cap on tier change. Best-effort — never throws.
+  // Maps Stripe price id -> token cap (matches docs/ai-provider-billing-spec.md).
+  // Today's env model has only STRIPE_PRO_PRICE_ID ($197 Local Pro) +
+  // STRIPE_FOUNDERS_PRICE_ID. As we ship the $297 + $497 SKUs we'll add
+  // STRIPE_MULTI_SERVICE_PRICE_ID and STRIPE_TERRITORY_PARTNER_PRICE_ID.
+  const priceCapMap: Record<string, number> = {};
+  if (process.env.STRIPE_PRO_PRICE_ID) priceCapMap[process.env.STRIPE_PRO_PRICE_ID] = 1_000_000;
+  if (process.env.STRIPE_MULTI_SERVICE_PRICE_ID)
+    priceCapMap[process.env.STRIPE_MULTI_SERVICE_PRICE_ID] = 5_000_000;
+  if (process.env.STRIPE_TERRITORY_PARTNER_PRICE_ID)
+    priceCapMap[process.env.STRIPE_TERRITORY_PARTNER_PRICE_ID] = 15_000_000;
+
+  const newCap = newPriceId ? priceCapMap[newPriceId] : undefined;
+  if (newCap == null) {
+    if (newPriceId)
+      console.warn(
+        `[stripe/sub-updated] price ${newPriceId} not in cap map — skipping cap refresh`,
+      );
+    return;
+  }
+
+  const userData = userDoc.data();
+  const agencyId = userData?.primaryAgencyId;
+  if (!agencyId) {
+    console.warn(
+      `[stripe/sub-updated] user ${userDoc.id} has no primaryAgencyId — can't refresh sub-account caps`,
+    );
+    return;
+  }
+
+  try {
+    const subAccountsSnap = await db
+      .collection("subAccounts")
+      .where("agencyId", "==", agencyId)
+      .get();
+    const writes: Promise<unknown>[] = [];
+    for (const saDoc of subAccountsSnap.docs) {
+      writes.push(
+        saDoc.ref.set(
+          { aiUsage: { monthlyCapTokens: newCap } },
+          { merge: true },
+        ),
+      );
+    }
+    await Promise.all(writes);
+    console.info(
+      `[stripe/sub-updated] refreshed ${subAccountsSnap.size} sub-accounts to cap=${newCap} for agency=${agencyId}`,
+    );
+  } catch (err) {
+    console.error(
+      `[stripe/sub-updated] cap refresh failed for agency=${agencyId}:`,
+      err,
+    );
+  }
 }
 
 export async function handleSubscriptionDeleted(

@@ -8,6 +8,10 @@ import {
   TIER_CAPS,
 } from "@/lib/comms/ai/provider-resolver";
 import { callAi } from "@/lib/comms/ai/openrouter";
+import {
+  encryptByokKey,
+  byokEncryptionConfigured,
+} from "@/lib/crypto/byok";
 import type { AiProviderMode } from "@/types/tenancy";
 
 /**
@@ -103,6 +107,16 @@ export async function PATCH(
         { status: 400 },
       );
     }
+    if (!byokEncryptionConfigured()) {
+      return NextResponse.json(
+        {
+          error: "encryption_not_configured",
+          message:
+            "BYOK_ENCRYPTION_KEY isn't set on this deployment. Refusing to store an API key without encryption-at-rest. Set the env var and redeploy first.",
+        },
+        { status: 503 },
+      );
+    }
     if (body.validate) {
       try {
         await callAi({
@@ -126,10 +140,12 @@ export async function PATCH(
   const db = getAdminDb();
   const ref = db.doc(`subAccounts/${id}`);
 
+  const storedKey =
+    targetMode === "byok" && newKey ? encryptByokKey(newKey) : null;
   const updatePayload: Record<string, unknown> = {
     aiProvider: {
       mode: targetMode,
-      byokKey: targetMode === "byok" ? newKey : null,
+      byokKey: storedKey,
       byokKeyLast4: targetMode === "byok" && newKey ? newKey.slice(-4) : null,
       byokKeyValidatedAt: targetMode === "byok" && body.validate ? Timestamp.now() : null,
     },

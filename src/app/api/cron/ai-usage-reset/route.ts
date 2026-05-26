@@ -133,6 +133,7 @@ export async function POST(request: Request) {
           // monthlyCapTokens intentionally left as-is (tier-refresh is a
           // separate concern handled by the Stripe webhook).
           "aiUsage.lastWarningAt": null,
+          "aiUsage.warningsSentThisPeriod": [],
         });
       });
       stats.resetCount += 1;

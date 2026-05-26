@@ -138,6 +138,12 @@ export interface AiUsageState {
   lifetimeTokens: number;
   /** Last time we sent the "near cap" / "cap reached" warning email. */
   lastWarningAt: Date | null;
+  /**
+   * Which threshold warnings we've already emailed for the current
+   * billing period — e.g. `["80"]` means we sent the 80% notice but not
+   * the 100% one. Cleared by the monthly reset cron.
+   */
+  warningsSentThisPeriod: ("80" | "100")[];
 }
 
 export interface AccountContact {

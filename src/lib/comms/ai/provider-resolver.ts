@@ -2,6 +2,8 @@ import "server-only";
 
 import { getAdminDb } from "@/lib/firebase/admin";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { decryptByokKey } from "@/lib/crypto/byok";
+import { maybeSendCapWarning } from "@/lib/comms/ai/cap-warnings";
 import type { AiProviderMode } from "@/types/tenancy";
 
 /**
@@ -110,10 +112,21 @@ export async function resolveAiCallContext(
   const mode: AiProviderMode = data.aiProvider?.mode ?? "hosted";
 
   if (mode === "byok") {
-    const key = data.aiProvider?.byokKey?.trim();
-    if (!key) throw new ByokKeyMissingError(subAccountId);
+    const stored = data.aiProvider?.byokKey?.trim();
+    if (!stored) throw new ByokKeyMissingError(subAccountId);
+    // Tolerate both legacy plaintext + new AES-256-GCM-encrypted format.
+    // decryptByokKey returns plaintext untouched when no `v1:` prefix.
+    let plaintext: string;
+    try {
+      plaintext = decryptByokKey(stored);
+    } catch (err) {
+      console.error(
+        `[ai/resolver] BYOK decrypt failed for sa=${subAccountId}: ${err instanceof Error ? err.message : err}`,
+      );
+      throw new ByokKeyMissingError(subAccountId);
+    }
     return {
-      apiKey: key,
+      apiKey: plaintext,
       mode,
       // BYOK: operator owns the cost — no metering, no cap enforcement.
       recordUsage: async () => {},
@@ -160,6 +173,21 @@ export async function resolveAiCallContext(
         },
         { merge: true },
       );
+      // Best-effort cap-threshold notification (never throws to caller).
+      // We compute newUsage from the in-memory `used` + delta — slight
+      // drift vs other concurrent writers but good enough for crossing
+      // detection at 80% / 100%.
+      const newUsage = used + totalTokens;
+      void maybeSendCapWarning({
+        subAccountId,
+        newUsage,
+        capTokens: cap,
+      }).catch((err) => {
+        console.error(
+          `[ai/resolver] cap-warning hook failed sa=${subAccountId}:`,
+          err,
+        );
+      });
     },
   };
 }
