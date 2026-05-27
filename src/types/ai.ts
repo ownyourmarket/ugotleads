@@ -87,7 +87,7 @@ export interface AiChannelConfig {
   enabled: boolean;
   /** How many of the most-recent thread messages to feed the LLM. */
   contextMessageCount: number;
-  /** OpenRouter model id, e.g. "anthropic/claude-haiku-4-5". Null =
+  /** OpenRouter model id, e.g. "anthropic/claude-haiku-4.5". Null =
    *  fall back to the deployment-wide AI_REPLIES_DEFAULT_MODEL. */
   modelOverride: string | null;
   /** Optional channel-specific overrides of the profile's escalation

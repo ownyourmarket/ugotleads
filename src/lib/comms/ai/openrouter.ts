@@ -13,7 +13,9 @@ import "server-only";
  */
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
-const DEFAULT_MODEL = "anthropic/claude-haiku-4-5";
+// NOTE: OpenRouter uses dot-separated version numbers (4.5, 4.6, 4.7).
+// The earlier dash convention (4-5) was wrong and rejected by their API.
+const DEFAULT_MODEL = "anthropic/claude-haiku-4.5";
 
 export interface AiChatMessage {
   role: "system" | "user" | "assistant";

@@ -31,9 +31,19 @@ import type {
  *
  * QStash callback. Generates one week of social content posts. The
  * route is in PUBLIC_PATH_PATTERNS — security is the QStash signature.
+ *
+ * Model selection:
+ *   - Defaults to anthropic/claude-3.7-sonnet (great quality/cost for
+ *     creative content gen, ~10× cheaper than Opus).
+ *   - Override per-deployment via SOCIAL_CONTENT_MODEL env var (set to any
+ *     OpenRouter model id, e.g. anthropic/claude-sonnet-4.5 once available
+ *     on your account).
  */
 
-const MODEL = "anthropic/claude-sonnet-4-7";
+// Sonnet 4.6 = current best balance of quality + cost for creative
+// long-form generation on this account. Verified available 2026-05-25.
+const MODEL =
+  process.env.SOCIAL_CONTENT_MODEL?.trim() || "anthropic/claude-sonnet-4.6";
 
 export async function POST(request: Request) {
   // 1. Verify QStash signature.

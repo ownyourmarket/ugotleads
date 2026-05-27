@@ -740,7 +740,7 @@ async function checkOpenRouter(): Promise<IntegrationHealth> {
       status: defaultModel ? "ok" : "skipped",
       detail: defaultModel
         ? defaultModel
-        : "Optional. Defaults to anthropic/claude-haiku-4-5 when unset.",
+        : "Optional. Defaults to anthropic/claude-haiku-4.5 when unset.",
     });
   }
 

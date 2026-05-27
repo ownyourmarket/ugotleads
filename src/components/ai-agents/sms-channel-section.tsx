@@ -218,13 +218,13 @@ export function SmsChannelSection() {
                 id="sms-model"
                 value={modelOverride}
                 onChange={(e) => setModelOverride(e.target.value)}
-                placeholder="anthropic/claude-haiku-4-5"
+                placeholder="anthropic/claude-haiku-4.5"
               />
             </div>
           </div>
           <p className="text-[11px] text-muted-foreground">
             Default model: Claude Haiku 4.5. Override with{" "}
-            <code>anthropic/claude-opus-4-7</code> for premium quality at
+            <code>anthropic/claude-opus-4.7</code> for premium quality at
             ~50× the cost. Any OpenRouter model id works.
           </p>
 
