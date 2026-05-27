@@ -13,12 +13,12 @@ const faqs: FaqItem[] = [
   {
     question: "Is there a subscription or trial?",
     answer:
-      "No. LeadStack is a one-time purchase: $1,782 for the public license. Founders cohort members lock in $891 across all three waves. You own the code, host it yourself, and get free updates for the version you bought. There's no recurring LeadStack fee. The only ongoing costs are whatever your underlying providers charge — Firebase, Stripe, Resend, Twilio, gitpage — billed directly to you, not through us.",
+      "No. UGotLeads is a one-time purchase: $1,782 for the public license. Founders cohort members lock in $891 across all three waves. You own the code, host it yourself, and get free updates for the version you bought. There's no recurring UGotLeads fee. The only ongoing costs are whatever your underlying providers charge — Firebase, Stripe, Resend, Twilio, gitpage — billed directly to you, not through us.",
   },
   {
     question: "Can I rebrand it as my own product?",
     answer:
-      "Yes — that's the point. LeadStack is a business in a repo. On setup you swap the logo, brand name, domain, colors, pricing, and email/SMS sender — most of it from a single config file. By the end of week one your customers see your name on every screen, not ours. No \"powered by\" badge, no SaaS landlord taking a margin, and no fork penalty if you ever decide to take it in a different direction.",
+      "Yes — that's the point. UGotLeads is a business in a repo. On setup you swap the logo, brand name, domain, colors, pricing, and email/SMS sender — most of it from a single config file. By the end of week one your customers see your name on every screen, not ours. No \"powered by\" badge, no SaaS landlord taking a margin, and no fork penalty if you ever decide to take it in a different direction.",
   },
   {
     question: "Do I need to know how to code to set this up?",
@@ -38,12 +38,12 @@ const faqs: FaqItem[] = [
   {
     question: "How is this different from GoHighLevel?",
     answer:
-      "GHL is hosted SaaS with snapshots, per-message usage fees, and a 2–6 week onboarding ramp. LeadStack is a production-ready CRM you self-host and brand as your own. Every core feature ships working — contacts, pipeline, forms, automations, website builder, comms — your job between clone and going live is configuration, not building. You bring your own database, payments, email, and SMS providers and pay them directly — no margin tax. There's no snapshot system: every sub-account starts from your codebase, and you extend it however you want.",
+      "GHL is hosted SaaS with snapshots, per-message usage fees, and a 2–6 week onboarding ramp. UGotLeads is a production-ready CRM you self-host and brand as your own. Every core feature ships working — contacts, pipeline, forms, automations, website builder, comms — your job between clone and going live is configuration, not building. You bring your own database, payments, email, and SMS providers and pay them directly — no margin tax. There's no snapshot system: every sub-account starts from your codebase, and you extend it however you want.",
   },
   {
     question: "How is this different from HubSpot?",
     answer:
-      "HubSpot's Free CRM is a Trojan horse for the upgrade path — Starter is $45/mo, Professional is $890+/mo, plus a $3K mandatory onboarding and per-marketing-contact billing. LeadStack is a flat-priced license, no contact tiers, no onboarding fee. You also get multi-tenant sub-accounts and a built-in website builder, which HubSpot puts in a separate Hub.",
+      "HubSpot's Free CRM is a Trojan horse for the upgrade path — Starter is $45/mo, Professional is $890+/mo, plus a $3K mandatory onboarding and per-marketing-contact billing. UGotLeads is a flat-priced license, no contact tiers, no onboarding fee. You also get multi-tenant sub-accounts and a built-in website builder, which HubSpot puts in a separate Hub.",
   },
   {
     question: "What does each client see?",
@@ -53,7 +53,7 @@ const faqs: FaqItem[] = [
   {
     question: "How does the website builder work?",
     answer:
-      "It's a built-in gitpage integration. Pick a multi-page marketing site or a single-page video sales letter funnel, fill the form, hit Build — you get a live URL in 1–3 minutes. One agency API key powers every sub-account's sites. Published sites run on GitHub or GitLab Pages. The gitpage agency tier is $99/month, billed directly to gitpage. If you're already paying lovable.dev, v0, or Bolt $80–100/month to build client sites, this is a straight swap at the same price — except the published site is wired to your CRM, forms, and automations out of the box, with no copy-paste integration glue. Founders cohort members get bonus months bundled with their wave: 12 months for True Founders, 6 months for Early Adopters, 3 months for the Final Cohort. The website builder is fully optional — the rest of LeadStack works without it.",
+      "It's a built-in gitpage integration. Pick a multi-page marketing site or a single-page video sales letter funnel, fill the form, hit Build — you get a live URL in 1–3 minutes. One agency API key powers every sub-account's sites. Published sites run on GitHub or GitLab Pages. The gitpage agency tier is $99/month, billed directly to gitpage. If you're already paying lovable.dev, v0, or Bolt $80–100/month to build client sites, this is a straight swap at the same price — except the published site is wired to your CRM, forms, and automations out of the box, with no copy-paste integration glue. Founders cohort members get bonus months bundled with their wave: 12 months for True Founders, 6 months for Early Adopters, 3 months for the Final Cohort. The website builder is fully optional — the rest of UGotLeads works without it.",
   },
   {
     question: "Can I import my existing contacts?",
@@ -63,12 +63,12 @@ const faqs: FaqItem[] = [
   {
     question: "What handles email and SMS?",
     answer:
-      "An external email provider for email, an external SMS provider for SMS, and a managed background scheduler for delayed steps. You provide credentials for each — costs go directly to those providers, not through LeadStack. The shared-sender model means replies route back to the agent who sent the message, not to a generic inbox.",
+      "An external email provider for email, an external SMS provider for SMS, and a managed background scheduler for delayed steps. You provide credentials for each — costs go directly to those providers, not through UGotLeads. The shared-sender model means replies route back to the agent who sent the message, not to a generic inbox.",
   },
   {
     question: "How is my data kept secure?",
     answer:
-      "Security is foundational, not a feature. Because LeadStack is self-hosted, your customer data lives in your own database on your own infrastructure — never pooled with other customers. The single biggest SaaS breach scenario, one shared platform leaking everyone at once, simply doesn't apply. It runs on Google's Firebase (SOC 2 and ISO 27001 certified) with the standard protections you'd expect baked in. And because you get the full source code, you or your security team can verify any of it directly — no black box.",
+      "Security is foundational, not a feature. Because UGotLeads is self-hosted, your customer data lives in your own database on your own infrastructure — never pooled with other customers. The single biggest SaaS breach scenario, one shared platform leaking everyone at once, simply doesn't apply. It runs on Google's Firebase (SOC 2 and ISO 27001 certified) with the standard protections you'd expect baked in. And because you get the full source code, you or your security team can verify any of it directly — no black box.",
   },
   {
     question: "What if an automation goes wrong?",
@@ -78,7 +78,7 @@ const faqs: FaqItem[] = [
   {
     question: "Is this a 100% complete app ready to go?",
     answer:
-      "Every core feature ships working — LeadStack is a self-hosted CRM you brand as your own, not a turnkey SaaS. Setup is connecting your provider accounts and brand details via config. Before going live, walk the golden path on your own deployment — signup, a contact, a deal, a form, an automation — to confirm it's wired end-to-end. The Onboarding Guide walks Claude Code through everything; plan an afternoon.",
+      "Every core feature ships working — UGotLeads is a self-hosted CRM you brand as your own, not a turnkey SaaS. Setup is connecting your provider accounts and brand details via config. Before going live, walk the golden path on your own deployment — signup, a contact, a deal, a form, an automation — to confirm it's wired end-to-end. The Onboarding Guide walks Claude Code through everything; plan an afternoon.",
   },
 ];
 

@@ -116,7 +116,7 @@ export async function createFollowUpActions(
         errors.push("email: no escalation address configured");
       } else {
         const appUrl =
-          process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://leadstack.dev";
+          process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://ugotleads.io";
         const sessionUrl = `${appUrl}/sa/${input.subAccountId}/ai-agents/web-chat/sessions/${input.sessionId}`;
         const contactUrl = `${appUrl}/sa/${input.subAccountId}/contacts/${input.contactId}`;
 

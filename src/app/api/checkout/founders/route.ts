@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
   // Affiliate attribution: read the ?ref= cookie set by <RefTracker /> and
   // stamp it onto the session metadata so the webhook can credit the right
-  // affiliate on purchase. Only on the LeadStack-branded variant; buyer
+  // affiliate on purchase. Only on the UGotLeads-branded variant; buyer
   // clones never set this cookie.
   const metadata: Record<string, string> = {
     kind: "founders",

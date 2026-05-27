@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     );
   }
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadstack.dev";
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://ugotleads.io";
 
   try {
     const affiliate = await findAffiliateByEmail(email);
@@ -45,10 +45,10 @@ export async function POST(request: Request) {
 
       await sendEmail({
         to: affiliate.email,
-        subject: "Sign in to your LeadStack affiliate dashboard",
+        subject: "Sign in to your UGotLeads affiliate dashboard",
         text: `Hi,
 
-Click the link below to sign in to your LeadStack affiliate dashboard.
+Click the link below to sign in to your UGotLeads affiliate dashboard.
 The link expires in 15 minutes and can only be used once.
 
 ${link}
@@ -56,7 +56,7 @@ ${link}
 If you didn't request this, you can safely ignore it — your account
 isn't affected.
 
-— LeadStack
+— UGotLeads
 `,
         html: `<!DOCTYPE html>
 <html><body style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:560px;margin:32px auto;padding:0 16px;color:#1a1a22;line-height:1.6;">

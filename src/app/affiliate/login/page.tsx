@@ -12,8 +12,8 @@ interface PageProps {
 const ERROR_MESSAGES: Record<string, string> = {
   missing_token: "That sign-in link was incomplete. Request a new one below.",
   expired: "That sign-in link has expired or was already used. Request a new one below.",
-  not_found: "We couldn't find your account. Make sure you're using the email you bought LeadStack with.",
-  inactive: "Your affiliate account is paused. Email hello@leadstack.dev if you think this is a mistake.",
+  not_found: "We couldn't find your account. Make sure you're using the email you bought UGotLeads with.",
+  inactive: "Your affiliate account is paused. Email myusalocal@gmail.com if you think this is a mistake.",
 };
 
 export default async function AffiliateLoginPage({ searchParams }: PageProps) {
@@ -28,7 +28,7 @@ export default async function AffiliateLoginPage({ searchParams }: PageProps) {
           Affiliate sign-in
         </h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Enter the email you purchased LeadStack with. We&apos;ll send you a
+          Enter the email you purchased UGotLeads with. We&apos;ll send you a
           one-tap sign-in link.
         </p>
         {errorMessage && (
@@ -39,12 +39,12 @@ export default async function AffiliateLoginPage({ searchParams }: PageProps) {
         <LoginForm />
         <p className="mt-6 text-xs text-muted-foreground">
           Don&apos;t have an account yet? Affiliate accounts are auto-created
-          when you purchase LeadStack at{" "}
+          when you purchase UGotLeads at{" "}
           <Link
             href="/#pricing"
             className="text-foreground underline-offset-4 hover:underline"
           >
-            leadstack.dev
+            ugotleads.io
           </Link>
           .
         </p>

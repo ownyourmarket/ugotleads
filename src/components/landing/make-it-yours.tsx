@@ -56,7 +56,7 @@ export function MakeItYours() {
             .
           </h2>
           <p className="mt-4 text-lg text-muted-foreground lg:text-xl">
-            On day one this is LeadStack with your sub-account. By the end
+            On day one this is UGotLeads with your sub-account. By the end
             of week one it&apos;s your CRM, on your domain, with your name
             on every screen. No &ldquo;powered by&rdquo; badge, no SaaS
             landlord, no migration fees if you ever fork.
@@ -79,7 +79,7 @@ export function MakeItYours() {
         </div>
 
         <p className="mx-auto mt-10 max-w-2xl text-center text-sm text-muted-foreground lg:text-base">
-          Your customers never see the word &ldquo;LeadStack&rdquo;. Your
+          Your customers never see the word &ldquo;UGotLeads&rdquo;. Your
           data, your hosting, your billing — all in accounts you control.
           Your business. We just handed you the keys.
         </p>

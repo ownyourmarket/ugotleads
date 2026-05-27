@@ -42,7 +42,7 @@ export default function ThankYouPage() {
                   and onboarding details. Check your inbox (and spam) for a
                   message from{" "}
                   <span className="font-medium text-foreground">
-                    notifications@leadstack.dev
+                    notifications@ugotleads.io
                   </span>
                   .
                 </span>

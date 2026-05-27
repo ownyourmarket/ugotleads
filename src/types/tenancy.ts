@@ -16,9 +16,9 @@ export interface AgencyDoc {
   subscriptionPriceId: string | null;
   /**
    * Optional URL of the agency's logo. When set, the dashboard sidebar +
-   * browser tab title swap LeadStack's chevron mark + wordmark for the
+   * browser tab title swap UGotLeads's chevron mark + wordmark for the
    * agency's brand. The URL is rendered as <img src="…" />, so any public
-   * https URL works (CDN, S3, the agency's own site). Null = LeadStack's
+   * https URL works (CDN, S3, the agency's own site). Null = UGotLeads's
    * default mark.
    */
   logoUrl: string | null;
@@ -67,7 +67,7 @@ export interface SubAccountDoc {
    */
   bookingLink: string | null;
   /**
-   * Single source of truth for the Reply-To header on every email LeadStack
+   * Single source of truth for the Reply-To header on every email UGotLeads
    * sends on behalf of this sub-account — automation lead-step emails AND
    * manual contact-profile sends. Null falls back to no Reply-To (current
    * default behavior). One address per sub-account by design — keeps

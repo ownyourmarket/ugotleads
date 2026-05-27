@@ -29,7 +29,7 @@ export default async function AdminAffiliatesPage() {
             Affiliate program
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Every LeadStack buyer is auto-enrolled at 40% commission.
+            Every UGotLeads buyer is auto-enrolled at 40% commission.
           </p>
         </div>
         <Link

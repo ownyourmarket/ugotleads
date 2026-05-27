@@ -115,7 +115,7 @@ export function WebChatChannelSection() {
 
   const snippet = useMemo(() => {
     const origin =
-      typeof window !== "undefined" ? window.location.origin : "https://leadstack.dev";
+      typeof window !== "undefined" ? window.location.origin : "https://ugotleads.io";
     return `<script src="${origin}/widget.js" data-sa="${subAccountId}" async></script>`;
   }, [subAccountId]);
 
@@ -337,7 +337,7 @@ export function WebChatChannelSection() {
             <p className="text-[11px] text-muted-foreground">
               One hostname per line, no protocol. Only these origins can load
               the widget. Leave empty during testing to allow{" "}
-              <code>localhost</code> + your LeadStack domain.
+              <code>localhost</code> + your UGotLeads domain.
             </p>
           </div>
 

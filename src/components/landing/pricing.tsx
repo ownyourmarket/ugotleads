@@ -43,7 +43,7 @@ const plans: Plan[] = [
     tagline: "The codebase. Yours to keep, yours to brand.",
     price: 1782,
     features: [
-      "Full LeadStack source code",
+      "Full UGotLeads source code",
       "Unlimited sub-accounts, unlimited contacts",
       "Personal access from the founder, within 24 hours",
       "Email support from the founder",
@@ -266,7 +266,7 @@ export function Pricing() {
                   )}
                   <p className="mt-2 text-center text-[11px] text-muted-foreground md:text-left">
                     After purchase, we&apos;ll email you a link to access
-                    LeadStack at the address on your Stripe receipt.
+                    UGotLeads at the address on your Stripe receipt.
                   </p>
                   <p className="mt-2 text-center text-[11px] text-muted-foreground md:text-left">
                     Founding cohort recognition for the agencies backing us

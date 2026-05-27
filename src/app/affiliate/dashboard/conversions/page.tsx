@@ -50,7 +50,7 @@ export default async function ConversionsPage() {
           <div className="mt-8 rounded-2xl border border-dashed bg-muted/30 p-12 text-center">
             <p className="text-sm font-medium">No conversions yet</p>
             <p className="mt-2 text-xs text-muted-foreground">
-              Once someone purchases LeadStack through your tracked link,
+              Once someone purchases UGotLeads through your tracked link,
               they&apos;ll appear here within minutes.
             </p>
           </div>

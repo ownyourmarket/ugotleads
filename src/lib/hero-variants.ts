@@ -1,5 +1,5 @@
 /**
- * Hero copy variants for the LeadStack-branded landing's A/B/C test.
+ * Hero copy variants for the UGotLeads-branded landing's A/B/C test.
  *
  * Each new visitor is randomly assigned ONE variant (cookie-pinned, 90-day
  * window) so they see the same framing across visits. CTA clicks bucket by
@@ -37,7 +37,7 @@ export const HERO_VARIANTS: Record<HeroVariantId, HeroVariantCopy> = {
     id: "A",
     label: "GHL contrast",
     headlinePre: "GoHighLevel charges $297/month forever.",
-    headlineGradient: "LeadStack is $891 once.",
+    headlineGradient: "UGotLeads is $891 once.",
     headlinePost: "",
     subhead:
       "Same multi-tenant CRM, same instant-response automations, same built-in website builder — but you own the source code and never pay rent. Spin up your first client workspace in 60 minutes.",

@@ -96,8 +96,8 @@ export async function callAi({
       Authorization: `Bearer ${apiKey}`,
       "Content-Type": "application/json",
       // OpenRouter optional but recommended — helps them attribute usage.
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://leadstack.dev",
-      "X-Title": "LeadStack AI Replies",
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL ?? "https://ugotleads.io",
+      "X-Title": "UGotLeads AI Replies",
     },
     body: JSON.stringify({
       model: chosenModel,

@@ -3,17 +3,17 @@ import { resolveCustomBrand } from "@/lib/landing/resolve-brand";
 import { resolveHeroVariant } from "@/lib/hero-variant-server";
 
 import { AnnouncementBar } from "@/components/landing/announcement-bar";
-import { Navbar as LeadStackNavbar } from "@/components/landing/navbar";
-import { Hero as LeadStackHero } from "@/components/landing/hero";
+import { Navbar as UGotLeadsNavbar } from "@/components/landing/navbar";
+import { Hero as UGotLeadsHero } from "@/components/landing/hero";
 import { HowItWorks } from "@/components/landing/how-it-works";
 import { WorkspaceTour } from "@/components/landing/workspace-tour";
-import { Features as LeadStackFeatures } from "@/components/landing/features";
+import { Features as UGotLeadsFeatures } from "@/components/landing/features";
 import { Comparison } from "@/components/landing/comparison";
 import { MakeItYours } from "@/components/landing/make-it-yours";
-import { Pricing as LeadStackPricing } from "@/components/landing/pricing";
-import { FAQ as LeadStackFAQ } from "@/components/landing/faq";
-import { CTA as LeadStackCTA } from "@/components/landing/cta";
-import { Footer as LeadStackFooter } from "@/components/landing/footer";
+import { Pricing as UGotLeadsPricing } from "@/components/landing/pricing";
+import { FAQ as UGotLeadsFAQ } from "@/components/landing/faq";
+import { CTA as UGotLeadsCTA } from "@/components/landing/cta";
+import { Footer as UGotLeadsFooter } from "@/components/landing/footer";
 import { ExitIntentModal } from "@/components/landing/exit-intent-modal";
 
 import { Navbar as CustomNavbar } from "@/components/landing-custom/navbar";
@@ -31,8 +31,8 @@ import { Footer as CustomFooter } from "@/components/landing-custom/footer";
  *   Brand fields are resolved server-side from the agency doc (Agency →
  *   Settings → Branding), falling back to CUSTOM_BRAND for anything the
  *   owner hasn't set yet. THIS IS THE DEFAULT.
- * - "leadstack" — the LeadStack-branded marketing landing used on the
- *   leadstack.dev demo site. Flip back to this only for the public demo.
+ * - "leadstack" — the UGotLeads-branded marketing landing used on the
+ *   ugotleads.io demo site. Flip back to this only for the public demo.
  *
  * Flip LANDING_VARIANT to swap. Code-level defaults for the custom
  * variant live in src/config/landing.ts (CUSTOM_BRAND).
@@ -60,19 +60,19 @@ export default async function HomePage() {
   return (
     <div className="flex min-h-screen flex-col">
       <AnnouncementBar />
-      <LeadStackNavbar />
+      <UGotLeadsNavbar />
       <main className="flex-1">
-        <LeadStackHero variant={heroVariant} />
+        <UGotLeadsHero variant={heroVariant} />
         <HowItWorks />
         <WorkspaceTour />
-        <LeadStackFeatures />
+        <UGotLeadsFeatures />
         <Comparison />
         <MakeItYours />
-        <LeadStackPricing />
-        <LeadStackFAQ />
-        <LeadStackCTA />
+        <UGotLeadsPricing />
+        <UGotLeadsFAQ />
+        <UGotLeadsCTA />
       </main>
-      <LeadStackFooter variant={heroVariant} />
+      <UGotLeadsFooter variant={heroVariant} />
       <ExitIntentModal />
     </div>
   );

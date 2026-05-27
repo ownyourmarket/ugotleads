@@ -7,9 +7,9 @@ import { getFirebaseDb } from "@/lib/firebase/client";
 import type { AgencyDoc } from "@/types";
 
 interface AgencySummary {
-  /** Agency display name. Falls back to "LeadStack" until hydrated. */
+  /** Agency display name. Falls back to "UGotLeads" until hydrated. */
   name: string;
-  /** Optional logo URL — when set, sidebar swaps the LeadStack chevron mark for this. */
+  /** Optional logo URL — when set, sidebar swaps the UGotLeads chevron mark for this. */
   logoUrl: string | null;
   /** Public support / contact email. Null until set in Agency → Settings. */
   supportEmail: string | null;
@@ -35,7 +35,7 @@ interface AgencyData {
 export function useAgency(): AgencySummary {
   const { agencyId } = useAuth();
   const [data, setData] = useState<AgencyData>({
-    name: "LeadStack",
+    name: "UGotLeads",
     logoUrl: null,
     supportEmail: null,
     primaryDomain: null,
@@ -54,7 +54,7 @@ export function useAgency(): AgencySummary {
         if (snap.exists()) {
           const d = snap.data() as Partial<AgencyDoc>;
           setData({
-            name: (d.name as string) || "LeadStack",
+            name: (d.name as string) || "UGotLeads",
             logoUrl: (d.logoUrl as string | null) ?? null,
             supportEmail: (d.supportEmail as string | null) ?? null,
             primaryDomain: (d.primaryDomain as string | null) ?? null,

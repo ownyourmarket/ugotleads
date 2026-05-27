@@ -195,7 +195,7 @@ export async function respondToWebChat(
       const saSnap = await db.doc(`subAccounts/${input.subAccountId}`).get();
       const subAccount = saSnap.data() as SubAccountDoc | undefined;
       const appUrl =
-        process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://leadstack.dev";
+        process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://ugotleads.io";
       void sendEscalationNotification({
         to: eff.escalationNotifyEmail,
         businessName:

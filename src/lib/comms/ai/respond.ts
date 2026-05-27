@@ -265,7 +265,7 @@ export async function maybeRespondWithAi(
   if (triggered) {
     if (eff.escalationNotifyEmail) {
       const appUrl =
-        process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://leadstack.dev";
+        process.env.NEXT_PUBLIC_APP_URL?.trim() || "https://ugotleads.io";
       await sendEscalationNotification({
         to: eff.escalationNotifyEmail,
         businessName:

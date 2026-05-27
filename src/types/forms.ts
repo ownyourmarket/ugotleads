@@ -30,7 +30,7 @@ export interface FormAppearance {
   theme: "light" | "dark";
   /** Hex string with leading #. Drives the submit button + focus ring. */
   accent: string;
-  /** Hide the LeadStack header + "Powered by" footer when embedded. */
+  /** Hide the UGotLeads header + "Powered by" footer when embedded. */
   hideChrome: boolean;
   /**
    * Hide the form name + "Fill this out…" tagline above the fields. Use

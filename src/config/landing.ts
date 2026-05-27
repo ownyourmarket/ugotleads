@@ -17,9 +17,9 @@
  *     CUSTOM_BRAND.pricing block below for how to re-enable real
  *     self-serve resale.
  *
- *   - "leadstack" — the LeadStack-branded marketing landing that sells
- *     LeadStack itself (used on the leadstack.dev demo site). Only flip
- *     back to this if you're running the public LeadStack demo.
+ *   - "leadstack" — the UGotLeads-branded marketing landing that sells
+ *     UGotLeads itself (used on the ugotleads.io demo site). Only flip
+ *     back to this if you're running the public UGotLeads demo.
  *
  * Flip LANDING_VARIANT below to swap which one renders at "/".
  */

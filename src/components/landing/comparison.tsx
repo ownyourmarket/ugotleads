@@ -135,7 +135,7 @@ export function Comparison() {
           </h2>
           <p className="mt-4 text-lg text-muted-foreground lg:text-xl">
             GoHighLevel charges $97–$497/mo plus per-message usage. HubSpot
-            adds $3K onboarding plus per-contact tiering. LeadStack is a
+            adds $3K onboarding plus per-contact tiering. UGotLeads is a
             license — own it, host it, brand it.
           </p>
         </div>
@@ -147,7 +147,7 @@ export function Comparison() {
             <div className="text-center">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-indigo-500 via-violet-500 to-pink-500 bg-clip-text text-sm font-bold text-transparent">
                 <span className="inline-block h-2 w-2 rounded-sm bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500" />
-                LeadStack
+                UGotLeads
               </span>
             </div>
             <div className="text-center text-sm text-muted-foreground">
@@ -181,7 +181,7 @@ export function Comparison() {
           ))}
         </div>
 
-        {/* Honest cancellation block — what LeadStack actually replaces vs
+        {/* Honest cancellation block — what UGotLeads actually replaces vs
             what you keep paying for. Pitched against the GHL-style "I
             cancelled six subscriptions" theme without overclaiming. */}
         <div className="mx-auto mt-12 max-w-4xl">

@@ -141,7 +141,7 @@ async function handleFoundersCheckout(session: Stripe.Checkout.Session) {
     throw err;
   }
 
-  // Affiliate program — only runs on the LeadStack-branded variant. Buyer
+  // Affiliate program — only runs on the UGotLeads-branded variant. Buyer
   // clones (LANDING_VARIANT === "custom") skip this whole block; their
   // welcome email goes out without affiliate copy and no Firestore writes
   // hit the affiliates/referrals collections.

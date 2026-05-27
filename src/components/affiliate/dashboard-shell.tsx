@@ -22,7 +22,7 @@ export function DashboardShell({
             className="flex items-center gap-2 text-base font-semibold"
           >
             <LogoMark size={18} idSuffix="-aff" />
-            LeadStack <span className="text-xs font-medium text-muted-foreground">Affiliate</span>
+            UGotLeads <span className="text-xs font-medium text-muted-foreground">Affiliate</span>
           </Link>
           <div className="flex items-center gap-3 text-xs text-muted-foreground">
             <span className="hidden sm:inline">{affiliateEmail}</span>

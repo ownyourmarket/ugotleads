@@ -63,7 +63,7 @@ export function Navbar() {
       <div className="container mx-auto flex h-16 items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2 text-xl font-bold">
           <LogoMark size={24} idSuffix="-nav" />
-          LeadStack
+          UGotLeads
         </Link>
 
         {/* Desktop nav */}

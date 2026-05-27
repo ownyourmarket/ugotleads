@@ -8,7 +8,7 @@ const testimonials = [
     company: "Northwind Roofing",
     initials: "PS",
     quote:
-      "We moved off HubSpot and cancelled three other subscriptions. LeadStack does what we actually needed — contacts, pipeline, bookings — without the bloat or the bill.",
+      "We moved off HubSpot and cancelled three other subscriptions. UGotLeads does what we actually needed — contacts, pipeline, bookings — without the bloat or the bill.",
   },
   {
     name: "Tomás García",
@@ -24,7 +24,7 @@ const testimonials = [
     company: "Bright Lane Marketing",
     initials: "AF",
     quote:
-      "I set LeadStack up for a client in 40 minutes. Their ops lead said it was the first CRM anyone on their team has actually kept using.",
+      "I set UGotLeads up for a client in 40 minutes. Their ops lead said it was the first CRM anyone on their team has actually kept using.",
   },
 ];
 

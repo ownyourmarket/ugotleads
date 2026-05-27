@@ -14,7 +14,7 @@ export default async function AffiliateDashboardPage() {
   if (!affiliate) redirect("/affiliate/login");
 
   const baseUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://leadstack.dev";
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://ugotleads.io";
   const trackedLink = `${baseUrl}/?ref=${affiliate.code}`;
   const totalCommission =
     affiliate.pendingCommissionCents + affiliate.paidCommissionCents;
@@ -96,7 +96,7 @@ export default async function AffiliateDashboardPage() {
                   <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs">
                     ?ref={affiliate.code}
                   </code>{" "}
-                  to any leadstack.dev URL you share. Attribution is captured
+                  to any ugotleads.io URL you share. Attribution is captured
                   for 30 days from the click — so even if your contact buys
                   weeks later, you still get credit.
                 </p>
@@ -109,7 +109,7 @@ export default async function AffiliateDashboardPage() {
                   Pick the right people, not the most people
                 </p>
                 <p className="mt-1 text-muted-foreground">
-                  LeadStack converts best with agency owners, freelancers
+                  UGotLeads converts best with agency owners, freelancers
                   building client tools, and consultants who already sell to
                   small businesses. Targeted DMs beat broadcast.
                 </p>

@@ -45,7 +45,7 @@ export function Footer({ variant }: FooterProps = {}) {
           <div className="lg:col-span-1">
             <Link href="/" className="flex items-center gap-2 text-lg font-bold">
               <LogoMark size={20} idSuffix="-footer" />
-              LeadStack
+              UGotLeads
             </Link>
             <p className="mt-3 text-sm text-muted-foreground">
               The all-in-one CRM for small teams that want to close, not
@@ -174,7 +174,7 @@ export function Footer({ variant }: FooterProps = {}) {
         </div>
 
         <div className="mt-8 border-t pt-8 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} LeadStack. All rights reserved.
+          &copy; {new Date().getFullYear()} UGotLeads. All rights reserved.
           {hydrated && (
             <p className="mt-2 font-mono text-[10px] tracking-tight text-muted-foreground/50">
               <span title="Total landing-page views">

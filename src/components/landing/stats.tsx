@@ -1,5 +1,5 @@
 const stats = [
-  { value: "12,400+", label: "Teams closing on LeadStack" },
+  { value: "12,400+", label: "Teams closing on UGotLeads" },
   { value: "4.2M", label: "Contacts under management" },
   { value: "22%", label: "Average lift in close rate" },
   { value: "4.8/5", label: "Rating on G2 & Capterra" },
