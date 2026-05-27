@@ -101,6 +101,13 @@ export interface SubAccountDoc {
    */
   aiProvider: AiProviderConfig | null;
   /**
+   * Zernio Profile ID paired 1:1 with this sub-account. Created lazily
+   * on first social-account connect via /api/sub-accounts/[id]/zernio/
+   * provision. Null on sub-accounts that haven't touched social yet.
+   * Used by /v1/profiles/{id}/* calls when proxying through Zernio.
+   */
+  zernioProfileId: string | null;
+  /**
    * Rolling token usage for the current billing period. The
    * /api/cron/ai-usage-reset job snapshots + zeroes this every ~30 days.
    * Null on legacy docs; the resolver lazy-initialises on first read.

@@ -17,6 +17,7 @@ const PUBLIC_PATHS = [
   "/api/social-content/generate-step",
   "/api/cron/ai-usage-reset",
   "/api/checkout/public-subscription",
+  "/api/webhooks/zernio",
   "/api/checkout",
   "/api/cron/gitpage-heartbeat",
   "/api/landing/metrics",
