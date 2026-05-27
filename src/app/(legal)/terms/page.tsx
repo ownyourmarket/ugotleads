@@ -18,14 +18,14 @@ export default function TermsPage() {
 
         <h2>1. Acceptance of Terms</h2>
         <p>
-          By purchasing, downloading, or using LeadStack (&ldquo;the
+          By purchasing, downloading, or using UGotLeads (&ldquo;the
           Service&rdquo;), you agree to be bound by these Terms of Service. If
           you do not agree, do not purchase or use the Service.
         </p>
 
         <h2>2. The Service</h2>
         <p>
-          LeadStack is a self-hosted, one-time-purchase software codebase. You
+          UGotLeads is a self-hosted, one-time-purchase software codebase. You
           buy a license, receive access to the source code, and run it on
           infrastructure you control. We do not host your deployment, store
           your customer data, or provide a SaaS layer on top of the codebase.
@@ -33,7 +33,7 @@ export default function TermsPage() {
 
         <h2>3. Purchase, Payment &amp; No Refunds</h2>
         <p>
-          LeadStack is sold as a one-time purchase. There is no subscription
+          UGotLeads is sold as a one-time purchase. There is no subscription
           and no recurring fee charged by us.
         </p>
         <p>
@@ -47,7 +47,7 @@ export default function TermsPage() {
         <h2>4. License &amp; Intellectual Property</h2>
         <p>
           On purchase you receive a non-transferable license to use, modify,
-          and deploy the LeadStack codebase for your own business and your
+          and deploy the UGotLeads codebase for your own business and your
           clients. You retain ownership of any modifications you make and any
           customer data you collect through your deployment. You may not
           resell or redistribute the unmodified codebase as a competing

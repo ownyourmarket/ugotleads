@@ -37,7 +37,7 @@ export function OverviewTab() {
           </span>
           <div>
             <h2 className="text-xl font-semibold tracking-tight">
-              Welcome to LeadStack
+              Welcome to UGotLeads
             </h2>
             <p className="mt-1 text-sm text-muted-foreground">
               An agency CRM in a box: capture leads with hosted forms,
@@ -50,7 +50,7 @@ export function OverviewTab() {
       </section>
 
       <section>
-        <h3 className="mb-3 text-sm font-semibold">How LeadStack works</h3>
+        <h3 className="mb-3 text-sm font-semibold">How UGotLeads works</h3>
         <div className="grid gap-4 lg:grid-cols-2">
           <WorkflowCard
             title="Multi-tenant agency model"

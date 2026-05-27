@@ -68,7 +68,7 @@ function titleFor(pathname: string): string {
   for (const [re, label] of TITLES) {
     if (re.test(pathname)) return label;
   }
-  return "LeadStack";
+  return "UGotLeads";
 }
 
 function activeSubAccountFromPath(pathname: string): string | null {

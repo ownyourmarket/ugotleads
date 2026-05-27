@@ -47,7 +47,7 @@ export default function AgencySettingsPage() {
           either place; handles its own reauth. */}
       <PasswordSection />
 
-      {/* Demo seed/unseed panel — LeadStack-branded deployment only.
+      {/* Demo seed/unseed panel — UGotLeads-branded deployment only.
           Buyer clones (LANDING_VARIANT === "custom") don't see this, and
           the underlying API route 404s for them too. */}
       {LANDING_VARIANT === "leadstack" && <SeedDemoSection />}

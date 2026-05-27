@@ -1,11 +1,11 @@
 /**
- * LeadStack logo mark — the "Chevron Stack" variant.
+ * UGotLeads logo mark — the "Chevron Stack" variant.
  *
  * Three offset chevron-tipped bars alternating direction. Top points left,
  * middle right, bottom left — chevron tips trace the directional flow of an S
  * while alternating alignment gives the stacked-cards reading.
  *
- * Use `<LogoMark size={20} />` next to the "LeadStack" wordmark, or alone as
+ * Use `<LogoMark size={20} />` next to the "UGotLeads" wordmark, or alone as
  * a brand glyph.
  */
 

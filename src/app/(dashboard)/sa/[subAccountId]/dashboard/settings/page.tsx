@@ -193,7 +193,7 @@ export default function SettingsPage() {
           <div>
             <h2 className="text-sm font-semibold">Profile</h2>
             <p className="text-xs text-muted-foreground">
-              How you appear across LeadStack.
+              How you appear across UGotLeads.
             </p>
           </div>
         </div>
@@ -272,7 +272,7 @@ export default function SettingsPage() {
         </div>
       </section>
 
-      {/* Subscription — admin only, and only on the LeadStack-branded
+      {/* Subscription — admin only, and only on the UGotLeads-branded
           deployment. Buyer clones (LANDING_VARIANT === "custom") collect
           payment off-system and provision sub-accounts by invite, so this
           panel is hidden there. Flip CUSTOM_BRAND.pricing + restore this
@@ -407,7 +407,7 @@ export default function SettingsPage() {
 
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-background p-4">
           <div>
-            <p className="text-sm font-medium">Sign out of LeadStack</p>
+            <p className="text-sm font-medium">Sign out of UGotLeads</p>
             <p className="text-xs text-muted-foreground">
               Ends this session on this device.
             </p>

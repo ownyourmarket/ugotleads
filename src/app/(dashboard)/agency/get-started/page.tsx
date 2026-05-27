@@ -57,7 +57,7 @@ export default function GetStartedPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Get started</h1>
           <p className="text-sm text-muted-foreground">
-            A two-minute tour of LeadStack and the agency workflow it
+            A two-minute tour of UGotLeads and the agency workflow it
             supports.
           </p>
         </div>
