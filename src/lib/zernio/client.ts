@@ -146,17 +146,36 @@ export type ZernioPlatform =
   | "whatsapp"
   | "discord";
 
+/**
+ * Verified against the live Zernio API 2026-05-27 — response shape is
+ * `{ authUrl: string, state: string }`, NOT `{ url }`. The `state`
+ * payload encodes Zernio's own return URL (their dashboard); the
+ * `redirectUri` query param is NOT honored as a way to send the
+ * operator back to your app. After authorizing, the operator lands on
+ * the Zernio dashboard. Your `account.connected` webhook is what tells
+ * you the connection succeeded — you can use that to update your UI
+ * even though the operator's browser isn't back on your app yet.
+ *
+ * If a smoother UX is needed (operator lands back inside UGotLeads), we
+ * can either (a) instruct operators to close the tab, (b) open the
+ * Connect flow in a popup we control, or (c) ask Zernio support for a
+ * customReturnUrl feature. Punted from Phase 1.
+ */
 export async function getConnectUrl(args: {
   platform: ZernioPlatform;
   profileId: string;
-  /** Where to send the operator after they authorize. */
   redirectUri?: string;
 }): Promise<{ url: string }> {
   const params = new URLSearchParams({ profileId: args.profileId });
   if (args.redirectUri) params.set("redirectUri", args.redirectUri);
-  return zernioFetch<{ url: string }>(
+  const raw = await zernioFetch<{ authUrl?: string; url?: string }>(
     `/connect/${args.platform}?${params.toString()}`,
   );
+  const url = raw.authUrl ?? raw.url;
+  if (!url) {
+    throw new Error("Zernio returned no auth URL for this platform");
+  }
+  return { url };
 }
 
 // ── Posts (publish + schedule) ───────────────────────────────────────────
