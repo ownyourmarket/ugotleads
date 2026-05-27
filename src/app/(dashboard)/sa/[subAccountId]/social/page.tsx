@@ -37,12 +37,55 @@ export default function SocialPage() {
   const [provisioning, setProvisioning] = useState(false);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [connectingPlatform, setConnectingPlatform] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     if (justConnected) {
-      toast.success(`Connected ${justConnected}. It may take a moment to appear.`);
+      toast.success(`Connected ${justConnected}. Refreshing connections…`);
     }
   }, [justConnected]);
+
+  // Background sync from Zernio on page load (and whenever we just came back
+  // from a connect flow). Keeps the UI honest even if a webhook is delayed
+  // or the sub-account doc never had zernioProfileId persisted.
+  async function syncFromZernio(opts: { silent?: boolean } = {}) {
+    setSyncing(true);
+    try {
+      // First make sure the sub-account is paired with a Zernio Profile.
+      await fetch(`/api/sub-accounts/${subAccountId}/zernio/provision`, {
+        method: "POST",
+      });
+      const res = await fetch(`/api/sub-accounts/${subAccountId}/zernio/sync`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = (await res.json()) as { message?: string; error?: string };
+        throw new Error(data.message ?? data.error ?? "Sync failed");
+      }
+      if (!opts.silent) {
+        const data = (await res.json()) as { accountsSynced?: number };
+        toast.success(
+          `Synced ${data.accountsSynced ?? 0} connection${
+            data.accountsSynced === 1 ? "" : "s"
+          } from Zernio.`,
+        );
+      }
+    } catch (err) {
+      if (!opts.silent) {
+        toast.error(err instanceof Error ? err.message : "Sync failed");
+      } else {
+        console.warn("[social] silent sync failed:", err);
+      }
+    } finally {
+      setSyncing(false);
+    }
+  }
+
+  // Auto-sync on first load + whenever ?connected=X just landed.
+  useEffect(() => {
+    void syncFromZernio({ silent: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subAccountId, justConnected]);
 
   useEffect(() => {
     const db = getFirebaseDb();
@@ -105,13 +148,23 @@ export default function SocialPage() {
 
   return (
     <div className="container max-w-5xl py-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold">Social</h1>
-        <p className="text-sm text-muted-foreground mt-1">
-          Connect your social accounts. UGotLeads publishes through
-          authorized integrations — every post is logged, every action is
-          auditable, and you can revoke access from each platform at any time.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Social</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Connect your social accounts. UGotLeads publishes through
+            authorized integrations — every post is logged, every action is
+            auditable, and you can revoke access from each platform at any time.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => void syncFromZernio({ silent: false })}
+          disabled={syncing}
+          className="shrink-0 h-9 px-3 rounded-md border text-sm font-medium hover:bg-muted/50 disabled:opacity-50"
+        >
+          {syncing ? "Syncing…" : "Sync"}
+        </button>
       </div>
 
       <div className="rounded-xl border bg-card p-6 space-y-4">
