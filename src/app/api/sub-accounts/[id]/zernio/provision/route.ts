@@ -4,6 +4,7 @@ import { requireSubAccountAdmin } from "@/lib/auth/require-tenancy";
 import { getAdminDb } from "@/lib/firebase/admin";
 import {
   createProfile,
+  listProfiles,
   zernioIsConfigured,
   ZernioError,
 } from "@/lib/zernio/client";
@@ -49,18 +50,63 @@ export async function POST(
     return NextResponse.json({
       profileId: data.zernioProfileId,
       created: false,
+      reused: false,
     });
   }
 
-  // Create a new Zernio Profile. Name = sub-account name for operator
-  // friendliness when they view it in the Zernio dashboard themselves.
-  // Description carries the UGotLeads sub-account ID so support can
-  // reverse-look-up if needed.
+  // Truly idempotent provision. Three paths, in order:
+  //   1. Sub-account doc has zernioProfileId → return it (handled above).
+  //   2. Zernio already has a Profile with description matching this
+  //      sub-account ID (from a prior provision call that crashed
+  //      mid-write) → adopt it, write the id back to Firestore.
+  //   3. No matching profile exists → create one with a unique
+  //      description (carrying the sub-account ID) so future
+  //      reconciliation works, then write back.
+  //
+  // The description-based match (not name-based) means two operators
+  // can independently name their workspaces "Main" without colliding on
+  // Zernio's per-name uniqueness constraint, since their descriptions
+  // contain distinct sub-account IDs.
+  const DESC_MARKER = `UGotLeads sub-account ${id}`;
+
+  let existing;
+  try {
+    const all = await listProfiles();
+    existing = all.find((p) => p.description === DESC_MARKER);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "Unknown error";
+    console.error(`[zernio/provision] listProfiles failed sa=${id}:`, msg);
+    return NextResponse.json(
+      { error: "zernio_list_failed", message: msg.slice(0, 300) },
+      { status: 502 },
+    );
+  }
+
+  if (existing) {
+    await ref.update({
+      zernioProfileId: existing._id,
+      updatedAt: Timestamp.now(),
+    });
+    return NextResponse.json({
+      profileId: existing._id,
+      created: false,
+      reused: true,
+      profile: existing,
+    });
+  }
+
+  // Name has the sub-account ID prefix appended to dodge Zernio's
+  // unique-name constraint across the whole agency's profile namespace.
+  // The dashboard shows the description too, so operators still see
+  // their sub-account name clearly.
+  const baseName = (data.name as string)?.trim() || `Sub-account ${id.slice(0, 8)}`;
+  const uniqueName = `${baseName} · ${id.slice(0, 6)}`;
+
   let profile;
   try {
     profile = await createProfile({
-      name: (data.name as string) || `Sub-account ${id.slice(0, 8)}`,
-      description: `UGotLeads sub-account ${id}`,
+      name: uniqueName,
+      description: DESC_MARKER,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
@@ -80,6 +126,7 @@ export async function POST(
   return NextResponse.json({
     profileId: profile._id,
     created: true,
+    reused: false,
     profile,
   });
 }

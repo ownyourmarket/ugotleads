@@ -69,6 +69,10 @@ export class ZernioError extends Error {
 export interface ZernioProfile {
   _id: string;
   name: string;
+  /** Operator-facing description. We use this to encode the UGotLeads
+   *  sub-account ID so reconciliation across multi-tenant sub-accounts
+   *  works without colliding on Zernio's unique-name constraint. */
+  description?: string;
   color?: string;
   isDefault?: boolean;
   accountUsernames?: string[];
