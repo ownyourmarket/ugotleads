@@ -86,9 +86,17 @@ export async function POST(
       typeof a.profileId === "string"
         ? a.profileId
         : (a.profileId as { _id?: string } | undefined)?._id ?? profileId;
-    const isActive = (a as { isActive?: boolean }).isActive ?? true;
-    const enabled = (a as { enabled?: boolean }).enabled ?? true;
+    // Zernio's Account shape has extra fields we read defensively
+    // (isActive, displayName, createdAt, etc.). Cast through `unknown`
+    // so TS allows the indexed access without complaining that the
+    // interface is too narrow.
+    const raw = a as unknown as Record<string, unknown>;
+    const isActive = (raw.isActive as boolean | undefined) ?? true;
+    const enabled = (raw.enabled as boolean | undefined) ?? true;
     const status = isActive && enabled ? "active" : "disconnected";
+    const connectedAtSource =
+      (raw.connectedAt as string | undefined) ??
+      (raw.createdAt as string | undefined);
     writes.push(
       connRef.set(
         {
@@ -96,18 +104,15 @@ export async function POST(
           profileId: profileIdField,
           platform: a.platform ?? "unknown",
           username:
-            (a as { username?: string }).username ??
-            (a as { displayName?: string }).displayName ??
+            (raw.username as string | undefined) ??
+            (raw.displayName as string | undefined) ??
             null,
-          displayName: (a as { displayName?: string }).displayName ?? null,
-          followersCount:
-            (a as { followersCount?: number }).followersCount ?? null,
+          displayName: (raw.displayName as string | undefined) ?? null,
+          followersCount: (raw.followersCount as number | undefined) ?? null,
           status,
-          connectedAt: a.connectedAt
-            ? Timestamp.fromDate(new Date(a.connectedAt))
-            : (a as { createdAt?: string }).createdAt
-              ? Timestamp.fromDate(new Date((a as { createdAt: string }).createdAt))
-              : Timestamp.now(),
+          connectedAt: connectedAtSource
+            ? Timestamp.fromDate(new Date(connectedAtSource))
+            : Timestamp.now(),
           syncedAt: Timestamp.now(),
         },
         { merge: true },
