@@ -10,10 +10,25 @@ interface SignupBody {
   email?: string;
   password?: string;
   displayName?: string;
+  /**
+   * Optional Stripe Checkout session ID. When present and matching a
+   * pendingSignups/{sessionId} doc (written by the self-serve webhook),
+   * the signup mints a NEW agency for this buyer regardless of whether
+   * the bootstrap agency already exists. Cap is set from the price tier.
+   */
+  stripeSessionId?: string;
 }
 
 type Decision =
   | { kind: "agencyOwner" }
+  | {
+      kind: "selfServeAgencyOwner";
+      stripeSessionId: string;
+      priceId: string | null;
+      customerId: string | null;
+      subscriptionId: string | null;
+      monthlyCapTokens: number;
+    }
   | {
       kind: "subAccountMember";
       adminUid: string;
@@ -22,6 +37,13 @@ type Decision =
       subAccountRole: "admin" | "collaborator";
       inviteId: string;
     };
+
+const PRICE_CAP_MAP: Record<string, number> = {};
+if (process.env.STRIPE_PRO_PRICE_ID) PRICE_CAP_MAP[process.env.STRIPE_PRO_PRICE_ID] = 1_000_000;
+if (process.env.STRIPE_MULTI_SERVICE_PRICE_ID)
+  PRICE_CAP_MAP[process.env.STRIPE_MULTI_SERVICE_PRICE_ID] = 5_000_000;
+if (process.env.STRIPE_TERRITORY_PARTNER_PRICE_ID)
+  PRICE_CAP_MAP[process.env.STRIPE_TERRITORY_PARTNER_PRICE_ID] = 15_000_000;
 
 export async function POST(request: Request) {
   let body: SignupBody;
@@ -51,11 +73,43 @@ export async function POST(request: Request) {
   const db = getAdminDb();
   const auth = getAdminAuth();
 
-  // Phase 1 — gate decision in a transaction. Either claim the agency-owner
-  // slot (if appConfig/main doesn't exist yet) or consume a pending invite.
+  // Phase 1 — gate decision in a transaction. Three valid paths:
+  //   1. self-serve operator who just paid via Stripe (pendingSignups/{id})
+  //   2. first-ever signup that matches BOOTSTRAP_ADMIN_EMAIL
+  //   3. invited collaborator with a pending invite doc
   let decision: Decision;
   try {
     decision = await db.runTransaction<Decision>(async (tx) => {
+      // Path 1 — Stripe self-serve. Wins over bootstrap so multiple agencies coexist.
+      if (body.stripeSessionId) {
+        const pendingRef = db.doc(`pendingSignups/${body.stripeSessionId}`);
+        const pendingSnap = await tx.get(pendingRef);
+        if (!pendingSnap.exists) {
+          throw new Error(
+            "Stripe session not found or already used. If you just paid, wait a few seconds and retry.",
+          );
+        }
+        const pending = pendingSnap.data() ?? {};
+        if ((pending.email as string)?.toLowerCase() !== email) {
+          throw new Error(
+            "Email does not match the Stripe checkout session. Use the email you paid with.",
+          );
+        }
+        const priceId = (pending.priceId as string | null) ?? null;
+        const cap = (priceId && PRICE_CAP_MAP[priceId]) || 1_000_000;
+        // Delete the pending doc as part of this transaction so a second
+        // signup attempt with the same session id 404s cleanly.
+        tx.delete(pendingRef);
+        return {
+          kind: "selfServeAgencyOwner",
+          stripeSessionId: body.stripeSessionId,
+          priceId,
+          customerId: (pending.customerId as string | null) ?? null,
+          subscriptionId: (pending.subscriptionId as string | null) ?? null,
+          monthlyCapTokens: cap,
+        };
+      }
+
       const cfgSnap = await tx.get(db.doc("appConfig/main"));
       if (!cfgSnap.exists) {
         const bootstrap = process.env.BOOTSTRAP_ADMIN_EMAIL?.trim().toLowerCase();
@@ -143,6 +197,149 @@ export async function POST(request: Request) {
   // Phase 3 — set custom claims, write the agency/sub-account/membership
   // graph, and finalize. If anything fails we delete the orphan auth user.
   try {
+    if (decision.kind === "selfServeAgencyOwner") {
+      const agencyRef = db.collection("agencies").doc();
+      const subAccountRef = db.collection("subAccounts").doc();
+      const agencyId = agencyRef.id;
+      const subAccountId = subAccountRef.id;
+      const agencyName = `${displayName || email.split("@")[0]}'s Agency`;
+
+      await auth.setCustomUserClaims(uid, {
+        role: "admin" as Role,
+        status: "active",
+        agencyId,
+        agencyRole: "owner",
+      });
+
+      const batch = db.batch();
+
+      batch.set(db.doc(`users/${uid}`), {
+        uid,
+        email,
+        displayName,
+        photoURL: null,
+        stripeCustomerId: decision.customerId,
+        subscriptionStatus: "active",
+        subscriptionPriceId: decision.priceId,
+        role: "admin" as Role,
+        status: "active",
+        primaryAgencyId: agencyId,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      batch.set(agencyRef, {
+        id: agencyId,
+        name: agencyName,
+        ownerUid: uid,
+        stripeCustomerId: decision.customerId,
+        subscriptionStatus: "active",
+        subscriptionPriceId: decision.priceId,
+        logoUrl: null,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+
+      batch.set(agencyRef.collection("agencyMembers").doc(uid), {
+        uid,
+        agencyId,
+        role: "owner",
+        status: "active",
+        email,
+        displayName,
+        addedAt: FieldValue.serverTimestamp(),
+        addedByUid: uid,
+      });
+
+      batch.set(subAccountRef, {
+        id: subAccountId,
+        agencyId,
+        accountNumber: 1000,
+        name: "Main",
+        slug: "main",
+        status: "active",
+        timezone: "UTC",
+        createdByUid: uid,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+        twilioConfig: null,
+        resendConfig: null,
+        bookingConfig: null,
+        sendWindow: null,
+        bookingLink: null,
+        replyToEmail: null,
+        automationsPaused: false,
+        // Pre-seed AI usage block with the tier's cap so the resolver
+        // doesn't have to lazy-init on first AI call.
+        aiUsage: {
+          currentPeriodTokens: 0,
+          currentPeriodStart: FieldValue.serverTimestamp(),
+          monthlyCapTokens: decision.monthlyCapTokens,
+          lifetimeTokens: 0,
+          lastWarningAt: null,
+          warningsSentThisPeriod: [],
+        },
+        aiProvider: {
+          mode: "hosted",
+          byokKey: null,
+          byokKeyLast4: null,
+          byokKeyValidatedAt: null,
+        },
+      });
+
+      batch.set(
+        agencyRef.collection("counters").doc("subAccount"),
+        { next: 1001 },
+      );
+
+      batch.set(
+        subAccountRef.collection("subAccountMembers").doc(uid),
+        {
+          uid,
+          subAccountId,
+          agencyId,
+          role: "admin",
+          status: "active",
+          email,
+          displayName,
+          addedAt: FieldValue.serverTimestamp(),
+          addedByUid: uid,
+        },
+      );
+
+      batch.set(db.doc(`userMemberships/${uid}/agencies/${agencyId}`), {
+        agencyId,
+        role: "owner",
+        name: agencyName,
+      });
+      batch.set(db.doc(`userMemberships/${uid}/subAccounts/${subAccountId}`), {
+        subAccountId,
+        agencyId,
+        accountNumber: 1000,
+        role: "admin",
+        name: "Main",
+        addedAt: FieldValue.serverTimestamp(),
+      });
+
+      seedDefaultTemplates(db, (ref, data) => batch.set(ref, data), {
+        agencyId,
+        subAccountId,
+        createdByUid: uid,
+      });
+
+      await batch.commit();
+
+      return NextResponse.json({
+        uid,
+        role: "admin",
+        agencyId,
+        agencyRole: "owner",
+        subAccountId,
+        subscriptionStatus: "active",
+        redirectTo: "/agency",
+      });
+    }
+
     if (decision.kind === "agencyOwner") {
       const agencyRef = db.collection("agencies").doc();
       const subAccountRef = db.collection("subAccounts").doc();

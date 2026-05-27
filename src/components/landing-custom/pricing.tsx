@@ -1,9 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { Check, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -15,6 +13,9 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { CUSTOM_BRAND, type CustomPricingTier } from "@/config/landing";
+import { CheckoutButton } from "./checkout-button";
+
+type TierSlug = "starter" | "pro" | "scale";
 
 // Pricing buttons currently route to /signup. When you wire Stripe, swap
 // the Subscribe button to call createCheckoutSession with the relevant
@@ -23,10 +24,10 @@ import { CUSTOM_BRAND, type CustomPricingTier } from "@/config/landing";
 export function Pricing() {
   const [annual, setAnnual] = useState(true);
 
-  const tiers: CustomPricingTier[] = [
-    CUSTOM_BRAND.pricing.starter,
-    CUSTOM_BRAND.pricing.pro,
-    CUSTOM_BRAND.pricing.scale,
+  const tiers: { slug: TierSlug; tier: CustomPricingTier }[] = [
+    { slug: "starter", tier: CUSTOM_BRAND.pricing.starter },
+    { slug: "pro", tier: CUSTOM_BRAND.pricing.pro },
+    { slug: "scale", tier: CUSTOM_BRAND.pricing.scale },
   ];
 
   return (
@@ -77,7 +78,7 @@ export function Pricing() {
         </div>
 
         <div className="mx-auto mt-12 grid max-w-5xl gap-6 md:grid-cols-3">
-          {tiers.map((tier) => {
+          {tiers.map(({ slug, tier }) => {
             const price = annual ? tier.priceAnnual : tier.priceMonthly;
             const isFree = price === 0;
             return (
@@ -137,13 +138,12 @@ export function Pricing() {
                   </ul>
                 </CardContent>
                 <CardFooter>
-                  <Button
-                    render={<Link href="/signup" />}
-                    variant={tier.highlighted ? "default" : "outline"}
-                    className="w-full"
-                  >
-                    {tier.cta}
-                  </Button>
+                  <CheckoutButton
+                    tier={slug}
+                    tierName={tier.name}
+                    ctaLabel={tier.cta}
+                    highlighted={tier.highlighted}
+                  />
                 </CardFooter>
               </Card>
             );

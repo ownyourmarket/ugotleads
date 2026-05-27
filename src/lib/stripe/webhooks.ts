@@ -18,6 +18,15 @@ export async function handleCheckoutCompleted(
     return;
   }
 
+  // Self-serve subscription — anonymous-at-checkout. The buyer pays
+  // before signing up; we stash a pendingSignups doc keyed by session id
+  // so the signup route can mint their agency when they create the
+  // Firebase auth account on the success page.
+  if (session.metadata?.kind === "self_serve_subscription") {
+    await handleSelfServeSubscription(session);
+    return;
+  }
+
   // Legacy subscription flow — requires uid stamped at checkout creation.
   const uid = session.metadata?.uid;
   if (!uid) {
@@ -31,6 +40,54 @@ export async function handleCheckoutCompleted(
     subscriptionPriceId: session.metadata?.priceId ?? null,
     updatedAt: new Date(),
   });
+}
+
+async function handleSelfServeSubscription(
+  session: Stripe.Checkout.Session,
+) {
+  const sessionId = session.id;
+  const email = (
+    session.customer_details?.email ?? session.customer_email ?? ""
+  )
+    .trim()
+    .toLowerCase();
+  if (!email) {
+    console.error(
+      `[self-serve] Session ${sessionId} completed without a buyer email — can't provision`,
+    );
+    return;
+  }
+  const priceId = session.metadata?.priceId ?? null;
+  const customerId =
+    typeof session.customer === "string" ? session.customer : null;
+  const subscriptionId =
+    typeof session.subscription === "string" ? session.subscription : null;
+
+  const db = getAdminDb();
+  try {
+    // Use .create() for natural idempotency on Stripe retries — second
+    // delivery throws ALREADY_EXISTS (Firestore code 6) which we swallow.
+    await db.doc(`pendingSignups/${sessionId}`).create({
+      sessionId,
+      email,
+      priceId,
+      customerId,
+      subscriptionId,
+      kind: "self_serve_subscription",
+      createdAt: new Date(),
+    });
+    console.info(
+      `[self-serve] pendingSignups/${sessionId} created for ${email} (price ${priceId})`,
+    );
+  } catch (err) {
+    // 6 = ALREADY_EXISTS — duplicate webhook delivery, normal.
+    const code = (err as { code?: number }).code;
+    if (code === 6) {
+      console.info(`[self-serve] duplicate webhook for ${sessionId} — skipped`);
+      return;
+    }
+    console.error(`[self-serve] pendingSignups write failed for ${sessionId}:`, err);
+  }
 }
 
 async function handleFoundersCheckout(session: Stripe.Checkout.Session) {

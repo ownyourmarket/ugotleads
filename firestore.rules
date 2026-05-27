@@ -251,6 +251,16 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ---------- self-serve subscription pending signups ----------
+    // Written by the Stripe webhook when a buyer completes
+    // /api/checkout/public-subscription. Consumed (and deleted) by
+    // /api/auth/signup once the buyer creates their Firebase auth account.
+    // Doc id = Stripe checkout session id. Server-only — clients can't
+    // read or write directly.
+    match /pendingSignups/{sessionId} {
+      allow read, write: if false;
+    }
+
     // ---------- affiliate program ----------
     // Active only on deployments where LANDING_VARIANT === "leadstack"
     // (i.e. the leadstack.dev demo). On buyer clones (LANDING_VARIANT

@@ -25,6 +25,10 @@ export function SignupForm() {
   // signup API still re-validates against the invite doc by email, so this is
   // pure UX convenience.
   const initialEmail = searchParams?.get("email") ?? "";
+  // When arriving from the Stripe Checkout success URL we get
+  // ?session=cs_... — passed to the signup API so the server-side gate
+  // knows to mint a brand-new agency for the self-serve buyer.
+  const stripeSessionId = searchParams?.get("session") ?? "";
   const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -57,6 +61,7 @@ export function SignupForm() {
         body: JSON.stringify({
           email,
           password,
+          stripeSessionId: stripeSessionId || undefined,
           displayName: email.split("@")[0],
         }),
       });
