@@ -54,10 +54,13 @@ export async function POST(
 
   // Create a new Zernio Profile. Name = sub-account name for operator
   // friendliness when they view it in the Zernio dashboard themselves.
+  // Description carries the UGotLeads sub-account ID so support can
+  // reverse-look-up if needed.
   let profile;
   try {
     profile = await createProfile({
       name: (data.name as string) || `Sub-account ${id.slice(0, 8)}`,
+      description: `UGotLeads sub-account ${id}`,
     });
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";

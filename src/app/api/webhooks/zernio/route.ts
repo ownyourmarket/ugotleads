@@ -23,6 +23,15 @@ import { getAdminDb } from "@/lib/firebase/admin";
  *   - message.received / .sent / .delivered / .read / .failed → DM thread
  *
  * Unhandled event types are logged and 200'd so Zernio doesn't retry.
+ *
+ * TODO (verify against real events when first webhooks land):
+ *   - We currently assume each event payload nests its object as a
+ *     top-level field matching the event prefix (e.g. account.connected
+ *     → event.account, post.* → event.post, lead.received → event.lead).
+ *     The full docs only enumerate event names, not the JSON shape.
+ *     Once Zernio fires a real test event into our endpoint we'll
+ *     confirm + tighten this — until then handlers degrade gracefully
+ *     (the findSubAccountByProfile lookup short-circuits on undefined).
  */
 
 const HEADER_SIG = "x-zernio-signature";

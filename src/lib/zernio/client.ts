@@ -83,11 +83,14 @@ export async function listProfiles(): Promise<ZernioProfile[]> {
 
 export async function createProfile(args: {
   name: string;
-  color?: string;
+  description?: string;
 }): Promise<ZernioProfile> {
   return zernioFetch<ZernioProfile>("/profiles", {
     method: "POST",
-    body: JSON.stringify({ name: args.name, color: args.color }),
+    body: JSON.stringify({
+      name: args.name,
+      description: args.description,
+    }),
   });
 }
 
@@ -117,6 +120,15 @@ export async function listAccounts(profileId: string): Promise<ZernioAccount[]> 
 
 // ── Connect URLs (per-platform OAuth handshake) ──────────────────────────
 
+/**
+ * Platform slugs verified against docs.zernio.com/llms-full.txt:
+ *   ✓ facebook, instagram, linkedin, twitter, tiktok, youtube,
+ *     pinterest, threads, bluesky
+ *   ? reddit, gmb, telegram, snapchat, whatsapp, discord — not explicitly
+ *     enumerated in the LLM-readable docs; verify against /v1/connect/
+ *     before exposing in the UI. If a slug 404s the API returns a clear
+ *     error which the connect route surfaces to the operator.
+ */
 export type ZernioPlatform =
   | "facebook"
   | "instagram"
@@ -149,23 +161,41 @@ export async function getConnectUrl(args: {
 
 // ── Posts (publish + schedule) ───────────────────────────────────────────
 
+/**
+ * Publish-post shape per docs.zernio.com/llms-full.txt:
+ *   { content: <string>, scheduledFor?: <ISO>, timezone?: <IANA>,
+ *     platforms: [{ platform, accountId, customContent?, platformSpecificData? }],
+ *     mediaItems?: [{ type: "image"|"video", url }] }
+ *
+ * Notes:
+ *   - `content` is a flat string (not an object)
+ *   - Media is `mediaItems[]` separate from content (not nested mediaUrls)
+ *   - Per-platform overrides go in `customContent` per platforms[] entry
+ *   - Bluesky's 300-char cap is the #1 cause of failed cross-posts —
+ *     when targeting Bluesky alongside longer-form platforms, use
+ *     `customContent` on the Bluesky platforms[] entry to ship a
+ *     shorter variant.
+ */
 export interface ZernioPublishInput {
-  profileId: string;
-  accountIds: string[];
-  content: {
-    text?: string;
-    mediaUrls?: string[];
-  };
+  content: string;
+  platforms: Array<{
+    platform: ZernioPlatform;
+    accountId: string;
+    customContent?: string;
+    platformSpecificData?: Record<string, unknown>;
+  }>;
+  mediaItems?: Array<{ type: "image" | "video"; url: string }>;
   scheduledFor?: string;
+  timezone?: string;
 }
 
 export interface ZernioPost {
   _id: string;
-  profileId: string;
+  profileId?: string;
   status: "scheduled" | "publishing" | "published" | "failed" | "partial";
   scheduledFor?: string;
   publishedAt?: string;
-  perAccount: Array<{
+  perAccount?: Array<{
     accountId: string;
     platform: string;
     status: string;
