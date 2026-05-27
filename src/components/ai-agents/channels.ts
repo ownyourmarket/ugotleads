@@ -4,6 +4,7 @@ import {
   MessageCircle,
   MessageSquare,
   PhoneCall,
+  Sparkles,
   Star,
   type LucideIcon,
 } from "lucide-react";
@@ -21,6 +22,7 @@ export type AiChannelId =
   | "voice"
   | "email"
   | "web-chat"
+  | "social-content"
   | "google-business";
 
 export interface AiChannel {
@@ -67,6 +69,15 @@ export const AI_CHANNELS: AiChannel[] = [
     icon: MessageSquare,
     comingSoon: false,
     slug: "sms",
+  },
+  {
+    id: "social-content",
+    label: "Social Content",
+    blurb:
+      "Generate 30 days of platform-aware social posts (Facebook, Instagram, LinkedIn, X) with one click. Streams in week-by-week.",
+    icon: Sparkles,
+    comingSoon: false,
+    slug: "social-content",
   },
   {
     id: "voice",
