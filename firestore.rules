@@ -204,6 +204,26 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Reviews received (mirrored from Zernio review.* webhooks).
+      // Server-only write; sub-account members can read for the dashboard.
+      match /reviews/{reviewId} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+      }
+
+      // Review request log — tracks which contacts were sent review
+      // requests. Server-only write; sub-account members can read.
+      match /reviewRequests/{requestId} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+      }
+
       // Web Chat sessions + messages. Created and mutated by the public
       // /api/web-chat/* routes via the Admin SDK (origin-validated, rate-
       // limited). Sub-account members can READ both so the operator

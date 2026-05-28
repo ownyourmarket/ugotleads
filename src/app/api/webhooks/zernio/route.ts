@@ -278,6 +278,35 @@ async function handleEvent(
       receivedAt: Timestamp.now(),
       payload: event,
     });
+
+    // Mirror review events into a dedicated reviews collection for the
+    // reviews dashboard. The socialEvents write above is the raw audit
+    // log; this is the user-facing surface.
+    if (kind === "review.new" || kind === "review.updated") {
+      const review = event.review as Record<string, unknown> | undefined;
+      if (review) {
+        const reviewId =
+          (review.id as string) ?? (review.reviewId as string) ?? event.id;
+        await db
+          .doc(`subAccounts/${subAccountId}/reviews/${reviewId}`)
+          .set(
+            {
+              platform: (review.platform as string) ?? "unknown",
+              authorName: (review.authorName as string) ?? null,
+              authorAvatar: (review.authorAvatarUrl as string) ?? null,
+              rating: (review.rating as number) ?? null,
+              text: (review.text as string) ?? null,
+              url: (review.url as string) ?? null,
+              publishedAt: (review.publishedAt as string) ?? null,
+              source: "zernio_webhook",
+              lastEvent: kind,
+              updatedAt: Timestamp.now(),
+              ...(kind === "review.new" ? { createdAt: Timestamp.now() } : {}),
+            },
+            { merge: true },
+          );
+      }
+    }
     return;
   }
 
