@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { GitBranch } from "lucide-react";
+import { GitBranch, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
@@ -27,6 +28,7 @@ export default function PipelinePage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<PipelineFilterState>(EMPTY_FILTERS);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     if (authLoading || !user || !agencyId) return;
@@ -76,6 +78,7 @@ export default function PipelinePage() {
   // both the board AND the stat cards, so "Won this view" actually means
   // "won within the current filter".
   const filteredDeals = useMemo(() => {
+    const q = search.trim().toLowerCase();
     return deals.filter((d) => {
       if (filters.stages.length > 0 && !filters.stages.includes(d.stageId)) {
         return false;
@@ -93,9 +96,18 @@ export default function PipelinePage() {
         const c = contactsById.get(d.contactId);
         if (!c?.country || !filters.countries.includes(c.country)) return false;
       }
+      if (q) {
+        const c = contactsById.get(d.contactId);
+        const contactMatch =
+          c?.name?.toLowerCase().includes(q) ||
+          c?.email?.toLowerCase().includes(q) ||
+          c?.company?.toLowerCase().includes(q);
+        const titleMatch = d.title.toLowerCase().includes(q);
+        if (!titleMatch && !contactMatch) return false;
+      }
       return true;
     });
-  }, [deals, filters, contactsById]);
+  }, [deals, filters, contactsById, search]);
 
   const openDeals = useMemo(
     () =>
@@ -130,6 +142,18 @@ export default function PipelinePage() {
       </div>
 
       {!loading && deals.length > 0 && (
+        <div className="relative max-w-sm">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search deals by title, contact, or company"
+            className="pl-8"
+          />
+        </div>
+      )}
+
+      {!loading && deals.length > 0 && (
         <PipelineFilters
           filters={filters}
           onChange={setFilters}
@@ -160,18 +184,18 @@ export default function PipelinePage() {
         <BoardSkeleton />
       ) : deals.length === 0 ? (
         <EmptyState hasContacts={contacts.length > 0} contacts={contacts} />
-      ) : filteredDeals.length === 0 && hasActiveFilters(filters) ? (
+      ) : filteredDeals.length === 0 && (hasActiveFilters(filters) || search.trim()) ? (
         <div className="rounded-xl border border-dashed bg-card/50 p-12 text-center">
           <p className="text-sm text-muted-foreground">
-            No deals match the current filters.
+            No deals match {search.trim() ? `"${search.trim()}"` : "the current filters"}.
           </p>
           <Button
             variant="outline"
             size="sm"
-            onClick={() => setFilters(EMPTY_FILTERS)}
+            onClick={() => { setFilters(EMPTY_FILTERS); setSearch(""); }}
             className="mt-3"
           >
-            Clear filters
+            Clear {search.trim() ? "search" : "filters"}
           </Button>
         </div>
       ) : (
