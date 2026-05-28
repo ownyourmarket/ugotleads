@@ -60,6 +60,8 @@ export default function SocialPage() {
   const [composeText, setComposeText] = useState("");
   const [composePlatforms, setComposePlatforms] = useState<Set<string>>(new Set());
   const [composeScheduleFor, setComposeScheduleFor] = useState("");
+  const [composeMediaUrl, setComposeMediaUrl] = useState("");
+  const [composeMediaUrls, setComposeMediaUrls] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
 
   // Recent posts
@@ -155,6 +157,7 @@ export default function SocialPage() {
           body: JSON.stringify({
             content: text,
             platforms: Array.from(composePlatforms),
+            mediaUrls: composeMediaUrls.length > 0 ? composeMediaUrls : undefined,
             scheduledFor: composeScheduleFor || undefined,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
@@ -179,6 +182,8 @@ export default function SocialPage() {
       setComposeText("");
       setComposePlatforms(new Set());
       setComposeScheduleFor("");
+      setComposeMediaUrl("");
+      setComposeMediaUrls([]);
       setComposeOpen(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Publish failed");
@@ -345,6 +350,74 @@ export default function SocialPage() {
                     );
                   })}
               </div>
+            </div>
+            <div>
+              <div className="text-sm font-medium mb-1">
+                Images (optional · up to 4)
+              </div>
+              <div className="flex gap-2">
+                <input
+                  type="url"
+                  placeholder="https://… paste a public image URL"
+                  value={composeMediaUrl}
+                  onChange={(e) => setComposeMediaUrl(e.target.value)}
+                  className="flex-1 h-10 px-3 rounded-md border bg-background text-sm"
+                />
+                <button
+                  type="button"
+                  disabled={
+                    !composeMediaUrl.trim() ||
+                    !composeMediaUrl.trim().startsWith("http") ||
+                    composeMediaUrls.length >= 4
+                  }
+                  onClick={() => {
+                    const u = composeMediaUrl.trim();
+                    if (!u || !u.startsWith("http")) return;
+                    setComposeMediaUrls([...composeMediaUrls, u]);
+                    setComposeMediaUrl("");
+                  }}
+                  className="h-10 px-3 rounded-md border text-sm font-medium hover:bg-muted/50 disabled:opacity-50"
+                >
+                  Add
+                </button>
+              </div>
+              {composeMediaUrls.length > 0 && (
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {composeMediaUrls.map((u, i) => (
+                    <div
+                      key={`${u}-${i}`}
+                      className="relative rounded-md border overflow-hidden h-20 w-20 group"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={u}
+                        alt={`Attached image ${i + 1}`}
+                        className="h-full w-full object-cover"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).style.opacity = "0.3";
+                        }}
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setComposeMediaUrls(
+                            composeMediaUrls.filter((_, j) => j !== i),
+                          )
+                        }
+                        className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/70 text-white text-xs leading-none opacity-0 group-hover:opacity-100"
+                        aria-label="Remove image"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-muted-foreground mt-1">
+                Upload to your own storage (Drive, Dropbox public link,
+                CDN, hosted site) and paste the direct URL. File-upload
+                support coming next.
+              </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
