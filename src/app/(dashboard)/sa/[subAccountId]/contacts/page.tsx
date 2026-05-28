@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Download, GitMerge, Mail, Search, Tag, Upload, Users, X } from "lucide-react";
+import { Download, Filter, GitMerge, Mail, Search, Tag, Upload, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -51,7 +51,20 @@ export default function ContactsPage() {
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
+  const [sourceFilter, setSourceFilter] = useState<string>("");
+  const [stageFilter, setStageFilter] = useState<string>("");
+  const [contactFilter, setContactFilter] = useState<string>("");
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const openImport = useCallback(() => setImportOpen(true), []);
+
+  const activeFilterCount =
+    (sourceFilter ? 1 : 0) + (stageFilter ? 1 : 0) + (contactFilter ? 1 : 0);
+
+  function clearFilters() {
+    setSourceFilter("");
+    setStageFilter("");
+    setContactFilter("");
+  }
 
   useEffect(() => {
     if (authLoading || !user || !agencyId) return;
@@ -147,6 +160,21 @@ export default function ContactsPage() {
           />
         </div>
 
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setFiltersOpen((p) => !p)}
+          className={activeFilterCount > 0 ? "border-primary text-primary" : ""}
+        >
+          <Filter className="mr-1 h-3.5 w-3.5" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="ml-1.5 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-primary-foreground">
+              {activeFilterCount}
+            </span>
+          )}
+        </Button>
+
         {/* Tag filter pills */}
         {(() => {
           const allTags = Array.from(
@@ -186,12 +214,86 @@ export default function ContactsPage() {
         })()}
       </div>
 
+      {/* Advanced filter bar */}
+      {filtersOpen && (
+        <div className="flex flex-wrap items-end gap-3 rounded-xl border bg-card/50 p-3">
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Source
+            </label>
+            <select
+              value={sourceFilter}
+              onChange={(e) => setSourceFilter(e.target.value)}
+              className="flex h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            >
+              <option value="" className="bg-background text-foreground">All sources</option>
+              <option value="website-form" className="bg-background text-foreground">Website form</option>
+              <option value="web-chat" className="bg-background text-foreground">Web chat</option>
+              <option value="website" className="bg-background text-foreground">Website</option>
+              <option value="referral" className="bg-background text-foreground">Referral</option>
+              <option value="ads" className="bg-background text-foreground">Ads</option>
+              <option value="other" className="bg-background text-foreground">Other</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Pipeline stage
+            </label>
+            <select
+              value={stageFilter}
+              onChange={(e) => setStageFilter(e.target.value)}
+              className="flex h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            >
+              <option value="" className="bg-background text-foreground">All stages</option>
+              <option value="new" className="bg-background text-foreground">New</option>
+              <option value="contacted" className="bg-background text-foreground">Contacted</option>
+              <option value="qualified" className="bg-background text-foreground">Qualified</option>
+              <option value="proposal" className="bg-background text-foreground">Proposal</option>
+              <option value="won" className="bg-background text-foreground">Won</option>
+              <option value="lost" className="bg-background text-foreground">Lost</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+              Contact info
+            </label>
+            <select
+              value={contactFilter}
+              onChange={(e) => setContactFilter(e.target.value)}
+              className="flex h-8 rounded-lg border border-input bg-transparent px-2.5 text-sm outline-none transition-colors focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-input/30"
+            >
+              <option value="" className="bg-background text-foreground">Any</option>
+              <option value="has-email" className="bg-background text-foreground">Has email</option>
+              <option value="no-email" className="bg-background text-foreground">Missing email</option>
+              <option value="has-phone" className="bg-background text-foreground">Has phone</option>
+              <option value="no-phone" className="bg-background text-foreground">Missing phone</option>
+            </select>
+          </div>
+
+          {activeFilterCount > 0 && (
+            <Button variant="ghost" size="sm" onClick={clearFilters} className="h-8 text-xs">
+              <X className="mr-1 h-3 w-3" />
+              Clear filters
+            </Button>
+          )}
+        </div>
+      )}
+
       {loading ? (
         <TableSkeleton />
       ) : contacts.length === 0 ? (
         <EmptyState onImport={() => setImportOpen(true)} />
       ) : (
-        <ContactsTable contacts={contacts} search={search} tagFilter={tagFilter} />
+        <ContactsTable
+          contacts={contacts}
+          search={search}
+          tagFilter={tagFilter}
+          sourceFilter={sourceFilter}
+          stageFilter={stageFilter}
+          contactFilter={contactFilter}
+        />
       )}
 
       <ImportContactsDialog open={importOpen} onOpenChange={setImportOpen} />

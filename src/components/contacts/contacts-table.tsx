@@ -39,9 +39,19 @@ interface Props {
   contacts: Contact[];
   search: string;
   tagFilter?: string | null;
+  sourceFilter?: string;
+  stageFilter?: string;
+  contactFilter?: string;
 }
 
-export function ContactsTable({ contacts, search, tagFilter }: Props) {
+export function ContactsTable({
+  contacts,
+  search,
+  tagFilter,
+  sourceFilter = "",
+  stageFilter = "",
+  contactFilter = "",
+}: Props) {
   const { saPath } = useSubAccount();
   const [sorting, setSorting] = useState<SortingState>([
     { id: "createdAt", desc: true },
@@ -176,6 +186,21 @@ export function ContactsTable({ contacts, search, tagFilter }: Props) {
     if (tagFilter) {
       result = result.filter((c) => (c.tags ?? []).includes(tagFilter));
     }
+    if (sourceFilter) {
+      result = result.filter((c) => c.source === sourceFilter);
+    }
+    if (stageFilter) {
+      result = result.filter((c) => c.pipelineStage === stageFilter);
+    }
+    if (contactFilter === "has-email") {
+      result = result.filter((c) => !!c.email?.trim());
+    } else if (contactFilter === "no-email") {
+      result = result.filter((c) => !c.email?.trim());
+    } else if (contactFilter === "has-phone") {
+      result = result.filter((c) => !!c.phone?.trim());
+    } else if (contactFilter === "no-phone") {
+      result = result.filter((c) => !c.phone?.trim());
+    }
     const q = search.trim().toLowerCase();
     if (q) {
       result = result.filter((c) => {
@@ -187,7 +212,7 @@ export function ContactsTable({ contacts, search, tagFilter }: Props) {
       });
     }
     return result;
-  }, [contacts, search, tagFilter]);
+  }, [contacts, search, tagFilter, sourceFilter, stageFilter, contactFilter]);
 
   const table = useReactTable({
     data: filtered,
