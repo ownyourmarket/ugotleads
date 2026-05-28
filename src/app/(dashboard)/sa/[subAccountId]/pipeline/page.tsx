@@ -152,6 +152,10 @@ export default function PipelinePage() {
         </div>
       )}
 
+      {!loading && openTotal > 0 && (
+        <StageValueBar deals={filteredDeals} currency={currency} />
+      )}
+
       {loading ? (
         <BoardSkeleton />
       ) : deals.length === 0 ? (
@@ -250,6 +254,66 @@ function EmptyState({
             Go to Contacts
           </Button>
         )}
+      </div>
+    </div>
+  );
+}
+
+const STAGE_COLORS: Record<string, string> = {
+  new: "bg-slate-500",
+  contacted: "bg-blue-500",
+  qualified: "bg-violet-500",
+  proposal: "bg-amber-500",
+  won: "bg-emerald-500",
+  lost: "bg-red-400",
+};
+
+function StageValueBar({
+  deals,
+  currency,
+}: {
+  deals: Deal[];
+  currency: string;
+}) {
+  const activeStages = PIPELINE_STAGES.filter(
+    (s) => s.id !== "won" && s.id !== "lost",
+  );
+  const stageValues = activeStages.map((s) => ({
+    ...s,
+    total: deals
+      .filter((d) => d.stageId === s.id)
+      .reduce((sum, d) => sum + (d.value || 0), 0),
+    count: deals.filter((d) => d.stageId === s.id).length,
+  }));
+  const maxValue = Math.max(...stageValues.map((s) => s.total), 1);
+
+  return (
+    <div className="rounded-xl border bg-card p-4 space-y-2">
+      <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Value by stage
+      </p>
+      <div className="space-y-1.5">
+        {stageValues.map((s) => {
+          const pct = (s.total / maxValue) * 100;
+          return (
+            <div key={s.id} className="flex items-center gap-3">
+              <span className="w-20 shrink-0 truncate text-xs font-medium">
+                {s.label}
+              </span>
+              <div className="flex-1 h-5 rounded-full bg-muted overflow-hidden">
+                {pct > 0 && (
+                  <div
+                    className={`h-full rounded-full transition-all ${STAGE_COLORS[s.id] ?? "bg-primary"}`}
+                    style={{ width: `${Math.max(pct, 2)}%` }}
+                  />
+                )}
+              </div>
+              <span className="w-24 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
+                {formatCurrency(s.total, currency)} ({s.count})
+              </span>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
