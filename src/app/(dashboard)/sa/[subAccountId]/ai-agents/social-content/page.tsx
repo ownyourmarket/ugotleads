@@ -27,6 +27,16 @@ const PLATFORMS: { id: SocialPlatform; label: string }[] = [
   { id: "x", label: "X (Twitter)" },
 ];
 
+// Social Content Generator uses "x" as the platform slug; Zernio uses
+// "twitter". Every other platform slug matches. This map normalizes the
+// publish call so operators never see the discrepancy.
+const SOCIAL_TO_ZERNIO_PLATFORM: Record<SocialPlatform, string> = {
+  facebook: "facebook",
+  instagram: "instagram",
+  linkedin: "linkedin",
+  x: "twitter",
+};
+
 const VOICES: { id: SocialVoice; label: string }[] = [
   { id: "professional", label: "Professional" },
   { id: "casual", label: "Casual" },
@@ -43,6 +53,13 @@ export default function SocialContentPage() {
   const [activeBatchId, setActiveBatchId] = useState<string | null>(null);
   const [activeBatch, setActiveBatch] = useState<BatchSummary | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Set of platform slugs that have an active social connection on this
+  // sub-account. Drives which posts can be Published with one click vs.
+  // need the operator to connect the platform first.
+  const [connectedPlatforms, setConnectedPlatforms] = useState<Set<string>>(
+    new Set(),
+  );
 
   // Form state
   const [industry, setIndustry] = useState("");
@@ -82,6 +99,24 @@ export default function SocialContentPage() {
       if (snap.exists()) setActiveBatch(snap.data() as BatchSummary);
     });
   }, [subAccountId, activeBatchId]);
+
+  // Which platforms is this sub-account connected to via Zernio? Drives
+  // the per-post Publish button — generated posts for unconnected
+  // platforms surface a "Connect to publish" link instead of Publish.
+  useEffect(() => {
+    const db = getFirebaseDb();
+    const q = query(
+      collection(db, `subAccounts/${subAccountId}/socialConnections`),
+    );
+    return onSnapshot(q, (snap) => {
+      const next = new Set<string>();
+      for (const d of snap.docs) {
+        const data = d.data() as { platform?: string; status?: string };
+        if (data.status === "active" && data.platform) next.add(data.platform);
+      }
+      setConnectedPlatforms(next);
+    });
+  }, [subAccountId]);
 
   async function generate() {
     if (!industry || !location || !products || !audience) {
@@ -263,7 +298,11 @@ export default function SocialContentPage() {
 
       {/* Active batch progress */}
       {activeBatch && (
-        <BatchResult batch={activeBatch} />
+        <BatchResult
+          batch={activeBatch}
+          connectedPlatforms={connectedPlatforms}
+          subAccountId={subAccountId}
+        />
       )}
 
       {/* Recent batches */}
@@ -353,7 +392,15 @@ function StatusBadge({ status }: { status: SocialContentBatch["status"] }) {
   );
 }
 
-function BatchResult({ batch }: { batch: BatchSummary }) {
+function BatchResult({
+  batch,
+  connectedPlatforms,
+  subAccountId,
+}: {
+  batch: BatchSummary;
+  connectedPlatforms: Set<string>;
+  subAccountId: string;
+}) {
   const pct = batch.progress?.total
     ? (batch.progress.completed / batch.progress.total) * 100
     : 0;
@@ -391,7 +438,12 @@ function BatchResult({ batch }: { batch: BatchSummary }) {
             .slice()
             .sort((a: GeneratedPost, b: GeneratedPost) => a.dayOffset - b.dayOffset)
             .map((p: GeneratedPost, i: number) => (
-              <PostCard key={`${p.dayOffset}-${p.platform}-${i}`} post={p} />
+              <PostCard
+                key={`${p.dayOffset}-${p.platform}-${i}`}
+                post={p}
+                connectedPlatforms={connectedPlatforms}
+                subAccountId={subAccountId}
+              />
             ))}
         </div>
       )}
@@ -409,13 +461,67 @@ function BatchResult({ batch }: { batch: BatchSummary }) {
   );
 }
 
-function PostCard({ post }: { post: GeneratedPost }) {
+function PostCard({
+  post,
+  connectedPlatforms,
+  subAccountId,
+}: {
+  post: GeneratedPost;
+  connectedPlatforms: Set<string>;
+  subAccountId: string;
+}) {
   const platformColors: Record<SocialPlatform, string> = {
     facebook: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
     instagram: "bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300",
     linkedin: "bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300",
     x: "bg-zinc-200 text-zinc-900 dark:bg-zinc-700 dark:text-zinc-100",
   };
+
+  // Map the social-content gen platform slug to Zernio's slug.
+  const zernioPlatform = SOCIAL_TO_ZERNIO_PLATFORM[post.platform];
+  const isConnected = connectedPlatforms.has(zernioPlatform);
+  const [publishing, setPublishing] = useState(false);
+  const [publishedAt, setPublishedAt] = useState<Date | null>(null);
+
+  async function publish() {
+    setPublishing(true);
+    try {
+      // Body of the post = caption + 1 blank line + hashtags (the platform
+      // strips raw text vs. hashtag-block sensibly per its own native UI).
+      const hashtagBlock = post.hashtags.length
+        ? `\n\n${post.hashtags.map((h) => `#${h}`).join(" ")}`
+        : "";
+      const content = `${post.caption}${hashtagBlock}`;
+
+      const res = await fetch(
+        `/api/sub-accounts/${subAccountId}/zernio/post`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content,
+            platforms: [zernioPlatform],
+            timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          }),
+        },
+      );
+      const data = (await res.json()) as {
+        ok?: boolean;
+        message?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.ok) {
+        throw new Error(data.message ?? data.error ?? `HTTP ${res.status}`);
+      }
+      setPublishedAt(new Date());
+      toast.success(`Published to ${post.platform}.`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Publish failed");
+    } finally {
+      setPublishing(false);
+    }
+  }
+
   return (
     <div className="rounded-md border p-3 text-sm">
       <div className="flex items-center justify-between mb-1">
@@ -439,6 +545,32 @@ function PostCard({ post }: { post: GeneratedPost }) {
       {post.ctaText && (
         <div className="text-xs font-medium mt-1">CTA: {post.ctaText}</div>
       )}
+      <div className="mt-2 flex items-center justify-between gap-2">
+        {publishedAt ? (
+          <span className="text-xs px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+            ✓ Published {publishedAt.toLocaleTimeString()}
+          </span>
+        ) : isConnected ? (
+          <button
+            type="button"
+            onClick={publish}
+            disabled={publishing}
+            className="h-8 px-3 rounded-md bg-primary text-primary-foreground text-xs font-medium hover:opacity-90 disabled:opacity-50"
+          >
+            {publishing ? "Publishing…" : "Publish now"}
+          </button>
+        ) : (
+          <a
+            href={`/sa/${subAccountId}/social`}
+            className="text-xs text-amber-700 dark:text-amber-400 underline"
+          >
+            Connect {post.platform} to publish
+          </a>
+        )}
+        <span className="text-xs text-muted-foreground">
+          Or copy &amp; post manually
+        </span>
+      </div>
     </div>
   );
 }
