@@ -1,19 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Plus } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Plus } from "lucide-react";
+import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { toDate } from "@/lib/format";
+import { setTaskCompleted } from "@/lib/firestore/tasks";
+import { useAuth } from "@/hooks/use-auth";
 import { Button } from "@/components/ui/button";
 import { EventDialog } from "@/components/calendar/event-dialog";
 import type { CalendarEvent } from "@/types/events";
 import type { Contact } from "@/types/contacts";
+import type { Task } from "@/types/tasks";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 interface CalendarViewProps {
   events: CalendarEvent[];
   contacts: Contact[];
+  tasks?: Task[];
 }
 
 function dayKey(d: Date): string {
@@ -38,7 +43,8 @@ function formatTime(d: Date): string {
     .replace(" ", "");
 }
 
-export function CalendarView({ events, contacts }: CalendarViewProps) {
+export function CalendarView({ events, contacts, tasks = [] }: CalendarViewProps) {
+  const { user } = useAuth();
   const today = useMemo(() => {
     const d = new Date();
     d.setHours(0, 0, 0, 0);
@@ -94,6 +100,30 @@ export function CalendarView({ events, contacts }: CalendarViewProps) {
     return m;
   }, [contacts]);
 
+  const tasksByDay = useMemo(() => {
+    const map = new Map<string, Task[]>();
+    for (const t of tasks) {
+      const due = toDate(t.dueAt);
+      if (!due) continue;
+      const key = dayKey(due);
+      const bucket = map.get(key);
+      if (bucket) bucket.push(t);
+      else map.set(key, [t]);
+    }
+    return map;
+  }, [tasks]);
+
+  async function toggleTask(task: Task, e: React.MouseEvent) {
+    e.stopPropagation();
+    if (!user) return;
+    try {
+      await setTaskCompleted(task, !task.completed, user.uid);
+      toast.success(task.completed ? "Task reopened" : "Task done!");
+    } catch {
+      toast.error("Couldn't update task.");
+    }
+  }
+
   function shiftMonth(delta: number) {
     const d = new Date(cursor);
     d.setMonth(d.getMonth() + delta);
@@ -130,8 +160,13 @@ export function CalendarView({ events, contacts }: CalendarViewProps) {
               {monthLabel}
             </h2>
             <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-              {events.length} events
+              {events.length} event{events.length !== 1 ? "s" : ""}
             </span>
+            {tasks.length > 0 && (
+              <span className="rounded-full bg-amber-500/10 px-2 py-0.5 text-xs font-medium text-amber-600 dark:text-amber-400">
+                {tasks.filter((t) => !t.completed).length} task{tasks.filter((t) => !t.completed).length !== 1 ? "s" : ""} due
+              </span>
+            )}
           </div>
           <div className="flex items-center gap-1">
             <Button variant="outline" size="sm" onClick={goToday}>
@@ -179,8 +214,13 @@ export function CalendarView({ events, contacts }: CalendarViewProps) {
             const isToday = d.getTime() === today.getTime();
             const isWeekend = d.getDay() === 0 || d.getDay() === 6;
             const dayEvents = eventsByDay.get(dayKey(d)) ?? [];
-            const visible = dayEvents.slice(0, 3);
-            const overflow = dayEvents.length - visible.length;
+            const dayTasks = tasksByDay.get(dayKey(d)) ?? [];
+            const maxSlots = 3;
+            const visible = dayEvents.slice(0, maxSlots);
+            const taskSlots = Math.max(0, maxSlots - visible.length);
+            const visibleTasks = dayTasks.slice(0, taskSlots);
+            const overflow =
+              dayEvents.length - visible.length + dayTasks.length - visibleTasks.length;
             const colIndex = i % 7;
             const rowIndex = Math.floor(i / 7);
 
@@ -242,6 +282,40 @@ export function CalendarView({ events, contacts }: CalendarViewProps) {
                         )}
                         <span className="truncate">
                           {ev.title}
+                          {contact && (
+                            <span className="text-muted-foreground">
+                              {" · "}
+                              {contact.name?.split(" ")[0] ?? ""}
+                            </span>
+                          )}
+                        </span>
+                      </button>
+                    );
+                  })}
+                  {visibleTasks.map((task) => {
+                    const contact = task.contactId
+                      ? contactById.get(task.contactId)
+                      : null;
+                    return (
+                      <button
+                        key={task.id}
+                        type="button"
+                        onClick={(e) => toggleTask(task, e)}
+                        className={cn(
+                          "group/task flex w-full items-center gap-1 truncate rounded-md border border-transparent px-1.5 py-1 text-left text-[11px] font-medium leading-tight transition-colors",
+                          task.completed
+                            ? "bg-emerald-500/10 text-muted-foreground line-through hover:border-emerald-500/30"
+                            : "bg-amber-500/10 hover:border-amber-500/30",
+                        )}
+                        title={task.completed ? "Click to reopen" : "Click to mark done"}
+                      >
+                        {task.completed ? (
+                          <CheckCircle2 className="h-3 w-3 shrink-0 text-emerald-500" />
+                        ) : (
+                          <Circle className="h-3 w-3 shrink-0 text-amber-500" />
+                        )}
+                        <span className="truncate">
+                          {task.title}
                           {contact && (
                             <span className="text-muted-foreground">
                               {" · "}

@@ -6,8 +6,10 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToEvents } from "@/lib/firestore/events";
+import { subscribeToTasks } from "@/lib/firestore/tasks";
 import type { CalendarEvent } from "@/types/events";
 import type { Contact } from "@/types/contacts";
+import type { Task } from "@/types/tasks";
 import { CalendarView } from "@/components/calendar/calendar-view";
 
 export default function CalendarPage() {
@@ -15,6 +17,7 @@ export default function CalendarPage() {
   const { subAccountId, agencyId } = useSubAccount();
   const [events, setEvents] = useState<CalendarEvent[]>([]);
   const [contacts, setContacts] = useState<Contact[]>([]);
+  const [tasks, setTasks] = useState<Task[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -23,8 +26,9 @@ export default function CalendarPage() {
     const scope = { agencyId, subAccountId };
     let eventsReady = false;
     let contactsReady = false;
+    let tasksReady = false;
     const settle = () => {
-      if (eventsReady && contactsReady) setLoading(false);
+      if (eventsReady && contactsReady && tasksReady) setLoading(false);
     };
     const unsubE = subscribeToEvents(scope, (l) => {
       setEvents(l);
@@ -36,9 +40,15 @@ export default function CalendarPage() {
       contactsReady = true;
       settle();
     });
+    const unsubT = subscribeToTasks(scope, (l) => {
+      setTasks(l);
+      tasksReady = true;
+      settle();
+    });
     return () => {
       unsubE();
       unsubC();
+      unsubT();
     };
   }, [user, agencyId, subAccountId, authLoading]);
 
@@ -47,15 +57,14 @@ export default function CalendarPage() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Calendar</h1>
         <p className="text-sm text-muted-foreground">
-          Manual events — meetings, calls, reminders. Click any day to add
-          something.
+          Events, meetings, and task due dates — all in one place.
         </p>
       </div>
 
       {loading ? (
         <CalendarSkeleton />
       ) : (
-        <CalendarView events={events} contacts={contacts} />
+        <CalendarView events={events} contacts={contacts} tasks={tasks} />
       )}
     </div>
   );
