@@ -9,15 +9,32 @@ import {
   getSortedRowModel,
   useReactTable,
   type ColumnDef,
+  type RowSelectionState,
   type SortingState,
 } from "@tanstack/react-table";
-import { ArrowUpDown, ArrowUp, ArrowDown, Mail, Phone, Building2 } from "lucide-react";
+import {
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  CheckSquare,
+  Download,
+  Loader2,
+  Mail,
+  Phone,
+  Building2,
+  Tag,
+  Trash2,
+  X,
+} from "lucide-react";
+import { toast } from "sonner";
 import type { Contact } from "@/types/contacts";
 import { SourceBadge } from "@/components/contacts/source-badge";
-import { formatContactDate } from "@/lib/format";
+import { formatContactDate, toDate } from "@/lib/format";
+import { serializeCsv, downloadCsv } from "@/lib/csv";
 import { cn } from "@/lib/utils";
 import { useSubAccount } from "@/context/sub-account-context";
-
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 interface Props {
   contacts: Contact[];
   search: string;
@@ -29,9 +46,35 @@ export function ContactsTable({ contacts, search, tagFilter }: Props) {
   const [sorting, setSorting] = useState<SortingState>([
     { id: "createdAt", desc: true },
   ]);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
 
   const columns = useMemo<ColumnDef<Contact>[]>(
     () => [
+      {
+        id: "select",
+        header: ({ table }) => (
+          <input
+            type="checkbox"
+            checked={table.getIsAllPageRowsSelected()}
+            ref={(el) => {
+              if (el) el.indeterminate = table.getIsSomePageRowsSelected();
+            }}
+            onChange={table.getToggleAllPageRowsSelectedHandler()}
+            aria-label="Select all"
+            className="h-4 w-4 accent-primary rounded"
+          />
+        ),
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            checked={row.getIsSelected()}
+            onChange={row.getToggleSelectedHandler()}
+            aria-label="Select row"
+            className="h-4 w-4 accent-primary rounded"
+          />
+        ),
+        enableSorting: false,
+      },
       {
         accessorKey: "name",
         header: "Name",
@@ -149,12 +192,87 @@ export function ContactsTable({ contacts, search, tagFilter }: Props) {
   const table = useReactTable({
     data: filtered,
     columns,
-    state: { sorting },
+    state: { sorting, rowSelection },
     onSortingChange: setSorting,
+    onRowSelectionChange: setRowSelection,
+    getRowId: (row) => row.id,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getSortedRowModel: getSortedRowModel(),
+    enableRowSelection: true,
   });
+
+  const selectedIds = Object.keys(rowSelection).filter((k) => rowSelection[k]);
+  const selectedContacts = filtered.filter((c) => selectedIds.includes(c.id));
+
+  /* ── Bulk action state ───────────────────────────────────── */
+  const [bulkTagOpen, setBulkTagOpen] = useState(false);
+  const [bulkTagValue, setBulkTagValue] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  async function handleBulkTag() {
+    const tag = bulkTagValue.trim();
+    if (!tag) { toast.error("Enter a tag name."); return; }
+    setBulkBusy(true);
+    try {
+      const res = await fetch("/api/contacts/bulk", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "tag", contactIds: selectedIds, tag }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string; updated?: number };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Failed");
+      toast.success(`Tagged ${data.updated} contacts with "${tag}"`);
+      setRowSelection({});
+      setBulkTagOpen(false);
+      setBulkTagValue("");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not tag.");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  async function handleBulkDelete() {
+    if (
+      !confirm(
+        `Permanently delete ${selectedIds.length} contact(s) and all their deals, notes, and activities? This cannot be undone.`,
+      )
+    )
+      return;
+    setBulkBusy(true);
+    try {
+      const res = await fetch("/api/contacts/bulk", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ action: "delete", contactIds: selectedIds }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string; deleted?: number };
+      if (!res.ok || !data.ok) throw new Error(data.error ?? "Failed");
+      toast.success(`Deleted ${data.deleted} contacts.`);
+      setRowSelection({});
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Could not delete.");
+    } finally {
+      setBulkBusy(false);
+    }
+  }
+
+  function handleExportSelected() {
+    const headers = ["name", "email", "phone", "company", "source", "tags", "createdAt"];
+    const rows = selectedContacts.map((c) => ({
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      company: c.company,
+      source: c.source,
+      tags: c.tags ?? [],
+      createdAt: toDate(c.createdAt)?.toISOString() ?? "",
+    }));
+    const csv = serializeCsv(headers, rows);
+    downloadCsv(`contacts-export-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+    toast.success(`Exported ${rows.length} contacts.`);
+  }
 
   if (contacts.length === 0) {
     return null;
@@ -172,6 +290,61 @@ export function ContactsTable({ contacts, search, tagFilter }: Props) {
 
   return (
     <>
+      {/* Bulk action bar */}
+      {selectedIds.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border bg-primary/5 px-3 py-2">
+          <span className="flex items-center gap-1.5 text-sm font-medium">
+            <CheckSquare className="h-4 w-4 text-primary" />
+            {selectedIds.length} selected
+          </span>
+          <span className="mx-1 h-4 w-px bg-border" />
+          {bulkTagOpen ? (
+            <div className="flex items-center gap-1.5">
+              <Input
+                value={bulkTagValue}
+                onChange={(e) => setBulkTagValue(e.target.value)}
+                placeholder="Tag name"
+                className="h-7 w-36 text-xs"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") { e.preventDefault(); handleBulkTag(); }
+                  if (e.key === "Escape") setBulkTagOpen(false);
+                }}
+              />
+              <Button size="sm" className="h-7 text-xs" onClick={handleBulkTag} disabled={bulkBusy}>
+                {bulkBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Tag className="mr-1 h-3 w-3" />}
+                Apply
+              </Button>
+              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setBulkTagOpen(false)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+          ) : (
+            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setBulkTagOpen(true)}>
+              <Tag className="mr-1 h-3 w-3" />
+              Tag
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={handleExportSelected}>
+            <Download className="mr-1 h-3 w-3" />
+            Export
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs text-destructive hover:bg-destructive/10"
+            onClick={handleBulkDelete}
+            disabled={bulkBusy}
+          >
+            {bulkBusy ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Trash2 className="mr-1 h-3 w-3" />}
+            Delete
+          </Button>
+          <Button size="sm" variant="ghost" className="h-7 text-xs ml-auto" onClick={() => setRowSelection({})}>
+            Clear selection
+          </Button>
+        </div>
+      )}
+
       {/* Desktop table */}
       <div className="hidden overflow-hidden rounded-xl border bg-card md:block">
         <table className="w-full text-sm">
