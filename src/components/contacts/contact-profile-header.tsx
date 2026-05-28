@@ -12,6 +12,8 @@ import {
   CircleDot,
   MessageSquare,
   Trash2,
+  Plus,
+  X,
 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -40,6 +42,28 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
   const [emailOpen, setEmailOpen] = useState(false);
   const [smsOpen, setSmsOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [addingTag, setAddingTag] = useState(false);
+  const [newTag, setNewTag] = useState("");
+
+  async function handleAddTag() {
+    const tag = newTag.trim().toLowerCase();
+    if (!tag) return;
+    const currentTags = contact.tags ?? [];
+    if (currentTags.includes(tag)) {
+      toast.error("Tag already exists");
+      return;
+    }
+    await updateContact(contact.id, { tags: [...currentTags, tag] });
+    toast.success(`Added tag "${tag}"`);
+    setNewTag("");
+    setAddingTag(false);
+  }
+
+  async function handleRemoveTag(tag: string) {
+    const currentTags = contact.tags ?? [];
+    await updateContact(contact.id, { tags: currentTags.filter((t) => t !== tag) });
+    toast.success(`Removed tag "${tag}"`);
+  }
 
   async function handleSave(data: ContactFormData) {
     await updateContact(contact.id, data);
@@ -177,17 +201,47 @@ export function ContactProfileHeader({ contact }: { contact: Contact }) {
             icon={<Tag className="h-4 w-4 text-muted-foreground" />}
             label="Tags"
           >
-            {contact.tags && contact.tags.length > 0 ? (
-              <div className="flex flex-wrap gap-1.5">
-                {contact.tags.map((tag) => (
-                  <Badge key={tag} variant="outline">
-                    {tag}
-                  </Badge>
-                ))}
-              </div>
-            ) : (
-              <span className="text-xs text-muted-foreground">No tags</span>
-            )}
+            <div className="flex flex-wrap items-center gap-1.5">
+              {(contact.tags ?? []).map((tag) => (
+                <Badge key={tag} variant="outline" className="group gap-1 pr-1">
+                  {tag}
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTag(tag)}
+                    className="opacity-0 group-hover:opacity-100 transition-opacity"
+                    aria-label={`Remove tag ${tag}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+              {addingTag ? (
+                <form
+                  onSubmit={(e) => { e.preventDefault(); handleAddTag(); }}
+                  className="flex items-center gap-1"
+                >
+                  <input
+                    autoFocus
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    placeholder="tag name"
+                    className="h-6 w-24 rounded border bg-background px-2 text-xs"
+                    onKeyDown={(e) => { if (e.key === "Escape") setAddingTag(false); }}
+                  />
+                  <Button type="submit" variant="ghost" size="icon" className="h-6 w-6">
+                    <Plus className="h-3 w-3" />
+                  </Button>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setAddingTag(true)}
+                  className="flex h-6 items-center gap-0.5 rounded-full border border-dashed px-2 text-xs text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                >
+                  <Plus className="h-3 w-3" /> Add tag
+                </button>
+              )}
+            </div>
           </Row>
         </dl>
 

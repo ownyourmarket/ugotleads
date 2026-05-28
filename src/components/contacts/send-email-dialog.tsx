@@ -2,7 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { toast } from "sonner";
-import { Loader2, Mail } from "lucide-react";
+import { ChevronDown, Loader2, Mail } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -16,6 +16,34 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import type { Contact } from "@/types/contacts";
+
+const QUICK_TEMPLATES = [
+  {
+    label: "Follow-up after call",
+    subject: "Great chatting with you!",
+    body: "Hi {{name}},\n\nThanks for taking the time to speak with me today. I really enjoyed learning more about your business.\n\nAs discussed, I'll follow up with the details shortly. In the meantime, don't hesitate to reach out if you have any questions.\n\nBest regards",
+  },
+  {
+    label: "Introduction",
+    subject: "Quick introduction — let's connect",
+    body: "Hi {{name}},\n\nMy name is [Your Name] and I help businesses like yours [brief value prop].\n\nI'd love to learn more about what you're working on and see if there's a way I can help. Would you be open to a quick 15-minute call this week?\n\nLooking forward to hearing from you!",
+  },
+  {
+    label: "Check-in",
+    subject: "Just checking in",
+    body: "Hi {{name}},\n\nHope you're doing well! I wanted to check in and see how things are going.\n\nIs there anything I can help with? I'm always just a message away.\n\nBest regards",
+  },
+  {
+    label: "Thank you",
+    subject: "Thank you!",
+    body: "Hi {{name}},\n\nJust a quick note to say thank you for your business. We truly appreciate your trust and support.\n\nIf there's ever anything else we can do for you, please don't hesitate to reach out.\n\nWarm regards",
+  },
+  {
+    label: "Meeting request",
+    subject: "Can we schedule a quick call?",
+    body: "Hi {{name}},\n\nI'd love to set up a brief call to discuss how we can help you achieve your goals.\n\nWould any of these times work for you?\n- [Option 1]\n- [Option 2]\n- [Option 3]\n\nLooking forward to connecting!",
+  },
+];
 
 interface SendEmailDialogProps {
   contact: Contact;
@@ -103,6 +131,25 @@ export function SendEmailDialog({
               disabled
               className="cursor-not-allowed text-muted-foreground"
             />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs text-muted-foreground">Quick template</Label>
+            <div className="flex flex-wrap gap-1.5">
+              {QUICK_TEMPLATES.map((tpl) => (
+                <button
+                  key={tpl.label}
+                  type="button"
+                  onClick={() => {
+                    const firstName = contact.name?.split(" ")[0] ?? "there";
+                    setSubject(tpl.subject);
+                    setBody(tpl.body.replace(/\{\{name\}\}/g, firstName));
+                  }}
+                  className="rounded-full border px-2.5 py-1 text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                >
+                  {tpl.label}
+                </button>
+              ))}
+            </div>
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="email-subject">
