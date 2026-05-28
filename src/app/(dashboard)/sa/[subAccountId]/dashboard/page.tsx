@@ -20,7 +20,16 @@ import {
   Download,
   Zap,
 } from "lucide-react";
-import { collection, doc, onSnapshot, query, where, limit } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  onSnapshot,
+  orderBy,
+  query,
+  where,
+  limit,
+} from "firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { getFirebaseDb } from "@/lib/firebase/client";
@@ -30,7 +39,7 @@ import { subscribeToForms } from "@/lib/firestore/forms";
 import { formatCurrency, daysSince, toDate } from "@/lib/format";
 import { getStage, PIPELINE_STAGES, type Deal } from "@/types/deals";
 import type { Contact } from "@/types/contacts";
-import type { AutomationDoc } from "@/types";
+import type { AutomationDoc, ExecutionDoc } from "@/types";
 import type { LeadForm } from "@/types/forms";
 import { Button } from "@/components/ui/button";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
@@ -47,6 +56,8 @@ export default function DashboardPage() {
   const [hasAiAgent, setHasAiAgent] = useState(false);
   const [hasSocialConnection, setHasSocialConnection] = useState(false);
   const [hasBroadcast, setHasBroadcast] = useState(false);
+  const [recentExecutions, setRecentExecutions] = useState<ExecutionDoc[]>([]);
+  const [execContactNames, setExecContactNames] = useState<Record<string, string>>({});
   const [setupDismissed, setSetupDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
 
@@ -121,10 +132,42 @@ export default function DashboardPage() {
       () => setHasBroadcast(false),
     );
 
+    const execQ = query(
+      collection(db, "automation_executions"),
+      where("subAccountId", "==", subAccountId),
+      orderBy("startedAt", "desc"),
+      limit(5),
+    );
+    const unsubExec = onSnapshot(
+      execQ,
+      (snap) => {
+        const rows = snap.docs.map((d) => d.data() as ExecutionDoc);
+        setRecentExecutions(rows);
+        // Lazy-load contact names
+        for (const e of rows) {
+          if (execContactNames[e.contactId]) continue;
+          void getDoc(doc(db, "contacts", e.contactId))
+            .then((s) => {
+              if (s.exists()) {
+                const c = s.data() as Partial<Contact>;
+                setExecContactNames((prev) => ({
+                  ...prev,
+                  [e.contactId]:
+                    c.name?.trim() || c.email?.trim() || `Contact ${e.contactId.slice(0, 6)}`,
+                }));
+              }
+            })
+            .catch(() => {});
+        }
+      },
+      () => {},
+    );
+
     return () => {
       unsubAi();
       unsubSocial();
       unsubBroadcast();
+      unsubExec();
     };
   }, [user, subAccountId]);
 
@@ -498,6 +541,69 @@ export default function DashboardPage() {
                   </ul>
                 )}
               </section>
+
+              {recentExecutions.length > 0 && (
+                <section className="rounded-2xl border bg-card p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <div>
+                      <h2 className="text-sm font-semibold">Automation activity</h2>
+                      <p className="text-xs text-muted-foreground">
+                        Latest executions across your recipes.
+                      </p>
+                    </div>
+                    <Button
+                      render={<Link href={saPath("/automations/activity")} />}
+                      size="sm"
+                      variant="ghost"
+                      className="gap-1"
+                    >
+                      View all <ArrowRight className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <ul className="space-y-1">
+                    {recentExecutions.map((e) => {
+                      const name = execContactNames[e.contactId] ?? "…";
+                      const started = toDate(e.startedAt);
+                      const stepsRun = e.history?.length ?? 0;
+                      const statusColor =
+                        e.status === "completed"
+                          ? "bg-emerald-500"
+                          : e.status === "running"
+                            ? "bg-amber-500"
+                            : e.status === "failed"
+                              ? "bg-rose-500"
+                              : "bg-muted-foreground";
+                      return (
+                        <li key={e.id}>
+                          <Link
+                            href={saPath("/automations/activity")}
+                            className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-muted/50"
+                          >
+                            <span
+                              className={`h-2 w-2 shrink-0 rounded-full ${statusColor}`}
+                            />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-medium">{name}</p>
+                              <p className="truncate text-xs text-muted-foreground">
+                                {stepsRun} step{stepsRun === 1 ? "" : "s"} ·{" "}
+                                {e.status}
+                              </p>
+                            </div>
+                            <span className="shrink-0 text-[11px] text-muted-foreground">
+                              {started
+                                ? started.toLocaleDateString("en-US", {
+                                    month: "short",
+                                    day: "numeric",
+                                  })
+                                : "Pending"}
+                            </span>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </section>
+              )}
 
               <section className="rounded-2xl border bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-5">
                 <div className="mb-3 flex items-center gap-2">
