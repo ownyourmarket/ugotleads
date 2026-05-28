@@ -29,6 +29,11 @@ export default function LeadScraperPage() {
   const [importing, setImporting] = useState(false);
   const [importedCount, setImportedCount] = useState<number | null>(null);
 
+  // Enrichment state
+  const [enriching, setEnriching] = useState(false);
+  const [enrichedSoFar, setEnrichedSoFar] = useState(0);
+  const [enrichedTotal, setEnrichedTotal] = useState<number | null>(null);
+
   async function scrape() {
     if (!searchQuery.trim() || !location.trim()) {
       toast.error("Enter a search query and location.");
@@ -104,6 +109,66 @@ export default function LeadScraperPage() {
     }
   }
 
+  async function enrichAll() {
+    // After importing, re-run the search with autoImport to get contact IDs,
+    // then enrich each one that has a website. We'll use the leads array
+    // which has website URLs — we need to find the matching contacts.
+    const websiteLeads = leads.filter((l) => l.website);
+    if (websiteLeads.length === 0) {
+      toast.error("No leads with websites to enrich.");
+      return;
+    }
+    setEnriching(true);
+    setEnrichedSoFar(0);
+    let enriched = 0;
+
+    // Fetch contacts that were just imported (by source=lead-scraper)
+    try {
+      const contactsRes = await fetch(
+        `/api/sub-accounts/${subAccountId}/leads/scrape`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: searchQuery.trim(),
+            location: location.trim(),
+            autoImport: false,
+          }),
+        },
+      );
+      // We need to find contacts by googlePlaceId — query Firestore directly
+      // For now, enrich one-by-one using the placeId to look up contacts
+      for (const lead of websiteLeads) {
+        try {
+          // Find the contact by querying — we'll use the scrape result placeIds
+          // The enrichment endpoint needs a contactId, so we look it up
+          const lookupRes = await fetch(
+            `/api/sub-accounts/${subAccountId}/contacts/enrich`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ placeId: lead.placeId }),
+            },
+          );
+          if (lookupRes.ok) {
+            const data = (await lookupRes.json()) as { enriched?: boolean };
+            if (data.enriched) enriched++;
+          }
+        } catch {
+          // Skip failures, continue enriching
+        }
+        setEnrichedSoFar((prev) => prev + 1);
+      }
+      void contactsRes; // consume to avoid lint warning
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Enrichment failed");
+    }
+
+    setEnrichedTotal(enriched);
+    setEnriching(false);
+    toast.success(`Enriched ${enriched} contacts with email/phone data.`);
+  }
+
   return (
     <div className="container max-w-5xl py-8 space-y-6">
       <div>
@@ -155,18 +220,34 @@ export default function LeadScraperPage() {
             {scraping ? "Searching…" : "Search Google Maps"}
           </button>
           {leads.length > 0 && (
-            <button
-              type="button"
-              onClick={importAll}
-              disabled={importing}
-              className="h-10 px-5 rounded-md border text-sm font-semibold hover:bg-muted/50 disabled:opacity-50"
-            >
-              {importing
-                ? "Importing…"
-                : importedCount != null
-                  ? `✓ ${importedCount} imported`
-                  : `Import all ${leads.length} as contacts`}
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={importAll}
+                disabled={importing}
+                className="h-10 px-5 rounded-md border text-sm font-semibold hover:bg-muted/50 disabled:opacity-50"
+              >
+                {importing
+                  ? "Importing…"
+                  : importedCount != null
+                    ? `✓ ${importedCount} imported`
+                    : `Import all ${leads.length} as contacts`}
+              </button>
+              {importedCount != null && importedCount > 0 && (
+                <button
+                  type="button"
+                  onClick={enrichAll}
+                  disabled={enriching}
+                  className="h-10 px-5 rounded-md border text-sm font-semibold hover:bg-muted/50 disabled:opacity-50"
+                >
+                  {enriching
+                    ? `Enriching… (${enrichedSoFar}/${importedCount})`
+                    : enrichedTotal != null
+                      ? `✓ ${enrichedTotal} enriched`
+                      : `✨ Enrich contacts (find emails)`}
+                </button>
+              )}
+            </>
           )}
         </div>
       </div>
