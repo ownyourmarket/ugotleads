@@ -19,6 +19,9 @@ import {
   Upload,
   Download,
   Zap,
+  CheckCircle2,
+  Circle,
+  CalendarCheck,
 } from "lucide-react";
 import {
   collection,
@@ -36,7 +39,11 @@ import { getFirebaseDb } from "@/lib/firebase/client";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToDeals } from "@/lib/firestore/deals";
 import { subscribeToForms } from "@/lib/firestore/forms";
+import { subscribeToTasks, setTaskCompleted } from "@/lib/firestore/tasks";
+import { subscribeToEvents } from "@/lib/firestore/events";
 import { formatCurrency, daysSince, toDate } from "@/lib/format";
+import type { Task } from "@/types/tasks";
+import type { CalendarEvent } from "@/types/events";
 import { getStage, PIPELINE_STAGES, type Deal } from "@/types/deals";
 import type { Contact } from "@/types/contacts";
 import type { AutomationDoc, ExecutionDoc } from "@/types";
@@ -56,6 +63,8 @@ export default function DashboardPage() {
   const [hasAiAgent, setHasAiAgent] = useState(false);
   const [hasSocialConnection, setHasSocialConnection] = useState(false);
   const [hasBroadcast, setHasBroadcast] = useState(false);
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [calEvents, setCalEvents] = useState<CalendarEvent[]>([]);
   const [recentExecutions, setRecentExecutions] = useState<ExecutionDoc[]>([]);
   const [execContactNames, setExecContactNames] = useState<Record<string, string>>({});
   const [setupDismissed, setSetupDismissed] = useState(false);
@@ -80,6 +89,8 @@ export default function DashboardPage() {
       settle();
     });
     const unsubF = subscribeToForms(scope, setForms);
+    const unsubT = subscribeToTasks(scope, setTasks);
+    const unsubEv = subscribeToEvents(scope, setCalEvents);
     const automationsQ = query(
       collection(getFirebaseDb(), "automations"),
       where("subAccountId", "==", subAccountId),
@@ -91,6 +102,8 @@ export default function DashboardPage() {
       unsubC();
       unsubD();
       unsubF();
+      unsubT();
+      unsubEv();
       unsubA();
     };
   }, [user, agencyId, subAccountId]);
@@ -216,6 +229,28 @@ export default function DashboardPage() {
       (a, b) => (toDate(b.createdAt)?.getTime() ?? 0) - (toDate(a.createdAt)?.getTime() ?? 0),
     )
     .slice(0, 5);
+
+  // Today's agenda — tasks due today + overdue, events today
+  const todayAgenda = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const todayEnd = todayStart + 24 * 60 * 60 * 1000;
+
+    const dueTasks = tasks.filter((t) => {
+      if (t.completed) return false;
+      const d = toDate(t.dueAt);
+      if (!d) return false;
+      return d.getTime() < todayEnd; // due today or overdue
+    });
+
+    const todayEvents = calEvents.filter((e) => {
+      const d = toDate(e.startAt);
+      if (!d) return false;
+      return d.getTime() >= todayStart && d.getTime() < todayEnd;
+    });
+
+    return { dueTasks, todayEvents };
+  }, [tasks, calEvents]);
 
   const stageCounts = useMemo(() => {
     const m = new Map<string, number>();
@@ -383,6 +418,91 @@ export default function DashboardPage() {
           </div>
 
       <LeadsMap contacts={contacts} deals={deals} />
+
+      {/* Today's agenda */}
+      {!loading && (todayAgenda.dueTasks.length > 0 || todayAgenda.todayEvents.length > 0) && (
+        <section className="rounded-2xl border bg-card p-5">
+          <div className="mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <CalendarCheck className="h-4 w-4 text-indigo-500" />
+              <h2 className="text-sm font-semibold">Today&apos;s agenda</h2>
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                {todayAgenda.dueTasks.length + todayAgenda.todayEvents.length} item{todayAgenda.dueTasks.length + todayAgenda.todayEvents.length !== 1 ? "s" : ""}
+              </span>
+            </div>
+            <div className="flex gap-1.5">
+              <Button
+                render={<Link href={saPath("/tasks")} />}
+                size="sm"
+                variant="ghost"
+                className="gap-1 text-xs"
+              >
+                Tasks <ArrowRight className="h-3 w-3" />
+              </Button>
+              <Button
+                render={<Link href={saPath("/calendar")} />}
+                size="sm"
+                variant="ghost"
+                className="gap-1 text-xs"
+              >
+                Calendar <ArrowRight className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {todayAgenda.dueTasks.map((task) => {
+              const due = toDate(task.dueAt);
+              const isOverdue = due && due.getTime() < new Date().setHours(0, 0, 0, 0);
+              const c = task.contactId ? contactById.get(task.contactId) : null;
+              return (
+                <button
+                  key={task.id}
+                  type="button"
+                  onClick={async () => {
+                    if (!user) return;
+                    try {
+                      await setTaskCompleted(task, true, user.uid);
+                    } catch {}
+                  }}
+                  className="flex items-center gap-3 rounded-lg border bg-background p-3 text-left transition-all hover:border-primary/40 hover:shadow-sm"
+                  title="Click to mark done"
+                >
+                  <Circle className={`h-4 w-4 shrink-0 ${isOverdue ? "text-rose-500" : "text-amber-500"}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{task.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {isOverdue ? "Overdue" : "Due today"}
+                      {c ? ` · ${c.name || c.email || ""}` : ""}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+            {todayAgenda.todayEvents.map((ev) => {
+              const start = toDate(ev.startAt);
+              const c = ev.contactId ? contactById.get(ev.contactId) : null;
+              return (
+                <Link
+                  key={ev.id}
+                  href={saPath("/calendar")}
+                  className="flex items-center gap-3 rounded-lg border bg-background p-3 transition-all hover:border-primary/40 hover:shadow-sm"
+                >
+                  <span className="h-4 w-4 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 via-violet-500 to-pink-500" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium">{ev.title}</p>
+                    <p className="truncate text-xs text-muted-foreground">
+                      {start
+                        ? start.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                        : "All day"}
+                      {c ? ` · ${c.name || ""}` : ""}
+                    </p>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {isEmpty ? (
         <GettingStarted />
