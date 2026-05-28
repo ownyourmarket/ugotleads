@@ -1,8 +1,9 @@
 "use client";
 
 import { Suspense, useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Download, Mail, Search, Tag, Upload, Users, X } from "lucide-react";
+import { Download, GitMerge, Mail, Search, Tag, Upload, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -43,7 +44,7 @@ function ImportQueryWatcher({ onOpen }: { onOpen: () => void }) {
 
 export default function ContactsPage() {
   const { user, loading: authLoading } = useAuth();
-  const { subAccountId, agencyId } = useSubAccount();
+  const { subAccountId, agencyId, saPath } = useSubAccount();
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -100,6 +101,14 @@ export default function ContactsPage() {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            render={<Link href={saPath("/contacts/duplicates")} />}
+            disabled={contacts.length === 0}
+          >
+            <GitMerge className="mr-1 h-4 w-4" />
+            Duplicates
+          </Button>
           <Button
             variant="outline"
             onClick={() => setBulkEmailOpen(true)}
