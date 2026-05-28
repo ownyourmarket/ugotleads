@@ -17,6 +17,7 @@ import { useAuth } from "@/hooks/use-auth";
 import { signOutUser } from "@/lib/firebase/auth";
 import { maskEmail } from "@/lib/format";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { NotificationBell } from "@/components/dashboard/notification-bell";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { cn } from "@/lib/utils";
@@ -61,6 +62,12 @@ const TITLES: Array<[RegExp, string]> = [
   [/^\/sa\/[^/]+\/ai-agents\/web-chat/, "AI Agents · Web Chat"],
   [/^\/sa\/[^/]+\/ai-agents\/google-business/, "AI Agents · Google Business"],
   [/^\/sa\/[^/]+\/ai-agents/, "AI Agents"],
+  [/^\/sa\/[^/]+\/approvals/, "Approvals"],
+  [/^\/sa\/[^/]+\/leads-scraper/, "Lead Scraper"],
+  [/^\/sa\/[^/]+\/social/, "Social"],
+  [/^\/sa\/[^/]+\/reviews/, "Reviews"],
+  [/^\/sa\/[^/]+\/broadcasts\/[^/]+/, "Broadcast"],
+  [/^\/sa\/[^/]+\/broadcasts/, "Broadcasts"],
   [/^\/sa\/[^/]+\/reports/, "Reports"],
 ];
 
@@ -227,6 +234,9 @@ export function Header({ onMenuClick, onOpenSearch }: HeaderProps) {
           <Search className="h-4 w-4" />
         </Button>
         <ThemeToggle />
+        {authReady && activeSubId && (
+          <NotificationBell subAccountId={activeSubId} />
+        )}
 
         <DropdownMenu>
           <DropdownMenuTrigger
