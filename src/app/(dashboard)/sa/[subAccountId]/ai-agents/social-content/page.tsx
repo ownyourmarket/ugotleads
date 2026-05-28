@@ -404,6 +404,80 @@ function BatchResult({
   const pct = batch.progress?.total
     ? (batch.progress.completed / batch.progress.total) * 100
     : 0;
+
+  const [scheduling, setScheduling] = useState(false);
+  const [scheduledCount, setScheduledCount] = useState<number | null>(null);
+
+  // "Schedule all" — publishes every post to connected platforms with
+  // staggered scheduling based on dayOffset + suggestedTime. Posts for
+  // unconnected platforms are skipped. This is the "auto-posting" feature
+  // promised in the Multi-Service tier.
+  async function scheduleAll() {
+    if (!batch.generatedPosts || batch.generatedPosts.length === 0) return;
+    setScheduling(true);
+    let scheduled = 0;
+    let failed = 0;
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    const now = new Date();
+
+    for (const post of batch.generatedPosts) {
+      const zernioPlatform = SOCIAL_TO_ZERNIO_PLATFORM[post.platform];
+      if (!connectedPlatforms.has(zernioPlatform)) continue;
+
+      // Compute schedule time: today + dayOffset days, at suggestedTime or 10:00
+      const schedDate = new Date(now);
+      schedDate.setDate(schedDate.getDate() + post.dayOffset);
+      const [hours, minutes] = (post.suggestedTime ?? "10:00")
+        .match(/(\d{1,2}):(\d{2})/)
+        ?.slice(1)
+        .map(Number) ?? [10, 0];
+      schedDate.setHours(hours, minutes, 0, 0);
+
+      // Skip if the date is in the past
+      if (schedDate <= now) {
+        schedDate.setDate(schedDate.getDate() + 1);
+      }
+
+      const hashtagBlock = post.hashtags.length
+        ? `\n\n${post.hashtags.map((h: string) => `#${h}`).join(" ")}`
+        : "";
+      const content = `${post.caption}${hashtagBlock}`;
+
+      try {
+        const res = await fetch(
+          `/api/sub-accounts/${subAccountId}/zernio/post`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              content,
+              platforms: [zernioPlatform],
+              scheduledFor: schedDate.toISOString(),
+              timezone: tz,
+            }),
+          },
+        );
+        const data = (await res.json()) as { ok?: boolean };
+        if (res.ok && data.ok) scheduled++;
+        else failed++;
+      } catch {
+        failed++;
+      }
+    }
+
+    setScheduledCount(scheduled);
+    setScheduling(false);
+    if (failed > 0) {
+      toast.success(`Scheduled ${scheduled} posts. ${failed} failed or skipped.`);
+    } else {
+      toast.success(`Scheduled ${scheduled} posts across your connected platforms.`);
+    }
+  }
+
+  const publishablePosts = batch.generatedPosts?.filter((p) =>
+    connectedPlatforms.has(SOCIAL_TO_ZERNIO_PLATFORM[p.platform]),
+  ) ?? [];
+
   return (
     <div className="rounded-xl border bg-card p-6 space-y-4">
       <div className="flex items-center justify-between">
@@ -449,13 +523,29 @@ function BatchResult({
       )}
 
       {batch.status === "ready" && (
-        <button
-          type="button"
-          onClick={() => downloadCsv(batch)}
-          className="h-9 px-4 rounded-md border text-sm font-medium hover:bg-muted/50"
-        >
-          Export CSV
-        </button>
+        <div className="flex flex-wrap gap-3">
+          {publishablePosts.length > 0 && (
+            <button
+              type="button"
+              onClick={scheduleAll}
+              disabled={scheduling || scheduledCount != null}
+              className="h-9 px-4 rounded-md bg-primary text-primary-foreground text-sm font-semibold hover:opacity-90 disabled:opacity-50"
+            >
+              {scheduling
+                ? "Scheduling…"
+                : scheduledCount != null
+                  ? `✓ ${scheduledCount} posts scheduled`
+                  : `Schedule all ${publishablePosts.length} posts`}
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => downloadCsv(batch)}
+            className="h-9 px-4 rounded-md border text-sm font-medium hover:bg-muted/50"
+          >
+            Export CSV
+          </button>
+        </div>
       )}
     </div>
   );
