@@ -12,6 +12,7 @@ import type {
   ExecutionDoc,
   ExecutionStepHistoryEntry,
   InstantResponseConfig,
+  LeadNurtureConfig,
   MessageTemplateDoc,
   SendWindow,
   StepChannel,
@@ -42,7 +43,9 @@ interface PlannedStep {
 function planSteps(automation: AutomationDoc): PlannedStep[] {
   switch (automation.recipeType) {
     case "instant_response":
-      return planInstantResponse(automation.config);
+      return planInstantResponse(automation.config as InstantResponseConfig);
+    case "lead_nurture":
+      return planLeadNurture(automation.config as LeadNurtureConfig);
     default:
       return [];
   }
@@ -75,6 +78,19 @@ function planInstantResponse(config: InstantResponseConfig): PlannedStep[] {
     });
   }
   return steps;
+}
+
+function planLeadNurture(config: LeadNurtureConfig): PlannedStep[] {
+  if (!config.steps?.length) return [];
+  // Sort by delay so steps execute in chronological order.
+  const sorted = [...config.steps].sort((a, b) => a.delaySeconds - b.delaySeconds);
+  return sorted.map((step, i) => ({
+    channel: step.channel,
+    templateId: step.templateId,
+    // Convert absolute-from-trigger delays to relative-from-previous.
+    delaySeconds: i === 0 ? step.delaySeconds : Math.max(0, step.delaySeconds - sorted[i - 1].delaySeconds),
+    recipient: { kind: "contact" as const },
+  }));
 }
 
 interface ExecuteStepInput {

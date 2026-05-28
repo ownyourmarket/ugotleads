@@ -73,4 +73,50 @@ Reply to them directly at {{contact.email}}, or open the lead in your CRM.
 —
 {{unsubscribeLink}}`,
   },
+  {
+    id: "nurture-day2-email",
+    label: "Nurture — Day 2 follow-up",
+    description: "Gentle check-in 2 days after form submission.",
+    type: "email",
+    subject: "Just checking in, {{contact.firstName}}",
+    body: `Hi {{contact.firstName}},
+
+I wanted to follow up on your inquiry to {{workspace.name}}. Did you have any questions I can help with?
+
+We'd love to help you get started — just reply to this email or give us a call.
+
+Best,
+{{owner.firstName}}
+
+—
+{{unsubscribeLink}}`,
+  },
+  {
+    id: "nurture-day5-email",
+    label: "Nurture — Day 5 value add",
+    description: "Share something useful to stay top of mind.",
+    type: "email",
+    subject: "A quick tip from {{workspace.name}}",
+    body: `Hi {{contact.firstName}},
+
+Here's something we share with everyone who reaches out:
+
+[Add a tip, resource, or case study relevant to your business here]
+
+If you'd like to chat about how we can help, I'm here whenever you're ready.
+
+Talk soon,
+{{owner.firstName}}
+
+—
+{{unsubscribeLink}}`,
+  },
+  {
+    id: "nurture-day10-sms",
+    label: "Nurture — Day 10 SMS nudge",
+    description: "Short text nudge for leads who haven't responded.",
+    type: "sms",
+    subject: "",
+    body: "Hey {{contact.firstName}}, just circling back from {{workspace.name}}. Still interested in learning more? Happy to chat anytime. Reply STOP to opt out.",
+  },
 ];

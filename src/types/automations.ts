@@ -4,7 +4,7 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  * v1 ships only "instant_response". v2 will extend this union with
  * "nurture", "stage_trigger", "booking_lifecycle", "stale_revive".
  */
-export type RecipeType = "instant_response";
+export type RecipeType = "instant_response" | "lead_nurture";
 
 export type AutomationTriggerType = "form_submit";
 
@@ -38,7 +38,23 @@ export interface InstantResponseConfig {
   } | null;
 }
 
-export type RecipeConfig = InstantResponseConfig;
+/**
+ * Recipe 2 config — Lead Nurture. A multi-step drip sequence that fires
+ * over days/weeks after a form submission. Each step sends an email or SMS
+ * at a configurable delay from the trigger.
+ */
+export interface LeadNurtureStep {
+  channel: StepChannel;
+  templateId: string;
+  /** Delay in seconds from the TRIGGER (not from the previous step). */
+  delaySeconds: number;
+}
+
+export interface LeadNurtureConfig {
+  steps: LeadNurtureStep[];
+}
+
+export type RecipeConfig = InstantResponseConfig | LeadNurtureConfig;
 
 export interface AutomationDoc {
   id: string;

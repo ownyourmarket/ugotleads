@@ -14,6 +14,7 @@ import {
   History,
   Pause,
   Play,
+  Plus,
   Sparkles,
   Zap,
 } from "lucide-react";
@@ -117,6 +118,13 @@ export default function AutomationsHomePage() {
                     Pause all
                   </>
                 )}
+              </Button>
+              <Button
+                size="sm"
+                render={<Link href={saPath("/automations/new")} />}
+              >
+                <Plus className="mr-1 h-3.5 w-3.5" />
+                New automation
               </Button>
               <Button
                 variant="outline"
@@ -238,6 +246,8 @@ function recipeLabel(t: AutomationDoc["recipeType"]): string {
   switch (t) {
     case "instant_response":
       return "Speed-to-Lead";
+    case "lead_nurture":
+      return "Lead Nurture";
     default:
       return t;
   }

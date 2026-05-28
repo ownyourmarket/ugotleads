@@ -8,6 +8,7 @@ import type {
   AutomationTriggerType,
   ExecutionDoc,
   InstantResponseConfig,
+  LeadNurtureConfig,
 } from "@/types";
 
 interface FireTriggersInput {
@@ -166,7 +167,14 @@ async function startExecution(input: StartExecutionInput): Promise<void> {
 function computeFirstStepDelay(automation: AutomationDoc): number | null {
   switch (automation.recipeType) {
     case "instant_response":
-      return firstInstantResponseDelay(automation.config);
+      return firstInstantResponseDelay(
+        automation.config as InstantResponseConfig,
+      );
+    case "lead_nurture": {
+      const cfg = automation.config as LeadNurtureConfig;
+      if (!cfg.steps?.length) return null;
+      return Math.min(...cfg.steps.map((s) => Math.max(0, s.delaySeconds)));
+    }
     default:
       return null;
   }

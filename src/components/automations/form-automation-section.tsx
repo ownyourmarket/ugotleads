@@ -72,7 +72,10 @@ export function FormAutomationSection({
         ),
         (snap) => {
           const list = snap.docs.map((d) => d.data() as AutomationDoc);
-          setAutomation(list[0] ?? null);
+          // Only show instant_response here; lead_nurture has its own page.
+          setAutomation(
+            list.find((a) => a.recipeType === "instant_response") ?? null,
+          );
           setLoading(false);
         },
         () => setLoading(false),
@@ -258,40 +261,42 @@ function AttachedState({
   emailTemplates,
   saPath,
 }: AttachedStateProps) {
+  const cfg = automation.config as InstantResponseConfig;
   const [enabled, setEnabled] = useState(automation.enabled);
   const [smsTemplateId, setSmsTemplateId] = useState<string>(
-    automation.config.leadSms?.templateId ?? "",
+    cfg.leadSms?.templateId ?? "",
   );
   const [smsDelay, setSmsDelay] = useState<number>(
-    automation.config.leadSms?.delaySeconds ?? 30,
+    cfg.leadSms?.delaySeconds ?? 30,
   );
   const [emailTemplateId, setEmailTemplateId] = useState<string>(
-    automation.config.leadEmail?.templateId ?? "",
+    cfg.leadEmail?.templateId ?? "",
   );
   const [emailDelay, setEmailDelay] = useState<number>(
-    automation.config.leadEmail?.delaySeconds ?? 0,
+    cfg.leadEmail?.delaySeconds ?? 0,
   );
   const [ownerChannel, setOwnerChannel] = useState<"sms" | "email">(
-    automation.config.ownerNotify?.channel ?? "email",
+    cfg.ownerNotify?.channel ?? "email",
   );
   const [ownerTemplateId, setOwnerTemplateId] = useState<string>(
-    automation.config.ownerNotify?.templateId ?? "",
+    cfg.ownerNotify?.templateId ?? "",
   );
   const [ownerRecipient, setOwnerRecipient] = useState<string>(
-    automation.config.ownerNotify?.recipient ?? "",
+    cfg.ownerNotify?.recipient ?? "",
   );
   const [saving, setSaving] = useState(false);
 
   // Keep local form state in sync if the snapshot updates from elsewhere.
   useEffect(() => {
+    const c = automation.config as InstantResponseConfig;
     setEnabled(automation.enabled);
-    setSmsTemplateId(automation.config.leadSms?.templateId ?? "");
-    setSmsDelay(automation.config.leadSms?.delaySeconds ?? 30);
-    setEmailTemplateId(automation.config.leadEmail?.templateId ?? "");
-    setEmailDelay(automation.config.leadEmail?.delaySeconds ?? 0);
-    setOwnerChannel(automation.config.ownerNotify?.channel ?? "email");
-    setOwnerTemplateId(automation.config.ownerNotify?.templateId ?? "");
-    setOwnerRecipient(automation.config.ownerNotify?.recipient ?? "");
+    setSmsTemplateId(c.leadSms?.templateId ?? "");
+    setSmsDelay(c.leadSms?.delaySeconds ?? 30);
+    setEmailTemplateId(c.leadEmail?.templateId ?? "");
+    setEmailDelay(c.leadEmail?.delaySeconds ?? 0);
+    setOwnerChannel(c.ownerNotify?.channel ?? "email");
+    setOwnerTemplateId(c.ownerNotify?.templateId ?? "");
+    setOwnerRecipient(c.ownerNotify?.recipient ?? "");
   }, [automation]);
 
   const ownerTemplates =
