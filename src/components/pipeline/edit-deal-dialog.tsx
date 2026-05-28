@@ -73,6 +73,20 @@ export function EditDealDialog({
       });
       if (stageId !== deal.stageId) {
         await moveDeal(deal, stageId, { userId });
+        if (stageId === "won" || stageId === "lost") {
+          fetch("/api/deals/notify", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              subAccountId: deal.subAccountId,
+              dealTitle: deal.title,
+              contactName: null,
+              stageId,
+              value: deal.value,
+              currency: deal.currency,
+            }),
+          }).catch(() => {});
+        }
       }
       toast.success("Deal updated");
       onOpenChange(false);

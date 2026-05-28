@@ -96,6 +96,10 @@ export function PipelineBoard({ deals, contacts, userId }: PipelineBoardProps) {
       await moveDeal(deal, nextStageId, { userId });
       const label = PIPELINE_STAGES.find((s) => s.id === nextStageId)?.label;
       toast.success(`Moved to ${label}`);
+      if (nextStageId === "won") {
+        const c = contactById.get(deal.contactId);
+        notifyDealStage(deal, nextStageId, c?.name);
+      }
     } catch (err) {
       console.error(err);
       toast.error("Couldn't move deal. Try again.");
@@ -107,6 +111,8 @@ export function PipelineBoard({ deals, contacts, userId }: PipelineBoardProps) {
     try {
       await moveDeal(pendingLost, "lost", { userId, lostReason: reason });
       toast.success("Moved to Lost");
+      const c = contactById.get(pendingLost.contactId);
+      notifyDealStage(pendingLost, "lost", c?.name);
     } catch (err) {
       console.error(err);
       toast.error("Couldn't move deal. Try again.");
@@ -259,6 +265,26 @@ function DraggableDeal({
       onEdit={onEdit}
     />
   );
+}
+
+/** Fire-and-forget notification for won/lost deals. */
+function notifyDealStage(
+  deal: Deal,
+  stageId: string,
+  contactName?: string,
+) {
+  fetch("/api/deals/notify", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      subAccountId: deal.subAccountId,
+      dealTitle: deal.title,
+      contactName: contactName ?? null,
+      stageId,
+      value: deal.value,
+      currency: deal.currency,
+    }),
+  }).catch(() => {});
 }
 
 function EmptyCol() {
