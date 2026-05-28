@@ -20,7 +20,7 @@ import {
   Download,
   Zap,
 } from "lucide-react";
-import { collection, onSnapshot, query, where } from "firebase/firestore";
+import { collection, doc, onSnapshot, query, where, limit } from "firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { getFirebaseDb } from "@/lib/firebase/client";
@@ -35,6 +35,7 @@ import type { LeadForm } from "@/types/forms";
 import { Button } from "@/components/ui/button";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
 import { LeadsMap } from "@/components/dashboard/leads-map";
+import { SetupChecklist } from "@/components/dashboard/setup-checklist";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -43,6 +44,10 @@ export default function DashboardPage() {
   const [deals, setDeals] = useState<Deal[]>([]);
   const [forms, setForms] = useState<LeadForm[]>([]);
   const [automations, setAutomations] = useState<AutomationDoc[]>([]);
+  const [hasAiAgent, setHasAiAgent] = useState(false);
+  const [hasSocialConnection, setHasSocialConnection] = useState(false);
+  const [hasBroadcast, setHasBroadcast] = useState(false);
+  const [setupDismissed, setSetupDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -78,6 +83,55 @@ export default function DashboardPage() {
       unsubA();
     };
   }, [user, agencyId, subAccountId]);
+
+  // Setup checklist: load dismissed state from localStorage
+  useEffect(() => {
+    const key = `ugotleads-setup-dismissed-${subAccountId}`;
+    setSetupDismissed(localStorage.getItem(key) === "true");
+  }, [subAccountId]);
+
+  // Setup checklist: subscribe to AI agent profile, social connections, broadcasts
+  useEffect(() => {
+    if (!user) return;
+    const db = getFirebaseDb();
+
+    const unsubAi = onSnapshot(
+      doc(db, `subAccounts/${subAccountId}/aiAgent/profile`),
+      (snap) => {
+        const data = snap.data();
+        setHasAiAgent(!!data?.systemPrompt);
+      },
+      () => setHasAiAgent(false),
+    );
+
+    const unsubSocial = onSnapshot(
+      query(collection(db, `subAccounts/${subAccountId}/socialConnections`), limit(1)),
+      (snap) => setHasSocialConnection(!snap.empty),
+      () => setHasSocialConnection(false),
+    );
+
+    const broadcastsQ = query(
+      collection(db, "broadcasts"),
+      where("subAccountId", "==", subAccountId),
+      limit(1),
+    );
+    const unsubBroadcast = onSnapshot(
+      broadcastsQ,
+      (snap) => setHasBroadcast(!snap.empty),
+      () => setHasBroadcast(false),
+    );
+
+    return () => {
+      unsubAi();
+      unsubSocial();
+      unsubBroadcast();
+    };
+  }, [user, subAccountId]);
+
+  const handleDismissSetup = () => {
+    setSetupDismissed(true);
+    localStorage.setItem(`ugotleads-setup-dismissed-${subAccountId}`, "true");
+  };
 
   const displayName = (user?.displayName ?? user?.email ?? "").split("@")[0];
 
@@ -142,6 +196,21 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {!setupDismissed && (
+        <SetupChecklist
+          subAccountId={subAccountId}
+          contactCount={contacts.length}
+          dealCount={deals.length}
+          formCount={forms.length}
+          hasAiAgent={hasAiAgent}
+          hasSocialConnection={hasSocialConnection}
+          hasAutomation={automations.length > 0}
+          hasBroadcast={hasBroadcast}
+          dismissed={setupDismissed}
+          onDismiss={handleDismissSetup}
+        />
+      )}
+
       {hasContact && accountContact && (
         <Link
           href={saPath("/dashboard/settings")}
