@@ -119,7 +119,10 @@ export const CUSTOM_BRAND: CustomBrand = {
     starter: {
       name: "Local Pro",
       priceMonthly: 197,
-      priceAnnual: 1970,
+      // priceAnnual = per-month equivalent when billed yearly (the component
+      // multiplies by 12 to show yearly total). 197 × 0.80 = 157.60 → 158.
+      // Yearly bill = $1,896 · save $468/yr (20% off vs $2,364 monthly).
+      priceAnnual: 158,
       blurb: "Your own AI-powered CRM for one local business.",
       features: [
         "Your own branded UGotLeads sub-account",
@@ -136,7 +139,8 @@ export const CUSTOM_BRAND: CustomBrand = {
     pro: {
       name: "Multi-Service Operator",
       priceMonthly: 297,
-      priceAnnual: 2970,
+      // 297 × 0.80 = 237.60 → 238 · yearly $2,856 · save $708/yr.
+      priceAnnual: 238,
       blurb: "For operators running multiple service lines or locations.",
       features: [
         "Everything in Local Pro",
@@ -153,7 +157,8 @@ export const CUSTOM_BRAND: CustomBrand = {
     scale: {
       name: "Territory Partner",
       priceMonthly: 497,
-      priceAnnual: 4970,
+      // 497 × 0.80 = 397.60 → 398 · yearly $4,776 · save $1,188/yr.
+      priceAnnual: 398,
       blurb: "For MyUSA-licensed operators running a local market.",
       features: [
         "Everything in Multi-Service Operator",
