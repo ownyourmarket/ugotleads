@@ -64,6 +64,10 @@ export default function SocialPage() {
   const [composeMediaUrls, setComposeMediaUrls] = useState<string[]>([]);
   const [publishing, setPublishing] = useState(false);
 
+  // AI image generation
+  const [imagePrompt, setImagePrompt] = useState("");
+  const [generatingImage, setGeneratingImage] = useState(false);
+
   // Recent posts
   const [recentPosts, setRecentPosts] = useState<SocialPostDoc[]>([]);
 
@@ -355,10 +359,61 @@ export default function SocialPage() {
               <div className="text-sm font-medium mb-1">
                 Images (optional · up to 4)
               </div>
+              {/* AI Image Generation */}
+              <div className="mb-2 rounded-md border border-dashed p-3 space-y-2 bg-muted/30">
+                <div className="text-xs font-medium text-muted-foreground">✨ Generate with AI</div>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Describe the image you want… e.g. 'professional HVAC technician inspecting an AC unit'"
+                    value={imagePrompt}
+                    onChange={(e) => setImagePrompt(e.target.value)}
+                    className="flex-1 h-10 px-3 rounded-md border bg-background text-sm"
+                    maxLength={2000}
+                  />
+                  <button
+                    type="button"
+                    disabled={
+                      generatingImage ||
+                      !imagePrompt.trim() ||
+                      imagePrompt.trim().length < 5 ||
+                      composeMediaUrls.length >= 4
+                    }
+                    onClick={async () => {
+                      setGeneratingImage(true);
+                      try {
+                        const res = await fetch(
+                          `/api/sub-accounts/${subAccountId}/images/generate`,
+                          {
+                            method: "POST",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ prompt: imagePrompt.trim() }),
+                          },
+                        );
+                        const data = (await res.json()) as { url?: string; message?: string; error?: string };
+                        if (!res.ok || !data.url) {
+                          throw new Error(data.message ?? data.error ?? "Generation failed");
+                        }
+                        setComposeMediaUrls((prev) => [...prev, data.url!]);
+                        setImagePrompt("");
+                        toast.success("Image generated and attached.");
+                      } catch (err) {
+                        toast.error(err instanceof Error ? err.message : "Image generation failed");
+                      } finally {
+                        setGeneratingImage(false);
+                      }
+                    }}
+                    className="h-10 px-4 rounded-md bg-primary text-primary-foreground text-sm font-medium hover:opacity-90 disabled:opacity-50 shrink-0"
+                  >
+                    {generatingImage ? "Generating…" : "Generate"}
+                  </button>
+                </div>
+              </div>
+              {/* Manual URL input */}
               <div className="flex gap-2">
                 <input
                   type="url"
-                  placeholder="https://… paste a public image URL"
+                  placeholder="https://… or paste a public image URL"
                   value={composeMediaUrl}
                   onChange={(e) => setComposeMediaUrl(e.target.value)}
                   className="flex-1 h-10 px-3 rounded-md border bg-background text-sm"
@@ -413,11 +468,6 @@ export default function SocialPage() {
                   ))}
                 </div>
               )}
-              <p className="text-xs text-muted-foreground mt-1">
-                Upload to your own storage (Drive, Dropbox public link,
-                CDN, hosted site) and paste the direct URL. File-upload
-                support coming next.
-              </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>

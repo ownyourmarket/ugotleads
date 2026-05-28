@@ -482,6 +482,8 @@ function PostCard({
   const isConnected = connectedPlatforms.has(zernioPlatform);
   const [publishing, setPublishing] = useState(false);
   const [publishedAt, setPublishedAt] = useState<Date | null>(null);
+  const [generatingImage, setGeneratingImage] = useState(false);
+  const [generatedImageUrl, setGeneratedImageUrl] = useState<string | null>(null);
 
   async function publish() {
     setPublishing(true);
@@ -501,6 +503,7 @@ function PostCard({
           body: JSON.stringify({
             content,
             platforms: [zernioPlatform],
+            mediaUrls: generatedImageUrl ? [generatedImageUrl] : undefined,
             timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
           }),
         },
@@ -542,6 +545,55 @@ function PostCard({
       <div className="text-xs text-muted-foreground mt-1 italic">
         Image: {post.imagePrompt}
       </div>
+      {generatedImageUrl ? (
+        <div className="mt-2 relative rounded-md border overflow-hidden h-32 w-full max-w-xs">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={generatedImageUrl}
+            alt="AI generated"
+            className="h-full w-full object-cover"
+          />
+          <button
+            type="button"
+            onClick={() => setGeneratedImageUrl(null)}
+            className="absolute top-1 right-1 h-5 w-5 rounded-full bg-black/70 text-white text-xs leading-none"
+            aria-label="Remove image"
+          >
+            ×
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          disabled={generatingImage}
+          onClick={async () => {
+            setGeneratingImage(true);
+            try {
+              const res = await fetch(
+                `/api/sub-accounts/${subAccountId}/images/generate`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ prompt: post.imagePrompt }),
+                },
+              );
+              const data = (await res.json()) as { url?: string; message?: string; error?: string };
+              if (!res.ok || !data.url) {
+                throw new Error(data.message ?? data.error ?? "Generation failed");
+              }
+              setGeneratedImageUrl(data.url);
+              toast.success("Image generated.");
+            } catch (err) {
+              toast.error(err instanceof Error ? err.message : "Image generation failed");
+            } finally {
+              setGeneratingImage(false);
+            }
+          }}
+          className="mt-1 h-7 px-3 rounded-md border border-dashed text-xs font-medium hover:bg-muted/50 disabled:opacity-50"
+        >
+          {generatingImage ? "Generating…" : "✨ Generate this image"}
+        </button>
+      )}
       {post.ctaText && (
         <div className="text-xs font-medium mt-1">CTA: {post.ctaText}</div>
       )}
