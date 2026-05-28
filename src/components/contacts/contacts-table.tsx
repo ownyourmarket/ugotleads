@@ -21,9 +21,10 @@ import { useSubAccount } from "@/context/sub-account-context";
 interface Props {
   contacts: Contact[];
   search: string;
+  tagFilter?: string | null;
 }
 
-export function ContactsTable({ contacts, search }: Props) {
+export function ContactsTable({ contacts, search, tagFilter }: Props) {
   const { saPath } = useSubAccount();
   const [sorting, setSorting] = useState<SortingState>([
     { id: "createdAt", desc: true },
@@ -88,6 +89,27 @@ export function ContactsTable({ contacts, search }: Props) {
         cell: ({ row }) => <SourceBadge source={row.original.source} />,
       },
       {
+        accessorKey: "tags",
+        header: "Tags",
+        enableSorting: false,
+        cell: ({ row }) => {
+          const tags = row.original.tags ?? [];
+          if (tags.length === 0) return <span className="text-xs text-muted-foreground">—</span>;
+          return (
+            <div className="flex flex-wrap gap-1">
+              {tags.slice(0, 3).map((t) => (
+                <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium">
+                  {t}
+                </span>
+              ))}
+              {tags.length > 3 && (
+                <span className="text-[10px] text-muted-foreground">+{tags.length - 3}</span>
+              )}
+            </div>
+          );
+        },
+      },
+      {
         accessorKey: "createdAt",
         header: "Added",
         enableSorting: true,
@@ -107,16 +129,22 @@ export function ContactsTable({ contacts, search }: Props) {
   );
 
   const filtered = useMemo(() => {
+    let result = contacts;
+    if (tagFilter) {
+      result = result.filter((c) => (c.tags ?? []).includes(tagFilter));
+    }
     const q = search.trim().toLowerCase();
-    if (!q) return contacts;
-    return contacts.filter((c) => {
-      return (
-        c.name?.toLowerCase().includes(q) ||
-        c.email?.toLowerCase().includes(q) ||
-        c.company?.toLowerCase().includes(q)
-      );
-    });
-  }, [contacts, search]);
+    if (q) {
+      result = result.filter((c) => {
+        return (
+          c.name?.toLowerCase().includes(q) ||
+          c.email?.toLowerCase().includes(q) ||
+          c.company?.toLowerCase().includes(q)
+        );
+      });
+    }
+    return result;
+  }, [contacts, search, tagFilter]);
 
   const table = useReactTable({
     data: filtered,

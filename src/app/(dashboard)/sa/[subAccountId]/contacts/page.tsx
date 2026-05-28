@@ -2,7 +2,7 @@
 
 import { Suspense, useCallback, useEffect, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Download, Mail, Search, Upload, Users } from "lucide-react";
+import { Download, Mail, Search, Tag, Upload, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -47,6 +47,7 @@ export default function ContactsPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
   const openImport = useCallback(() => setImportOpen(true), []);
@@ -126,14 +127,54 @@ export default function ContactsPage() {
         </div>
       </div>
 
-      <div className="relative max-w-sm">
-        <Search className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-        <Input
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, email, or company"
-          className="pl-8"
-        />
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="relative max-w-sm flex-1">
+          <Search className="pointer-events-none absolute top-1/2 left-2.5 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search by name, email, or company"
+            className="pl-8"
+          />
+        </div>
+
+        {/* Tag filter pills */}
+        {(() => {
+          const allTags = Array.from(
+            new Set(contacts.flatMap((c) => c.tags ?? [])),
+          ).sort();
+          if (allTags.length === 0) return null;
+          return (
+            <div className="flex flex-wrap items-center gap-1.5">
+              <Tag className="h-3.5 w-3.5 text-muted-foreground" />
+              {allTags.map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() =>
+                    setTagFilter((prev) => (prev === t ? null : t))
+                  }
+                  className={`rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors ${
+                    tagFilter === t
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "text-muted-foreground hover:bg-muted"
+                  }`}
+                >
+                  {t}
+                </button>
+              ))}
+              {tagFilter && (
+                <button
+                  type="button"
+                  onClick={() => setTagFilter(null)}
+                  className="flex items-center gap-0.5 rounded-full border px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted"
+                >
+                  <X className="h-3 w-3" /> Clear
+                </button>
+              )}
+            </div>
+          );
+        })()}
       </div>
 
       {loading ? (
@@ -141,7 +182,7 @@ export default function ContactsPage() {
       ) : contacts.length === 0 ? (
         <EmptyState onImport={() => setImportOpen(true)} />
       ) : (
-        <ContactsTable contacts={contacts} search={search} />
+        <ContactsTable contacts={contacts} search={search} tagFilter={tagFilter} />
       )}
 
       <ImportContactsDialog open={importOpen} onOpenChange={setImportOpen} />
