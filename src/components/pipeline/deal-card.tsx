@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Clock } from "lucide-react";
+import { AlertTriangle, Clock } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { formatCurrency, daysSince } from "@/lib/format";
 import { getPriority, type Deal } from "@/types/deals";
@@ -36,6 +36,9 @@ export function DealCard({
   const daysLabel =
     days === 0 ? "today" : days === 1 ? "1d in stage" : `${days}d in stage`;
   const priority = getPriority(deal.priority);
+  const isTerminal = deal.stageId === "won" || deal.stageId === "lost";
+  const isStale = !isTerminal && days >= 7;
+  const isVeryStale = !isTerminal && days >= 14;
 
   const initials = (contact?.name || contact?.email || "?")
     .split(" ")
@@ -52,6 +55,8 @@ export function DealCard({
         "group relative rounded-lg border bg-card p-3 text-sm shadow-sm transition-all",
         "before:absolute before:inset-y-2 before:left-0 before:w-0.5 before:rounded-r-full before:bg-gradient-to-b before:from-indigo-500 before:via-violet-500 before:to-pink-500 before:opacity-0 before:transition-opacity",
         !overlay && "cursor-grab hover:border-primary/40 hover:shadow-md hover:before:opacity-100 active:cursor-grabbing",
+        isVeryStale && "border-rose-400/50 bg-rose-500/[0.03]",
+        isStale && !isVeryStale && "border-amber-400/50 bg-amber-500/[0.03]",
         dragging && "opacity-40",
         overlay && "rotate-1 scale-[1.02] cursor-grabbing shadow-lg ring-2 ring-primary/40",
       )}
@@ -82,8 +87,22 @@ export function DealCard({
         <span className="text-sm font-semibold tabular-nums">
           {formatCurrency(deal.value, deal.currency)}
         </span>
-        <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
-          <Clock className="h-3 w-3" />
+        <span
+          className={cn(
+            "inline-flex items-center gap-1 text-[11px]",
+            isVeryStale
+              ? "font-medium text-rose-600 dark:text-rose-400"
+              : isStale
+                ? "font-medium text-amber-600 dark:text-amber-400"
+                : "text-muted-foreground",
+          )}
+          title={isVeryStale ? "Stale — 14+ days without progress" : isStale ? "Getting stale — 7+ days in this stage" : undefined}
+        >
+          {isStale ? (
+            <AlertTriangle className="h-3 w-3" />
+          ) : (
+            <Clock className="h-3 w-3" />
+          )}
           {daysLabel}
         </span>
       </div>
