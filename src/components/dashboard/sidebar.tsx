@@ -20,6 +20,7 @@ import {
   Bot,
   Star,
   Share2,
+  Search,
 } from "lucide-react";
 import { signOutUser } from "@/lib/firebase/auth";
 import { useDueTodayCount } from "@/hooks/use-due-today";
@@ -65,6 +66,7 @@ const SUB_ACCOUNT_NAV: NavItem[] = [
   { href: "/social", label: "Social", icon: Share2, enabled: true },
   { href: "/broadcasts", label: "Broadcasts", icon: Send, enabled: true },
   { href: "/reviews", label: "Reviews", icon: Star, enabled: true },
+  { href: "/leads-scraper", label: "Lead Scraper", icon: Search, enabled: true },
   { href: "/reports", label: "Reports", icon: BarChart3, enabled: true },
   {
     href: "/dashboard/settings",
