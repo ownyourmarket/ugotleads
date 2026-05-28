@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { fireTriggers } from "@/lib/automations/triggers";
+import { createNotification } from "@/lib/notifications/create";
 import {
   EMPTY_LOCATION,
   ipFromRequest,
@@ -291,6 +292,15 @@ async function handleSubmit(
       meta: { formId: id, dealId },
       createdAt: FieldValue.serverTimestamp(),
     });
+
+  // Notification for the sub-account team.
+  createNotification({
+    subAccountId,
+    type: "form_submission",
+    title: "New form submission",
+    message: `Someone submitted "${form.name}"`,
+    linkTo: `/contacts/${contactRef.id}`,
+  }).catch(() => {}); // best-effort
 
   // Fire any matching automations. Failures are logged but don't break the
   // form submission response — the contact is already saved.

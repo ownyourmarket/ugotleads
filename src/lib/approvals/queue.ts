@@ -2,6 +2,7 @@ import "server-only";
 
 import { Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { createNotification } from "@/lib/notifications/create";
 
 export type ApprovalType =
   | "social-post"
@@ -46,6 +47,15 @@ export async function queueForApproval(
     reviewedBy: null,
     rejectionNote: null,
   });
+
+  // Notify the team about the pending approval
+  createNotification({
+    subAccountId: params.subAccountId,
+    type: "approval_pending",
+    title: "Content awaiting approval",
+    message: params.title,
+    linkTo: "/approvals",
+  }).catch(() => {}); // best-effort
 
   return doc.id;
 }

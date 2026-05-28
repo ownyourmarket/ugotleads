@@ -4,6 +4,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { resolveAgent } from "@/lib/comms/ai/agent";
 import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
+import { createNotification } from "@/lib/notifications/create";
 
 /**
  * Post-capture obligations: every Web Chat capture creates a Task and
@@ -93,6 +94,15 @@ export async function createFollowUpActions(
       updatedAt: FieldValue.serverTimestamp(),
     });
     taskId = taskRef.id;
+
+    // Notify the team
+    createNotification({
+      subAccountId: input.subAccountId,
+      type: "escalation",
+      title: "Web Chat lead captured",
+      message: `${identity} needs follow-up from Web Chat`,
+      linkTo: input.contactId ? `/contacts/${input.contactId}` : "/tasks",
+    }).catch(() => {});
   } catch (err) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     console.error(
