@@ -33,6 +33,7 @@ const PUBLIC_PATHS = [
   "/embed",
   // Widget loader JS — public static file served from /public.
   "/widget.js",
+  "/api/track",
   "/u",
   "/api/u",
   "/api/dev-only/danger-wipe-everything",

@@ -9,7 +9,7 @@ import {
   onSnapshot,
   query,
 } from "firebase/firestore";
-import { ArrowLeft, Mail } from "lucide-react";
+import { ArrowLeft, Mail, MailOpen, MousePointerClick } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { getFirebaseDb } from "@/lib/firebase/client";
 import { formatContactDate, formatRelativeTime } from "@/lib/format";
@@ -139,11 +139,23 @@ export default function BroadcastDetailPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <SummaryCard label="Sent" value={t.sent} tone="emerald" />
         <SummaryCard label="Skipped" value={t.skipped} tone="muted" />
         <SummaryCard label="Failed" value={t.failed} tone="rose" />
         <SummaryCard label="Audience" value={t.audienceSize} tone="muted" />
+        <SummaryCard
+          label="Opened"
+          value={sends.filter((s) => s.openedAt).length}
+          tone="emerald"
+          subtitle={t.sent > 0 ? `${Math.round((sends.filter((s) => s.openedAt).length / t.sent) * 100)}%` : undefined}
+        />
+        <SummaryCard
+          label="Clicked"
+          value={sends.filter((s) => s.clickedAt).length}
+          tone="emerald"
+          subtitle={t.sent > 0 ? `${Math.round((sends.filter((s) => s.clickedAt).length / t.sent) * 100)}%` : undefined}
+        />
       </div>
 
       {broadcast.status !== "completed" && broadcast.status !== "failed" && (
@@ -194,6 +206,16 @@ export default function BroadcastDetailPage() {
                   </p>
                 </div>
                 <SendStatus send={s} />
+                {s.openedAt && (
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-medium text-emerald-700 dark:text-emerald-300" title="Opened">
+                    <MailOpen className="h-3 w-3" />
+                  </span>
+                )}
+                {s.clickedAt && (
+                  <span className="inline-flex items-center gap-0.5 rounded-full bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-medium text-blue-700 dark:text-blue-300" title="Clicked">
+                    <MousePointerClick className="h-3 w-3" />
+                  </span>
+                )}
                 <span className="text-xs text-muted-foreground">
                   {formatContactDate(s.sentAt) === "—"
                     ? "—"
@@ -279,10 +301,12 @@ function SummaryCard({
   label,
   value,
   tone,
+  subtitle,
 }: {
   label: string;
   value: number;
   tone: "emerald" | "rose" | "muted";
+  subtitle?: string;
 }) {
   const valueClass =
     tone === "emerald"
@@ -295,9 +319,14 @@ function SummaryCard({
       <p className="text-xs uppercase tracking-wide text-muted-foreground">
         {label}
       </p>
-      <p className={`mt-1 font-mono text-2xl font-semibold ${valueClass}`}>
-        {value}
-      </p>
+      <div className="mt-1 flex items-baseline gap-1.5">
+        <p className={`font-mono text-2xl font-semibold ${valueClass}`}>
+          {value}
+        </p>
+        {subtitle && (
+          <span className="text-xs text-muted-foreground">{subtitle}</span>
+        )}
+      </div>
     </div>
   );
 }

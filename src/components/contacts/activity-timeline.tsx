@@ -16,6 +16,8 @@ import {
   CircleSlash,
   CheckCircle2,
   AlertTriangle,
+  MailOpen,
+  MousePointerClick,
 } from "lucide-react";
 import { subscribeToNotes } from "@/lib/firestore/contacts";
 import { subscribeToActivities } from "@/lib/firestore/activities";
@@ -247,6 +249,16 @@ function activityVisuals(type: ActivityType): {
       return {
         icon: <AlertTriangle className="h-3 w-3 text-rose-500" />,
         label: "Automation failed",
+      };
+    case "email_opened":
+      return {
+        icon: <MailOpen className="h-3 w-3 text-emerald-500" />,
+        label: "Email opened",
+      };
+    case "link_clicked":
+      return {
+        icon: <MousePointerClick className="h-3 w-3 text-blue-500" />,
+        label: "Link clicked",
       };
     case "note_added":
     default:

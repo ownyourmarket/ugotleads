@@ -116,4 +116,8 @@ export interface BroadcastSendDoc {
   attempts: number;
   queuedAt: Timestamp | FieldValue | null;
   sentAt: Timestamp | FieldValue | null;
+  /** When the recipient first opened the email (tracking pixel fired). */
+  openedAt?: Timestamp | FieldValue | null;
+  /** When the recipient first clicked a link in the email. */
+  clickedAt?: Timestamp | FieldValue | null;
 }

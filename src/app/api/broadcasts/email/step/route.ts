@@ -5,6 +5,7 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { qstashIsConfigured, verifyQStashSignature } from "@/lib/automations/qstash";
 import { sendEmail, emailIsConfigured } from "@/lib/comms/resend";
+import { injectTracking } from "@/lib/comms/tracking";
 import { resolveMergeTags } from "@/lib/automations/merge-tags";
 import { buildUnsubscribeUrl } from "@/lib/automations/unsubscribe-token";
 import type {
@@ -206,7 +207,12 @@ export async function POST(request: Request) {
     ...baseSubject,
     unsubscribeLink: htmlAnchor,
   }).replace(/\r?\n/g, "<br>");
-  const html = `<!doctype html><html><body style="font-family:system-ui,-apple-system,sans-serif;line-height:1.6;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px;">${htmlInner}</body></html>`;
+  const rawHtml = `<!doctype html><html><body style="font-family:system-ui,-apple-system,sans-serif;line-height:1.6;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px;">${htmlInner}</body></html>`;
+  const html = injectTracking(rawHtml, {
+    cid: contactId,
+    ctx: "broadcast",
+    ref: broadcastId,
+  });
 
   let resendMessageId: string | null = null;
   let error: string | null = null;

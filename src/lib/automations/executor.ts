@@ -3,6 +3,7 @@ import "server-only";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { sendEmail, emailIsConfigured } from "@/lib/comms/resend";
+import { injectTracking } from "@/lib/comms/tracking";
 import { sendSms, smsIsConfigured } from "@/lib/comms/twilio";
 import { resolveMergeTags } from "./merge-tags";
 import { publishStep } from "./qstash";
@@ -303,7 +304,12 @@ export async function executeStep(input: ExecuteStepInput): Promise<void> {
         ...baseSubject,
         unsubscribeLink: htmlAnchor,
       }).replace(/\r?\n/g, "<br>");
-      const html = `<!doctype html><html><body style="font-family:system-ui,-apple-system,sans-serif;line-height:1.6;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px;">${htmlInner}</body></html>`;
+      const rawHtml = `<!doctype html><html><body style="font-family:system-ui,-apple-system,sans-serif;line-height:1.6;color:#1a1a1a;max-width:600px;margin:0 auto;padding:24px;">${htmlInner}</body></html>`;
+      const html = injectTracking(rawHtml, {
+        cid: contact.id,
+        ctx: "automation",
+        ref: input.executionId,
+      });
       // Reply-To is the sub-account's nominated address — but only when
       // the recipient is the lead/contact. Owner-notify steps go to a
       // static address (the owner themselves); routing their reply back
