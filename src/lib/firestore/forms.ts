@@ -5,6 +5,7 @@ import {
   doc,
   getDoc,
   onSnapshot,
+  orderBy,
   query,
   serverTimestamp,
   updateDoc,
@@ -17,6 +18,7 @@ import {
   contactFormSettings,
   defaultFormFields,
   defaultFormSettings,
+  type FormSubmission,
   type FormTemplate,
   type LeadForm,
 } from "@/types/forms";
@@ -128,6 +130,27 @@ export async function getForm(id: string): Promise<LeadForm | null> {
   const snap = await getDoc(doc(getFirebaseDb(), FORMS, id));
   if (!snap.exists()) return null;
   return { id: snap.id, ...(snap.data() as Omit<LeadForm, "id">) };
+}
+
+export function subscribeToSubmissions(
+  formId: string,
+  callback: (submissions: FormSubmission[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(getFirebaseDb(), FORMS, formId, "submissions"),
+    orderBy("createdAt", "desc"),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const subs = snap.docs.map(
+        (d) => ({ id: d.id, ...(d.data() as Omit<FormSubmission, "id">) }),
+      );
+      callback(subs);
+    },
+    (err) => onError?.(err),
+  );
 }
 
 function toMillis(v: unknown): number {

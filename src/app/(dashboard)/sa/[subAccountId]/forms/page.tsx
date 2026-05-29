@@ -11,6 +11,7 @@ import {
   Copy,
   Trash2,
   MessageSquare,
+  BarChart3,
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -149,6 +150,7 @@ export default function FormsPage() {
               key={form.id}
               form={form}
               editHref={saPath(`/forms/${form.id}`)}
+              submissionsHref={saPath(`/forms/${form.id}/submissions`)}
               onCopy={() => copyLink(form)}
               onDelete={() => handleDelete(form)}
             />
@@ -200,11 +202,13 @@ export default function FormsPage() {
 function FormCard({
   form,
   editHref,
+  submissionsHref,
   onCopy,
   onDelete,
 }: {
   form: LeadForm;
   editHref: string;
+  submissionsHref: string;
   onCopy: () => void;
   onDelete: () => void;
 }) {
@@ -245,6 +249,12 @@ function FormCard({
           <Pencil className="mr-1 h-3.5 w-3.5" />
           Edit
         </Button>
+        {(form.submissionCount ?? 0) > 0 && (
+          <Button size="sm" variant="outline" render={<Link href={submissionsHref} />}>
+            <BarChart3 className="mr-1 h-3.5 w-3.5" />
+            {form.submissionCount}
+          </Button>
+        )}
         <Button size="sm" variant="outline" onClick={onCopy}>
           <Copy className="mr-1 h-3.5 w-3.5" />
           Copy link
