@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { CheckSquare, Plus } from "lucide-react";
+import { CheckSquare, Columns3, List, Plus } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
@@ -10,6 +10,7 @@ import { toDate } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import { TaskDialog } from "@/components/tasks/task-dialog";
 import { TaskItem } from "@/components/tasks/task-item";
+import { TaskBoard } from "@/components/tasks/task-board";
 import { cn } from "@/lib/utils";
 import type { Contact } from "@/types/contacts";
 import type { Task, TaskFilter } from "@/types/tasks";
@@ -21,6 +22,7 @@ export default function TasksPage() {
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<TaskFilter>("today");
+  const [view, setView] = useState<"list" | "board">("list");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editTask, setEditTask] = useState<Task | null>(null);
 
@@ -135,13 +137,41 @@ export default function TasksPage() {
             Follow-ups and reminders so nothing slips.
           </p>
         </div>
-        <Button onClick={openNew}>
-          <Plus className="mr-1 h-4 w-4" />
-          New Task
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border bg-muted/30 p-0.5">
+            <button
+              onClick={() => setView("list")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition-all",
+                view === "list"
+                  ? "bg-background shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <List className="h-4 w-4" />
+              List
+            </button>
+            <button
+              onClick={() => setView("board")}
+              className={cn(
+                "flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm font-medium transition-all",
+                view === "board"
+                  ? "bg-background shadow-sm"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Columns3 className="h-4 w-4" />
+              Board
+            </button>
+          </div>
+          <Button onClick={openNew}>
+            <Plus className="mr-1 h-4 w-4" />
+            New Task
+          </Button>
+        </div>
       </div>
 
-      <div className="flex flex-wrap gap-1 rounded-xl border bg-muted/30 p-1">
+      <div className={cn("flex flex-wrap gap-1 rounded-xl border bg-muted/30 p-1", view === "board" && "hidden")}>
         {FILTERS.map((f) => {
           const isActive = filter === f.id;
           return (
@@ -171,6 +201,14 @@ export default function TasksPage() {
 
       {loading ? (
         <ListSkeleton />
+      ) : tasks.length === 0 ? (
+        <EmptyState filter={filter} onAdd={openNew} />
+      ) : view === "board" ? (
+        <TaskBoard
+          tasks={tasks}
+          contacts={contacts}
+          onEdit={openEdit}
+        />
       ) : shown.length === 0 ? (
         <EmptyState filter={filter} onAdd={openNew} />
       ) : (
