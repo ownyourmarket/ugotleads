@@ -180,3 +180,39 @@
       0 0 18px 0 rgba(139, 92, 246, 0.3);
   }
 }
+
+/* ── Print styles ─────────────────────────────────────────────── */
+@media print {
+  /* Hide sidebar, header, and non-essential chrome */
+  [data-print-hide] {
+    display: none !important;
+  }
+
+  /* Reset the flex layout so main content fills the page */
+  body {
+    overflow: visible !important;
+  }
+
+  main {
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  /* Ensure cards and borders print cleanly */
+  * {
+    box-shadow: none !important;
+  }
+
+  /* Avoid page breaks inside cards */
+  .rounded-xl,
+  .rounded-2xl {
+    break-inside: avoid;
+  }
+
+  /* Expand truncated text */
+  .truncate {
+    overflow: visible !important;
+    text-overflow: unset !important;
+    white-space: normal !important;
+  }
+}

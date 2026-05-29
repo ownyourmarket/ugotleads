@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { UserX } from "lucide-react";
+import { Printer, UserX } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContact } from "@/lib/firestore/contacts";
@@ -50,6 +50,18 @@ export default function ContactProfilePage() {
   return (
     <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
       <div className="space-y-6">
+        <div className="flex items-center justify-between" data-print-hide>
+          <div />
+          <Button
+            variant="ghost"
+            size="sm"
+            className="h-7 text-xs"
+            onClick={() => window.print()}
+          >
+            <Printer className="mr-1 h-3 w-3" />
+            Print
+          </Button>
+        </div>
         <ContactProfileHeader contact={contact} />
         <ContactDeals contact={contact} />
         <ContactTasks contact={contact} />

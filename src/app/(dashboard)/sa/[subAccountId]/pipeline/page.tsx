@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Download, GitBranch, Search } from "lucide-react";
+import { Download, GitBranch, Printer, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -168,6 +168,15 @@ export default function PipelinePage() {
               Export
             </Button>
           )}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => window.print()}
+            title="Print pipeline"
+            data-print-hide
+          >
+            <Printer className="h-4 w-4" />
+          </Button>
           <NewDealDialog contacts={contacts} />
         </div>
       </div>

@@ -27,12 +27,16 @@ export default function DashboardLayout({
 
   return (
     <div className="flex h-screen">
-      <Sidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
+      <div data-print-hide>
+        <Sidebar open={sidebarOpen} onOpenChange={setSidebarOpen} />
+      </div>
       <div className="flex flex-1 flex-col overflow-hidden">
-        <Header
-          onMenuClick={() => setSidebarOpen(true)}
-          onOpenSearch={() => setSearchOpen(true)}
-        />
+        <div data-print-hide>
+          <Header
+            onMenuClick={() => setSidebarOpen(true)}
+            onOpenSearch={() => setSearchOpen(true)}
+          />
+        </div>
         <main className="flex-1 overflow-y-auto p-4 md:p-6">{children}</main>
       </div>
       <CommandPalette open={searchOpen} onOpenChange={setSearchOpen} />
