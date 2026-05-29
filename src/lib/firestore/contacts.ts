@@ -12,7 +12,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase/client";
-import type { Contact, ContactFormData, Note } from "@/types/contacts";
+import type { Contact, ContactFormData, ImportLog, Note } from "@/types/contacts";
 import type { TenantScope } from "@/types";
 
 const CONTACTS = "contacts";
@@ -136,6 +136,51 @@ export function subscribeToNotes(
       callback(
         snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Note, "id">) })),
       );
+    },
+    (err) => onError?.(err),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Import logs
+// ---------------------------------------------------------------------------
+
+const IMPORT_LOGS = "import_logs";
+
+export async function createImportLog(
+  scope: TenantScope,
+  data: Omit<ImportLog, "id" | "agencyId" | "subAccountId" | "createdAt">,
+): Promise<string> {
+  const ref = await addDoc(collection(getFirebaseDb(), IMPORT_LOGS), {
+    ...data,
+    agencyId: scope.agencyId,
+    subAccountId: scope.subAccountId,
+    createdAt: serverTimestamp(),
+  });
+  return ref.id;
+}
+
+export function subscribeToImportLogs(
+  scope: TenantScope,
+  callback: (logs: ImportLog[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(getFirebaseDb(), IMPORT_LOGS),
+    where("subAccountId", "==", scope.subAccountId),
+  );
+  return onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map(
+        (d) => ({ id: d.id, ...(d.data() as Omit<ImportLog, "id">) }),
+      );
+      list.sort((a, b) => {
+        const aMs = toMillis(a.createdAt);
+        const bMs = toMillis(b.createdAt);
+        return bMs - aMs;
+      });
+      callback(list);
     },
     (err) => onError?.(err),
   );

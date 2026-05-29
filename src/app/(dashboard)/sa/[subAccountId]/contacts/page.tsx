@@ -3,7 +3,7 @@
 import { Suspense, useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Download, Filter, GitMerge, Mail, Search, Tag, Upload, Users, X } from "lucide-react";
+import { Download, Filter, GitMerge, History, Mail, Search, Tag, Upload, Users, X } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -16,6 +16,7 @@ import { ContactsTable } from "@/components/contacts/contacts-table";
 import { AddContactModal } from "@/components/contacts/add-contact-modal";
 import { ImportContactsDialog } from "@/components/contacts/import-contacts-dialog";
 import { BulkEmailDialog } from "@/components/contacts/bulk-email-dialog";
+import { ImportHistoryDialog } from "@/components/contacts/import-history-dialog";
 import type { Contact } from "@/types/contacts";
 
 /**
@@ -51,6 +52,7 @@ export default function ContactsPage() {
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [importOpen, setImportOpen] = useState(false);
   const [bulkEmailOpen, setBulkEmailOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
   const [sourceFilter, setSourceFilter] = useState<string>("");
   const [stageFilter, setStageFilter] = useState<string>("");
   const [contactFilter, setContactFilter] = useState<string>("");
@@ -136,6 +138,14 @@ export default function ContactsPage() {
           >
             <Upload className="mr-1 h-4 w-4" />
             Import CSV
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setHistoryOpen(true)}
+            title="Import history"
+          >
+            <History className="h-4 w-4" />
           </Button>
           <Button
             variant="outline"
@@ -302,6 +312,7 @@ export default function ContactsPage() {
         onOpenChange={setBulkEmailOpen}
         contacts={contacts}
       />
+      <ImportHistoryDialog open={historyOpen} onOpenChange={setHistoryOpen} />
     </div>
   );
 }

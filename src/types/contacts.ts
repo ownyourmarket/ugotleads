@@ -117,3 +117,28 @@ export interface ActivityItem {
   createdAt: Timestamp | FieldValue | null;
   createdBy: string;
 }
+
+/**
+ * Audit log entry for a CSV contact import. One row per import action.
+ * Stored in the top-level `import_logs` collection, scoped by tenancy keys.
+ */
+export interface ImportLog {
+  id: string;
+  agencyId: string;
+  subAccountId: string;
+  /** UID of the user who ran the import. */
+  importedByUid: string;
+  /** Display name of the importer (snapshot — survives user deletion). */
+  importedByName: string;
+  /** Original CSV filename. */
+  fileName: string;
+  /** Total rows in the CSV (excluding header). */
+  totalRows: number;
+  /** Contacts successfully created. */
+  created: number;
+  /** Rows skipped (invalid email, duplicate, etc.). */
+  skipped: number;
+  /** First few error messages (capped at 5). */
+  errors: string[];
+  createdAt: Timestamp | FieldValue | null;
+}

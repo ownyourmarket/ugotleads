@@ -598,6 +598,19 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    // Import audit logs — one row per CSV import action.
+    match /import_logs/{logId} {
+      allow read: if canAccessSub(
+        resource.data.subAccountId,
+        resource.data.agencyId
+      );
+      allow create: if canAccessSub(
+        request.resource.data.subAccountId,
+        request.resource.data.agencyId
+      );
+      allow update, delete: if false;
+    }
+
     // Server-only dedup log for Zernio webhook events (idempotency).
     // Writes happen via Admin SDK from /api/webhooks/zernio.
     match /zernioEvents/{eventId} {

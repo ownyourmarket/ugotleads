@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
-import { createContact } from "@/lib/firestore/contacts";
+import { createContact, createImportLog } from "@/lib/firestore/contacts";
 import { parseCsv, guessContactField, isValidEmail } from "@/lib/csv";
 import type { ContactFormData, ContactSource } from "@/types/contacts";
 
@@ -149,6 +149,23 @@ export function ImportContactsDialog({
         }
       }
       setResult({ created, skipped, errors });
+      // Write audit log
+      try {
+        await createImportLog(
+          { agencyId, subAccountId },
+          {
+            importedByUid: user.uid,
+            importedByName: user.displayName || user.email || "Unknown",
+            fileName,
+            totalRows: rows.length,
+            created,
+            skipped,
+            errors: errors.slice(0, 5),
+          },
+        );
+      } catch {
+        // Best-effort — don't block the import result
+      }
       if (created > 0) {
         toast.success(
           `Imported ${created} contact${created === 1 ? "" : "s"}${
