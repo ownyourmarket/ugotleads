@@ -52,6 +52,8 @@ import { Button } from "@/components/ui/button";
 import { NewDealDialog } from "@/components/pipeline/new-deal-dialog";
 import { LeadsMap } from "@/components/dashboard/leads-map";
 import { SetupChecklist } from "@/components/dashboard/setup-checklist";
+import { WidgetSettings } from "@/components/dashboard/widget-settings";
+import { useDashboardWidgets } from "@/hooks/use-dashboard-widgets";
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -69,6 +71,7 @@ export default function DashboardPage() {
   const [execContactNames, setExecContactNames] = useState<Record<string, string>>({});
   const [setupDismissed, setSetupDismissed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const widgets = useDashboardWidgets(subAccountId);
 
   useEffect(() => {
     if (!user || !agencyId) return;
@@ -333,12 +336,13 @@ export default function DashboardPage() {
         </div>
         {!isEmpty && (
           <div className="flex items-center gap-2">
+            <WidgetSettings {...widgets} />
             <NewDealDialog contacts={contacts} />
           </div>
         )}
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+      {widgets.isVisible("stats") && <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         <StatCard
           href={saPath("/pipeline")}
           icon={<Briefcase className="h-4 w-4" />}
@@ -415,12 +419,12 @@ export default function DashboardPage() {
               }
               loading={loading}
             />
-          </div>
+          </div>}
 
-      <LeadsMap contacts={contacts} deals={deals} />
+      {widgets.isVisible("map") && <LeadsMap contacts={contacts} deals={deals} />}
 
       {/* Today's agenda */}
-      {!loading && (todayAgenda.dueTasks.length > 0 || todayAgenda.todayEvents.length > 0) && (
+      {widgets.isVisible("agenda") && !loading && (todayAgenda.dueTasks.length > 0 || todayAgenda.todayEvents.length > 0) && (
         <section className="rounded-2xl border bg-card p-5">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -508,7 +512,7 @@ export default function DashboardPage() {
         <GettingStarted />
       ) : (
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]">
-            <section className="rounded-2xl border bg-card p-5">
+            {widgets.isVisible("pipeline") && <section className="rounded-2xl border bg-card p-5">
               <div className="mb-4 flex items-center justify-between">
                 <div>
                   <h2 className="text-sm font-semibold">Pipeline snapshot</h2>
@@ -601,10 +605,10 @@ export default function DashboardPage() {
                   </ul>
                 </>
               )}
-            </section>
+            </section>}
 
             <div className="space-y-4">
-              <section className="rounded-2xl border bg-card p-5">
+              {widgets.isVisible("contacts") && <section className="rounded-2xl border bg-card p-5">
                 <div className="mb-4 flex items-center justify-between">
                   <div>
                     <h2 className="text-sm font-semibold">Recent contacts</h2>
@@ -660,9 +664,9 @@ export default function DashboardPage() {
                     })}
                   </ul>
                 )}
-              </section>
+              </section>}
 
-              {recentExecutions.length > 0 && (
+              {widgets.isVisible("automations") && recentExecutions.length > 0 && (
                 <section className="rounded-2xl border bg-card p-5">
                   <div className="mb-4 flex items-center justify-between">
                     <div>
@@ -725,7 +729,7 @@ export default function DashboardPage() {
                 </section>
               )}
 
-              <section className="rounded-2xl border bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-5">
+              {widgets.isVisible("quickActions") && <section className="rounded-2xl border bg-gradient-to-br from-indigo-500/5 via-violet-500/5 to-pink-500/5 p-5">
                 <div className="mb-3 flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-violet-500" />
                   <h2 className="text-sm font-semibold">Quick actions</h2>
@@ -761,7 +765,7 @@ export default function DashboardPage() {
                     desc="Move deals between stages"
                   />
                 </div>
-              </section>
+              </section>}
             </div>
           </div>
       )}
