@@ -2,14 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { GitBranch, Search } from "lucide-react";
+import { Download, GitBranch, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { subscribeToContacts } from "@/lib/firestore/contacts";
 import { subscribeToDeals } from "@/lib/firestore/deals";
-import { formatCurrency } from "@/lib/format";
-import { PIPELINE_STAGES, type Deal } from "@/types/deals";
+import { formatCurrency, toDate } from "@/lib/format";
+import { serializeCsv, downloadCsv } from "@/lib/csv";
+import { getStage, PIPELINE_STAGES, type Deal } from "@/types/deals";
 import type { Contact } from "@/types/contacts";
 import { Button } from "@/components/ui/button";
 import { PipelineBoard } from "@/components/pipeline/pipeline-board";
@@ -138,7 +139,37 @@ export default function PipelinePage() {
             Drag deals across stages. Your team sees every move in real time.
           </p>
         </div>
-        <NewDealDialog contacts={contacts} />
+        <div className="flex items-center gap-2">
+          {filteredDeals.length > 0 && (
+            <Button
+              variant="outline"
+              onClick={() => {
+                const headers = ["title", "value", "currency", "stage", "priority", "contact", "email", "company", "lostReason", "createdAt"];
+                const rows = filteredDeals.map((d) => {
+                  const c = contactsById.get(d.contactId);
+                  return {
+                    title: d.title,
+                    value: d.value,
+                    currency: d.currency,
+                    stage: getStage(d.stageId).label,
+                    priority: d.priority,
+                    contact: c?.name ?? "",
+                    email: c?.email ?? "",
+                    company: c?.company ?? "",
+                    lostReason: d.lostReason ?? "",
+                    createdAt: toDate(d.createdAt)?.toISOString() ?? "",
+                  };
+                });
+                const csv = serializeCsv(headers, rows);
+                downloadCsv(`deals-export-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+              }}
+            >
+              <Download className="mr-1 h-4 w-4" />
+              Export
+            </Button>
+          )}
+          <NewDealDialog contacts={contacts} />
+        </div>
       </div>
 
       {!loading && deals.length > 0 && (

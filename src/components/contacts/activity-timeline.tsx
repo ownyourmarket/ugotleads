@@ -18,11 +18,14 @@ import {
   AlertTriangle,
   MailOpen,
   MousePointerClick,
+  Download,
 } from "lucide-react";
 import { subscribeToNotes } from "@/lib/firestore/contacts";
 import { subscribeToActivities } from "@/lib/firestore/activities";
-import { formatRelativeTime } from "@/lib/format";
+import { formatRelativeTime, toDate } from "@/lib/format";
+import { serializeCsv, downloadCsv } from "@/lib/csv";
 import { useSubAccount } from "@/context/sub-account-context";
+import { Button } from "@/components/ui/button";
 import type { Note, ActivityType } from "@/types/contacts";
 import type { ActivityDoc } from "@/types/activities";
 
@@ -114,25 +117,44 @@ export function ActivityTimeline({ contactId }: { contactId: string }) {
     );
   }
 
+  function handleExport() {
+    const headers = ["type", "content", "date"];
+    const rows = items.map((item) => ({
+      type: item.kind === "note" ? "note" : item.type,
+      content: item.content,
+      date: toDate(item.createdAt)?.toISOString() ?? "",
+    }));
+    const csv = serializeCsv(headers, rows);
+    downloadCsv(`activity-export-${contactId}-${new Date().toISOString().slice(0, 10)}.csv`, csv);
+  }
+
   return (
-    <ol className="relative space-y-4 pl-6 before:absolute before:top-2 before:bottom-2 before:left-3 before:w-px before:bg-border">
-      {items.map((item) =>
-        item.kind === "note" ? (
-          <TimelineRow
-            key={`n-${item.id}`}
-            icon={<Pencil className="h-3 w-3 text-muted-foreground" />}
-            label="Note added"
-            when={item.createdAt}
-          >
-            <p className="whitespace-pre-wrap text-sm leading-relaxed">
-              {item.content}
-            </p>
-          </TimelineRow>
-        ) : (
-          <ActivityRow key={`a-${item.id}`} item={item} />
-        ),
-      )}
-    </ol>
+    <div>
+      <div className="mb-3 flex items-center justify-end">
+        <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={handleExport}>
+          <Download className="mr-1 h-3 w-3" />
+          Export timeline
+        </Button>
+      </div>
+      <ol className="relative space-y-4 pl-6 before:absolute before:top-2 before:bottom-2 before:left-3 before:w-px before:bg-border">
+        {items.map((item) =>
+          item.kind === "note" ? (
+            <TimelineRow
+              key={`n-${item.id}`}
+              icon={<Pencil className="h-3 w-3 text-muted-foreground" />}
+              label="Note added"
+              when={item.createdAt}
+            >
+              <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                {item.content}
+              </p>
+            </TimelineRow>
+          ) : (
+            <ActivityRow key={`a-${item.id}`} item={item} />
+          ),
+        )}
+      </ol>
+    </div>
   );
 }
 
