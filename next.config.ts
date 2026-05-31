@@ -1,6 +1,29 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  /**
+   * Output file tracing — include SOUL.md files in the Vercel serverless bundle.
+   *
+   * Next.js traces imports statically at build time to decide which files each
+   * serverless function needs. `buildAgentSystemPrompt` reads SOUL.md files via
+   * `fs.readFile` with a runtime-constructed path, so the static tracer never
+   * sees them and they are excluded from the bundle by default. The function
+   * would throw ENOENT in production on first call.
+   *
+   * `outputFileTracingIncludes` is the official escape hatch for files that are
+   * read dynamically at runtime. The glob is narrow — only SOUL markdown files
+   * are included, not the entire soul/ directory or project root.
+   *
+   * The `/**` key applies the include to every route/function in the build.
+   * Scoping it to a single API route would be premature — the prompt builder
+   * may eventually be called from Server Actions or multiple routes.
+   *
+   * Docs: https://nextjs.org/docs/app/api-reference/config/next-config-js/outputFileTracingIncludes
+   */
+  outputFileTracingIncludes: {
+    "/**": ["./soul/**/*.md"],
+  },
+
   async headers() {
     return [
       {
