@@ -1,4 +1,18 @@
-# LeadStack CRM
+# UGotLeads CRM (LeadStack base)
+
+## SOUL Files — Read First
+
+This deployment is branded as **UGotLeads** by Star Riley / MyUSA. Before working on any task, read the relevant SOUL files:
+
+1. Always read `/soul/brand/SOUL.md` before working on UGotLeads.
+2. If a task matches a specialized agent, also read that agent's SOUL.md.
+3. For code tasks, read `/soul/agents/code-engineer/SOUL.md`.
+4. For marketing copy, read `/soul/agents/marketing-copywriter/SOUL.md`.
+5. For risky claims, offers, partner language, or income-related copy, read `/soul/agents/compliance-reviewer/SOUL.md`.
+6. For onboarding flows or user setup help, read `/soul/agents/customer-onboarding/SOUL.md`.
+7. For business strategy, launch priorities, pricing, and revenue planning, read `/soul/agents/founder-operator-advisor/SOUL.md`.
+
+---
 
 ## Audience for this document
 
