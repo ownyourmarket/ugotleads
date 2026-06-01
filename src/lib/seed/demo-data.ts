@@ -4,8 +4,8 @@ import {
   FieldValue,
   type Firestore,
 } from "firebase-admin/firestore";
-import type { PartnerProfile } from "@/types/partner";
-import type { CreditWallet } from "@/types/credits";
+import type { PartnerProfile, PartnerTrack } from "@/types/partner";
+import type { CreditWallet, CommissionRule } from "@/types/credits";
 import type { Product } from "@/types/products";
 
 /**
@@ -549,4 +549,225 @@ export const SEED_PRODUCT_TEMPLATE: Omit<
   productFamily: "ugotleads_software",
   productOwner: "myusa_local",
   productSource: "myusa_local",
+};
+
+// ---------------------------------------------------------------------------
+// Task 10 — Product catalog seed samples
+// One entry per ProductFamily. Replace PLACEHOLDER_AGENCY_ID / PLACEHOLDER_UID
+// with real IDs at the call site before writing to Firestore.
+// These are read-only reference constants — they are NOT auto-seeded on boot.
+// ---------------------------------------------------------------------------
+
+type SeedProduct = Omit<
+  Product,
+  "id" | "agencyId" | "createdByUid" | "createdAt" | "updatedAt"
+>;
+
+/** uGotLeads platform software — credit-based AI feature */
+export const SEED_PRODUCT_AI_REPUTATION: SeedProduct = {
+  name: "AI Reputation Monitor",
+  description:
+    "Continuously scans Google, Yelp, and Facebook for new reviews. AI drafts a response in your client's voice within minutes.",
+  status: "active",
+  accessModel: "credit",
+  creditCostPerUnit: 5,
+  stripePriceIdMonthly: null,
+  stripePriceIdAnnual: null,
+  setupFeeCents: 0,
+  isPublic: true,
+  productFamily: "ugotleads_software",
+  productOwner: "myusa_local",
+  productSource: "myusa_local",
+};
+
+/** uGotLeads platform software — subscription CRM workspace */
+export const SEED_PRODUCT_CRM_PRO: SeedProduct = {
+  name: "uGotLeads CRM Pro",
+  description:
+    "Full-access CRM workspace: pipeline, contacts, calendar, tasks, forms, and AI agents. Billed monthly per sub-account.",
+  status: "active",
+  accessModel: "subscription",
+  creditCostPerUnit: 0,
+  stripePriceIdMonthly: null, // replace with real Stripe price_* at call site
+  stripePriceIdAnnual: null,
+  setupFeeCents: 0,
+  isPublic: true,
+  productFamily: "ugotleads_software",
+  productOwner: "myusa_local",
+  productSource: "myusa_local",
+};
+
+/** MyUSA Local education — certification course */
+export const SEED_PRODUCT_AI_CONSULTANT_COURSE: SeedProduct = {
+  name: "Certified AI Consultant Foundations",
+  description:
+    "Six-module course covering AI strategy, prompt engineering for local businesses, and the uGotLeads platform. Prepares operators for the Certified AI Consultant track.",
+  status: "active",
+  accessModel: "credit",
+  creditCostPerUnit: 150,
+  stripePriceIdMonthly: null,
+  stripePriceIdAnnual: null,
+  setupFeeCents: 0,
+  isPublic: true,
+  productFamily: "myusa_education",
+  productOwner: "myusa_local",
+  productSource: "myusa_local",
+};
+
+/** MyUSA Local services — done-for-you setup service */
+export const SEED_PRODUCT_DFY_SETUP: SeedProduct = {
+  name: "Done-For-You CRM Setup",
+  description:
+    "MyUSA Local team configures the full uGotLeads workspace for one client: pipeline stages, contact import, forms, Speed-to-Lead automation, and AI agent persona.",
+  status: "active",
+  accessModel: "credit",
+  creditCostPerUnit: 200,
+  stripePriceIdMonthly: null,
+  stripePriceIdAnnual: null,
+  setupFeeCents: 0,
+  isPublic: true,
+  productFamily: "myusa_services",
+  productOwner: "myusa_local",
+  productSource: "myusa_local",
+};
+
+/** MyUSA Local resources — operator toolkit */
+export const SEED_PRODUCT_OUTREACH_PLAYBOOK: SeedProduct = {
+  name: "Local Business Outreach Playbook",
+  description:
+    "Step-by-step playbook, email templates, and objection-handling scripts for landing the first five local clients in a new territory.",
+  status: "active",
+  accessModel: "credit",
+  creditCostPerUnit: 25,
+  stripePriceIdMonthly: null,
+  stripePriceIdAnnual: null,
+  setupFeeCents: 0,
+  isPublic: true,
+  productFamily: "myusa_resources",
+  productOwner: "myusa_local",
+  productSource: "myusa_local",
+};
+
+/** MyUSA Local media products — directory listing */
+export const SEED_PRODUCT_DIRECTORY_LISTING: SeedProduct = {
+  name: "MyUSA Local Business Directory Listing",
+  description:
+    "Annual featured listing in the MyUSA Local directory for one business. Includes logo, description, category tags, and a direct link to their booking or contact page.",
+  status: "active",
+  accessModel: "credit",
+  creditCostPerUnit: 40,
+  stripePriceIdMonthly: null,
+  stripePriceIdAnnual: null,
+  setupFeeCents: 0,
+  isPublic: true,
+  productFamily: "myusa_media_products",
+  productOwner: "myusa_local",
+  productSource: "myusa_local",
+};
+
+// Convenience array — iterate this when writing seed products to Firestore.
+export const SEED_PRODUCTS_ALL: SeedProduct[] = [
+  SEED_PRODUCT_TEMPLATE,
+  SEED_PRODUCT_AI_REPUTATION,
+  SEED_PRODUCT_CRM_PRO,
+  SEED_PRODUCT_AI_CONSULTANT_COURSE,
+  SEED_PRODUCT_DFY_SETUP,
+  SEED_PRODUCT_OUTREACH_PLAYBOOK,
+  SEED_PRODUCT_DIRECTORY_LISTING,
+];
+
+// ---------------------------------------------------------------------------
+// Task 10 — Partner track seed samples
+// Stored in partner_tracks/{id}. Replace PLACEHOLDER_* at call site.
+// ---------------------------------------------------------------------------
+
+type SeedTrack = Omit<
+  PartnerTrack,
+  "id" | "agencyId" | "createdByUid" | "createdAt" | "updatedAt"
+>;
+
+/** Track 1: Certified AI Consultant */
+export const SEED_TRACK_CERTIFIED_AI_CONSULTANT: SeedTrack = {
+  name: "Certified AI Consultant",
+  description:
+    "Equips operators to advise local businesses on AI adoption. Covers uGotLeads platform, prompt engineering, client discovery, and proposal delivery. Earns the Certified AI Consultant badge on completion.",
+  status: "active",
+  milestones: [
+    "Complete AI Foundations course",
+    "Configure a live uGotLeads sub-account",
+    "Deliver a mock AI audit to a practice client",
+    "Submit first paid client onboarding",
+    "Pass the Certified AI Consultant assessment",
+  ],
+  durationDays: 90,
+  certificationId: null, // replace with certifications/{id} at call site
+};
+
+/** Track 2: Support Local Community Advocate */
+export const SEED_TRACK_COMMUNITY_ADVOCATE: SeedTrack = {
+  name: "Support Local Community Advocate",
+  description:
+    "Trains operators to build relationships with local business owners as trusted community connectors. Covers directory outreach, media product sales, and referral conversations.",
+  status: "active",
+  milestones: [
+    "Complete Community Outreach Orientation",
+    "Secure three directory listing clients",
+    "Publish one issue of a local MyUSA newsletter",
+    "Refer one new operator to the partner network",
+  ],
+  durationDays: 60,
+  certificationId: null, // replace with certifications/{id} at call site
+};
+
+// ---------------------------------------------------------------------------
+// Task 10 — Commission rule seed samples
+// Stored in commission_rules/{id}. Generic foundation only — no MLM logic.
+// Replace PLACEHOLDER_* at call site.
+// ---------------------------------------------------------------------------
+
+type SeedCommissionRule = Omit<
+  CommissionRule,
+  "id" | "agencyId" | "createdByUid" | "createdAt" | "updatedAt"
+>;
+
+/**
+ * Rule A: 20% commission on any one-time product sale, all tiers.
+ * Applies when a partner refers a client who purchases any product.
+ */
+export const SEED_COMMISSION_RULE_PRODUCT_SALE: SeedCommissionRule = {
+  name: "Standard Product Sale Commission",
+  trigger: "product_sale",
+  commissionPct: 20,
+  productId: null,   // null = applies to all products
+  partnerTier: null, // null = applies to all tiers
+  isActive: true,
+};
+
+/**
+ * Rule B: 15% commission on CRM Pro subscription renewals, all tiers.
+ * Applies each billing cycle while the referred client remains subscribed.
+ *
+ * Results are not guaranteed. Individual earnings depend on effort, market
+ * conditions, and execution.
+ */
+export const SEED_COMMISSION_RULE_SUBSCRIPTION_RENEWAL: SeedCommissionRule = {
+  name: "CRM Pro Renewal Commission",
+  trigger: "subscription_renewal",
+  commissionPct: 15,
+  productId: null,   // replace with CRM Pro product id at call site if scoping
+  partnerTier: null,
+  isActive: true,
+};
+
+/**
+ * Rule C: 10% commission when a partner directly refers another new partner
+ * who is subsequently approved. Performance-based only — no guaranteed income.
+ */
+export const SEED_COMMISSION_RULE_PARTNER_REFERRAL: SeedCommissionRule = {
+  name: "Partner Referral Commission",
+  trigger: "partner_referral",
+  commissionPct: 10,
+  productId: null,
+  partnerTier: null,
+  isActive: true,
 };
