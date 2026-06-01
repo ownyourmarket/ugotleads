@@ -3,7 +3,7 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
 import type { AccessModel } from "./products";
 
 /**
- * A licensed operator approved to run a MyUSA local market.
+ * A licensed partner in the agency's partner network.
  * Doc id === uid — lookups by uid need no index.
  * Collection: partner_profiles/{uid}
  */

@@ -546,4 +546,7 @@ export const SEED_PRODUCT_TEMPLATE: Omit<
   stripePriceIdAnnual: null,
   setupFeeCents: 0,
   isPublic: true,
+  productFamily: "ugotleads_software",
+  productOwner: "myusa_local",
+  productSource: "myusa_local",
 };
