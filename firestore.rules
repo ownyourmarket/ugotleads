@@ -617,6 +617,134 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // =========================================================================
+    // Revenue OS — partner & billing collections
+    // (appended; no existing rules modified)
+    // =========================================================================
+
+    // partner_profiles/{uid}  (doc id === uid)
+    match /partner_profiles/{uid} {
+      allow read: if isAgencyOwner(resource.data.agencyId)
+                  || (isActive() && request.auth.uid == uid);
+      allow create, update: if isAgencyOwner(request.resource.data.agencyId);
+      allow delete: if false;
+    }
+
+    // partner_tracks/{id}
+    match /partner_tracks/{id} {
+      allow read: if isActive()
+                  && request.auth.token.agencyId == resource.data.agencyId;
+      allow create, update: if isAgencyOwner(request.resource.data.agencyId);
+      allow delete: if false;
+    }
+
+    // certifications/{id}
+    match /certifications/{id} {
+      allow read: if isActive()
+                  && request.auth.token.agencyId == resource.data.agencyId;
+      allow create, update: if isAgencyOwner(request.resource.data.agencyId);
+      allow delete: if false;
+    }
+
+    // products/{id}
+    match /products/{id} {
+      allow read: if isActive()
+                  && request.auth.token.agencyId == resource.data.agencyId;
+      allow create, update: if isAgencyOwner(request.resource.data.agencyId);
+      allow delete: if false;
+    }
+
+    // product_eligibility/{id}  (id = "${partnerProfileId}_${productId}")
+    match /product_eligibility/{id} {
+      allow read: if isAgencyOwner(resource.data.agencyId)
+                  || (isActive()
+                      && resource.data.partnerProfileId == request.auth.uid);
+      allow create, update: if isAgencyOwner(request.resource.data.agencyId);
+      allow delete: if false;
+    }
+
+    // partner_referrals/{id}  (separate from /referrals — see README)
+    match /partner_referrals/{id} {
+      allow read: if isAgencyOwner(resource.data.agencyId)
+                  || (isActive()
+                      && resource.data.referrerPartnerProfileId == request.auth.uid);
+      allow create: if isActive()
+                    && request.auth.token.agencyId == request.resource.data.agencyId;
+      allow update: if isAgencyOwner(request.resource.data.agencyId);
+      allow delete: if false;
+    }
+
+    // commission_rules/{id}
+    match /commission_rules/{id} {
+      allow read: if isActive()
+                  && request.auth.token.agencyId == resource.data.agencyId;
+      allow create, update: if isAgencyOwner(request.resource.data.agencyId);
+      allow delete: if false;
+    }
+
+    // commission_events/{id}  — owner reads all; partner reads their own
+    match /commission_events/{id} {
+      allow read: if isAgencyOwner(resource.data.agencyId)
+                  || (isActive()
+                      && resource.data.partnerProfileId == request.auth.uid);
+      allow create, update: if isAgencyOwner(request.resource.data.agencyId);
+      allow delete: if false;
+    }
+
+    // credit_wallets/{uid}  (doc id === partnerProfileId)
+    // Writes go through Admin SDK (applyCreditDelta transaction) only.
+    match /credit_wallets/{uid} {
+      allow read: if isAgencyOwner(resource.data.agencyId)
+                  || (isActive() && request.auth.uid == uid);
+      allow create: if isAgencyOwner(request.resource.data.agencyId);
+      allow update, delete: if false;
+    }
+
+    // credit_transactions/{id}  — Admin SDK writes only
+    match /credit_transactions/{id} {
+      allow read: if isAgencyOwner(resource.data.agencyId)
+                  || (isActive()
+                      && resource.data.partnerProfileId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // campaigns/{id}  — sub-account scoped
+    match /campaigns/{id} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow create: if canAdminSub(
+                        request.resource.data.subAccountId,
+                        request.resource.data.agencyId);
+      allow update: if canAdminSub(resource.data.subAccountId, resource.data.agencyId)
+                    && tenantFieldsLockedOnUpdate();
+      allow delete: if false;
+    }
+
+    // ai_runs/{id}  — Admin SDK writes only
+    match /ai_runs/{id} {
+      allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow create, update, delete: if false;
+    }
+
+    // living_ledger/{id}  — Admin SDK writes only
+    match /living_ledger/{id} {
+      allow read: if isAgencyOwner(resource.data.agencyId)
+                  || (isActive()
+                      && resource.data.partnerProfileId == request.auth.uid);
+      allow create, update, delete: if false;
+    }
+
+    // admin_approvals/{id}  — agency owner only
+    match /admin_approvals/{id} {
+      allow read, create, update: if isAgencyOwner(resource.data.agencyId);
+      allow delete: if false;
+    }
+
+    // stripe_events/{id}  — Admin SDK writes only
+    match /stripe_events/{id} {
+      allow read: if isAgencyOwner(resource.data.agencyId);
+      allow create, update, delete: if false;
+    }
+
     // Default: deny everything else.
     match /{document=**} {
       allow read, write: if false;
