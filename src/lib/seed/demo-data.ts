@@ -4,6 +4,9 @@ import {
   FieldValue,
   type Firestore,
 } from "firebase-admin/firestore";
+import type { PartnerProfile } from "@/types/partner";
+import type { CreditWallet } from "@/types/credits";
+import type { Product } from "@/types/products";
 
 /**
  * Demo-data seeder for the UGotLeads public demo only.
@@ -489,3 +492,58 @@ export async function unseedDemo(db: Firestore): Promise<UnseedResult> {
     subAccountId,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Revenue OS template constants
+// Replace PLACEHOLDER_* strings with real IDs at call site.
+// ---------------------------------------------------------------------------
+
+export const SEED_PARTNER_PROFILE_TEMPLATE: Omit<
+  PartnerProfile,
+  "id" | "uid" | "agencyId" | "subAccountId" | "createdAt" | "updatedAt"
+> = {
+  email: "partner@example.com",
+  fullName: "Alex Demo",
+  displayName: "Alex D.",
+  phone: "+14045550100",
+  city: "Atlanta",
+  state: "GA",
+  country: "US",
+  territory: "North Atlanta",
+  status: "active",
+  tier: "operator",
+  accessModel: "subscription",
+  stripeSubscriptionId: null,
+  activeTrackId: null,
+  lifetimeCommissionCents: 0,
+  pendingCommissionCents: 0,
+  approvedByUid: null,
+  approvedAt: null,
+  internalNotes: null,
+};
+
+export const SEED_CREDIT_WALLET_TEMPLATE: Omit<
+  CreditWallet,
+  "id" | "agencyId" | "partnerProfileId" | "subAccountId" | "createdAt" | "updatedAt"
+> = {
+  balanceCredits: 250,
+  lifetimePurchasedCredits: 500,
+  lifetimeSpentCredits: 250,
+  lifetimeRefundedCredits: 0,
+  stripeCustomerId: null,
+};
+
+export const SEED_PRODUCT_TEMPLATE: Omit<
+  Product,
+  "id" | "agencyId" | "createdByUid" | "createdAt" | "updatedAt"
+> = {
+  name: "AI Lead Follow-Up Pack",
+  description: "100 AI-powered follow-up sequences for local service leads.",
+  status: "active",
+  accessModel: "credit",
+  creditCostPerUnit: 10,
+  stripePriceIdMonthly: null,
+  stripePriceIdAnnual: null,
+  setupFeeCents: 0,
+  isPublic: true,
+};
