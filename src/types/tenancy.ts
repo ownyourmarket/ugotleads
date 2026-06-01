@@ -4,6 +4,13 @@ export type SubAccountStatus = "active" | "archived";
 
 import type { SubscriptionStatus, MemberStatus } from "./firebase";
 
+/**
+ * Which Revenue OS access model a sub-account's operator is on.
+ * Mirrors AccessModel from products.ts — duplicated here so tenancy.ts
+ * (imported across the whole app) does not depend on the new type files.
+ */
+export type PlanMode = "credit" | "subscription" | "byok";
+
 export interface AgencyDoc {
   id: string;
   name: string;
@@ -107,6 +114,22 @@ export interface SubAccountDoc {
    * Used by /v1/profiles/{id}/* calls when proxying through Zernio.
    */
   zernioProfileId: string | null;
+  // Revenue OS extensions — null/false on all pre-existing sub-accounts.
+  // The CRM is unaffected when these are null.
+  /**
+   * Which access model the operator is on. Null = legacy (treat as
+   * "subscription" for any Revenue OS logic that needs a default).
+   */
+  planMode: PlanMode | null;
+  /**
+   * Human-readable tier label, e.g. "Operator Pro". UI display only.
+   */
+  subscriptionTier: string | null;
+  /**
+   * True when aiProvider.mode === "byok" AND the key has been validated.
+   * Cached flag — source of truth is aiProvider.byokKey. Set by server only.
+   */
+  byokEnabled: boolean;
   /**
    * Rolling token usage for the current billing period. The
    * /api/cron/ai-usage-reset job snapshots + zeroes this every ~30 days.

@@ -4,3 +4,7 @@ export * from "./automations";
 export * from "./broadcasts";
 export * from "./messages";
 export * from "./website";
+export * from "./partner";
+export * from "./products";
+export * from "./credits";
+export * from "./ledger";

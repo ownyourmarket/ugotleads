@@ -24,6 +24,17 @@ export interface UserDoc {
   status: MemberStatus;
   // Tenancy: which agency this user was minted into (their "home" agency).
   primaryAgencyId: string | null;
+  // Revenue OS extensions — null on all pre-existing users
+  /**
+   * Legal full name. Separate from displayName (public alias).
+   * Set when a user submits a partner application.
+   */
+  fullName: string | null;
+  /**
+   * partner_profiles/{id} this user is linked to.
+   * Set when the partner application is submitted.
+   */
+  partnerProfileId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
