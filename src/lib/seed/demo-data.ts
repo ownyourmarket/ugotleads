@@ -760,14 +760,16 @@ export const SEED_COMMISSION_RULE_SUBSCRIPTION_RENEWAL: SeedCommissionRule = {
 };
 
 /**
- * Rule C: 10% commission when a partner directly refers another new partner
- * who is subsequently approved. Performance-based only — no guaranteed income.
+ * Rule C: 10% commission when a partner sells a certification or education
+ * product (e.g. Certified AI Consultant Foundations course). This is a flat
+ * product-sale commission — no rank, genealogy, or downline logic.
+ * Scope to a specific productId at call site if narrowing to one SKU.
  */
-export const SEED_COMMISSION_RULE_PARTNER_REFERRAL: SeedCommissionRule = {
-  name: "Partner Referral Commission",
-  trigger: "partner_referral",
+export const SEED_COMMISSION_RULE_CERTIFICATION_SALE: SeedCommissionRule = {
+  name: "Certification Product Sale Commission",
+  trigger: "product_sale",
   commissionPct: 10,
-  productId: null,
+  productId: null, // replace with myusa_education product id to scope to cert sales only
   partnerTier: null,
   isActive: true,
 };
