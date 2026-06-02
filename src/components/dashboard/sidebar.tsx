@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   PenLine,
   Package,
+  Award,
   Receipt,
   ShoppingBag,
   DollarSign,
@@ -83,6 +84,7 @@ const SUB_ACCOUNT_NAV: NavItem[] = [
   { href: "/marketplace/cockpit", label: "Revenue Cockpit", icon: TrendingUp, enabled: true, matchExact: true },
   { href: "/marketplace/partner", label: "Partner Profile", icon: Users, enabled: true, matchExact: true },
   { href: "/marketplace/purchases", label: "My Purchases", icon: Receipt, enabled: true, matchExact: true },
+  { href: "/training", label: "Training", icon: Award, enabled: true, matchExact: false },
   { href: "/get-started", label: "Get Started", icon: Compass, enabled: true },
   {
     href: "/dashboard/settings",
@@ -248,6 +250,20 @@ function SidebarContent() {
               >
                 <Package className="h-4 w-4" />
                 Products
+              </Link>
+            )}
+            {agencyRole === "owner" && (
+              <Link
+                href="/agency/certifications"
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/agency/certifications")
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Award className="h-4 w-4" />
+                Certifications
               </Link>
             )}
             {agencyRole === "owner" && (
