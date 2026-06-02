@@ -136,6 +136,18 @@ export interface SubAccountDoc {
    * Null on legacy docs; the resolver lazy-initialises on first read.
    */
   aiUsage: AiUsageState | null;
+  /**
+   * Set at signup when the new user arrived via a MyUSA partner referral link
+   * (?ref=CODE). Stores the partner_profiles/{uid} doc id of the referring
+   * partner so commission events can be attributed later.
+   *
+   * Null on sub-accounts created before referral capture was introduced, or
+   * when the user signed up without a referral link.
+   *
+   * This is the MyUSA Partner system only. Do NOT confuse with the LeadStack
+   * founders affiliate `referrals` collection.
+   */
+  referredByPartnerProfileId: string | null;
 }
 
 export type AiProviderMode = "hosted" | "byok";

@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono, Instrument_Serif } from "next/font/google";
 import { Providers } from "@/components/providers";
 import { RefTracker } from "@/components/affiliate/ref-tracker";
+import { PartnerRefTracker } from "@/components/partner-referral/ref-tracker";
 import { AnalyticsScripts } from "@/components/analytics-scripts";
 import { CUSTOM_BRAND, LANDING_VARIANT } from "@/config/landing";
 import "./globals.css";
@@ -59,7 +60,10 @@ export default function RootLayout({
           </noscript>
         )}
         <Providers>{children}</Providers>
+        {/* LeadStack founders affiliate (gated: leadstack variant only) */}
         <RefTracker />
+        {/* MyUSA partner referral — runs on every visit with ?ref=CODE */}
+        <PartnerRefTracker />
         {process.env.NEXT_PUBLIC_META_PIXEL_ID && (
           <noscript>
             {/* Meta Pixel no-JS fallback — must be a bare <img> tag.

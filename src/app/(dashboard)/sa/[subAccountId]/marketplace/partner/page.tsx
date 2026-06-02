@@ -8,7 +8,6 @@ import {
   Check,
   ChevronRight,
   ClipboardCopy,
-  DollarSign,
   ShoppingBag,
   User,
   Users,
@@ -17,7 +16,9 @@ import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { usePartnerProfile } from "@/hooks/use-partner-profile";
 import { subscribeToCertifications } from "@/lib/firestore/partners";
+import { subscribeToPartnerReferrals } from "@/lib/firestore/partner-referrals";
 import type { Certification } from "@/types/partner";
+import type { PartnerReferral } from "@/types/credits";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -94,6 +95,10 @@ export default function PartnerProfilePage() {
   const [certifications, setCertifications] = useState<Certification[]>([]);
   const [certsLoading, setCertsLoading] = useState(true);
 
+  // ---- Partner referrals ----
+  const [referrals, setReferrals] = useState<PartnerReferral[]>([]);
+  const [referralsLoading, setReferralsLoading] = useState(true);
+
   useEffect(() => {
     if (!effectiveAgencyId) return;
     const unsub = subscribeToCertifications(
@@ -109,6 +114,27 @@ export default function PartnerProfilePage() {
     );
     return () => unsub();
   }, [effectiveAgencyId]);
+
+  useEffect(() => {
+    if (!partnerProfile?.id) {
+      setReferrals([]);
+      setReferralsLoading(false);
+      return;
+    }
+    setReferralsLoading(true);
+    const unsub = subscribeToPartnerReferrals(
+      partnerProfile.id,
+      (refs) => {
+        setReferrals(refs);
+        setReferralsLoading(false);
+      },
+      (err) => {
+        console.error("[partner-profile] subscribeToPartnerReferrals:", err);
+        setReferralsLoading(false);
+      },
+    );
+    return () => unsub();
+  }, [partnerProfile?.id]);
 
   // ---- Copy referral link ----
   const [copied, setCopied] = useState(false);
@@ -135,7 +161,7 @@ export default function PartnerProfilePage() {
     return certifications.filter((c) => completedIds.includes(c.trackId));
   }, [certifications, partnerProfile]);
 
-  const loading = partnerLoading || certsLoading;
+  const loading = partnerLoading || certsLoading || referralsLoading;
 
   // ---- No-partner empty state ----
   if (!loading && !partnerProfile) {
@@ -431,24 +457,90 @@ export default function PartnerProfilePage() {
             )}
           </section>
 
-          {/* ---- Referred customers (placeholder — Phase 3 wires referral capture) ---- */}
+          {/* ---- Referred customers ---- */}
           <section className="rounded-xl border bg-card p-5">
             <div className="mb-4 flex items-center gap-2">
               <Users className="h-4 w-4 text-muted-foreground" />
               <h2 className="text-sm font-semibold text-foreground">
                 Referred Customers
               </h2>
+              <span className="ml-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground tabular-nums">
+                {referrals.length}
+              </span>
             </div>
-            <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed py-8 text-center">
-              <DollarSign className="h-7 w-7 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">
-                Referral tracking coming soon.
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Once referral capture is enabled, signups that use your link
-                will appear here.
-              </p>
-            </div>
+
+            {referrals.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-8 text-center">
+                <Users className="h-7 w-7 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">
+                  No referrals yet.
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Share your referral link. When someone signs up using it,
+                  they&apos;ll appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                      <th className="pb-2 pr-4 font-medium">Email</th>
+                      <th className="pb-2 pr-4 font-medium">Code used</th>
+                      <th className="pb-2 pr-4 font-medium">Status</th>
+                      <th className="pb-2 font-medium">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {referrals.map((ref) => {
+                      const dateVal = ref.createdAt as
+                        | { toDate?: () => Date }
+                        | Date
+                        | null;
+                      const date =
+                        dateVal && "toDate" in dateVal
+                          ? (dateVal.toDate?.() ?? null)
+                          : (dateVal as Date | null);
+                      return (
+                        <tr key={ref.id} className="text-xs">
+                          <td className="py-2 pr-4 text-muted-foreground">
+                            {ref.refereeEmail}
+                          </td>
+                          <td className="py-2 pr-4">
+                            <code className="rounded bg-muted px-1.5 py-0.5 font-mono text-[11px] tracking-widest">
+                              {ref.referrerCode}
+                            </code>
+                          </td>
+                          <td className="py-2 pr-4">
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                                ref.status === "converted"
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                  : ref.status === "voided"
+                                    ? "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300"
+                                    : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+                              )}
+                            >
+                              {ref.status}
+                            </span>
+                          </td>
+                          <td className="py-2 text-muted-foreground">
+                            {date
+                              ? date.toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                })
+                              : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </section>
         </>
       )}

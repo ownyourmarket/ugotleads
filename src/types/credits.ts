@@ -140,6 +140,8 @@ export interface PartnerReferral {
   refereeEmail: string;
   refereeUid: string | null;       // null until they sign up
   refereePartnerProfileId: string | null; // null until approved
+  /** subAccounts/{id} created for the referee at signup. Null until signup completes. */
+  refereedSubAccountId: string | null;
   status: PartnerReferralStatus;
   commissionEventId: string | null;
   convertedAt: Timestamp | FieldValue | null;

@@ -1,9 +1,12 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { seedDefaultTemplates } from "@/lib/automations/seed-templates";
+import { PARTNER_REF_COOKIE_NAME } from "@/lib/partner-referral/cookie";
+import { resolvePartnerReferralCode } from "@/lib/partner-referral/resolve";
 import type { Role } from "@/types";
 
 interface SignupBody {
@@ -51,6 +54,33 @@ export async function POST(request: Request) {
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  // ---- MyUSA Partner referral attribution (fail-open) ----
+  // Read the myusa_partner_ref cookie set by PartnerRefTracker when the
+  // visitor landed with ?ref=CODE. Resolve it to a partnerProfileId.
+  // Any failure here is logged and silently ignored — signup must never
+  // be blocked by referral lookup errors.
+  let partnerReferredBy: string | null = null;
+  let partnerReferralCode: string | null = null;
+  try {
+    const cookieStore = await cookies();
+    const rawCode = cookieStore.get(PARTNER_REF_COOKIE_NAME)?.value ?? null;
+    if (rawCode) {
+      const decoded = decodeURIComponent(rawCode).trim().toUpperCase();
+      if (decoded) {
+        partnerReferredBy = await resolvePartnerReferralCode(decoded);
+        if (partnerReferredBy) {
+          partnerReferralCode = decoded;
+        } else {
+          console.warn(
+            `[signup] myusa_partner_ref cookie present ("${decoded}") but no active partner matched — ignoring`,
+          );
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[signup] partner referral lookup failed (ignored):", err);
   }
 
   const email = body.email?.trim().toLowerCase();
@@ -269,6 +299,9 @@ export async function POST(request: Request) {
         bookingLink: null,
         replyToEmail: null,
         automationsPaused: false,
+        // Partner referral attribution (MyUSA Partner system only).
+        // Null when the user did not arrive via a ?ref= link.
+        referredByPartnerProfileId: partnerReferredBy,
         // Pre-seed AI usage block with the tier's cap so the resolver
         // doesn't have to lazy-init on first AI call.
         aiUsage: {
@@ -328,6 +361,30 @@ export async function POST(request: Request) {
       });
 
       await batch.commit();
+
+      // Write partner_referral attribution doc (best-effort, outside the batch
+      // to keep the batch small; failure here must not affect the signup response).
+      if (partnerReferredBy && partnerReferralCode) {
+        const docId = `${partnerReferredBy}_${uid}`;
+        db.doc(`partner_referrals/${docId}`)
+          .set({
+            agencyId,
+            referrerPartnerProfileId: partnerReferredBy,
+            referrerCode: partnerReferralCode,
+            refereeEmail: email,
+            refereeUid: uid,
+            refereePartnerProfileId: null,
+            refereedSubAccountId: subAccountId,
+            status: "pending",
+            commissionEventId: null,
+            convertedAt: null,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          })
+          .catch((err: unknown) => {
+            console.error("[signup] failed to write partner_referral doc:", err);
+          });
+      }
 
       return NextResponse.json({
         uid,
@@ -418,6 +475,8 @@ export async function POST(request: Request) {
         bookingLink: null,
         replyToEmail: null,
         automationsPaused: false,
+        // Partner referral attribution (MyUSA Partner system only).
+        referredByPartnerProfileId: partnerReferredBy,
       });
 
       // Seed the per-agency counter so the next sub-account picks up at
@@ -483,6 +542,29 @@ export async function POST(request: Request) {
       });
 
       await batch.commit();
+
+      // Write partner_referral attribution doc (best-effort).
+      if (partnerReferredBy && partnerReferralCode) {
+        const docId = `${partnerReferredBy}_${uid}`;
+        db.doc(`partner_referrals/${docId}`)
+          .set({
+            agencyId,
+            referrerPartnerProfileId: partnerReferredBy,
+            referrerCode: partnerReferralCode,
+            refereeEmail: email,
+            refereeUid: uid,
+            refereePartnerProfileId: null,
+            refereedSubAccountId: subAccountId,
+            status: "pending",
+            commissionEventId: null,
+            convertedAt: null,
+            createdAt: FieldValue.serverTimestamp(),
+            updatedAt: FieldValue.serverTimestamp(),
+          })
+          .catch((err: unknown) => {
+            console.error("[signup] failed to write partner_referral doc:", err);
+          });
+      }
 
       return NextResponse.json({
         uid,
