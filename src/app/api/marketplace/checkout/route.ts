@@ -71,9 +71,12 @@ import type { PartnerTier } from "@/types/partner";
  *   productFamily,
  *   referredByPartnerProfileId,   // "" when no valid referral code
  *   partnerReferralCode,          // "" when none
- *   commissionAmountCents,        // "0" when no rule found
- *   commissionPercent,            // "0" when no rule found
+ *   commissionPercent,            // "0" when no rule found; snapshotted at session creation
  *   commissionRuleId,             // "" when no rule found
+ *   commissionHoldDays,           // String(COMMISSION_HOLD_DAYS), default "30"
+ *   // NOTE: commissionAmountCents is NOT stamped here — the webhook recalculates
+ *   // it from session.amount_total × commissionPercent at payment time so the
+ *   // payout always reflects the actual charged amount.
  * }
  */
 
