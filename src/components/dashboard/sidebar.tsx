@@ -27,6 +27,7 @@ import {
   Receipt,
   ShoppingBag,
   DollarSign,
+  TrendingUp,
 } from "lucide-react";
 import { signOutUser } from "@/lib/firebase/auth";
 import { useDueTodayCount } from "@/hooks/use-due-today";
@@ -78,6 +79,7 @@ const SUB_ACCOUNT_NAV: NavItem[] = [
   { href: "/leads-scraper", label: "Lead Scraper", icon: Search, enabled: true },
   { href: "/reports", label: "Reports", icon: BarChart3, enabled: true },
   { href: "/marketplace", label: "Marketplace", icon: ShoppingBag, enabled: true, matchExact: true },
+  { href: "/marketplace/cockpit", label: "Revenue Cockpit", icon: TrendingUp, enabled: true, matchExact: true },
   { href: "/marketplace/partner", label: "Partner Profile", icon: Users, enabled: true, matchExact: true },
   { href: "/marketplace/purchases", label: "My Purchases", icon: Receipt, enabled: true, matchExact: true },
   { href: "/get-started", label: "Get Started", icon: Compass, enabled: true },
@@ -231,6 +233,20 @@ function SidebarContent() {
               >
                 <DollarSign className="h-4 w-4" />
                 Commissions
+              </Link>
+            )}
+            {agencyRole === "owner" && (
+              <Link
+                href="/agency/revenue-os"
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/agency/revenue-os")
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <TrendingUp className="h-4 w-4" />
+                Revenue Cockpit
               </Link>
             )}
             {agencyRole === "owner" && (
