@@ -163,6 +163,7 @@ export async function POST(request: Request) {
     subAccountId: null,
     activeTrackId: TRACK_AI_CONSULTANT,
     completedTrackIds: BOOTSTRAP_COMPLETED_TRACKS,
+    referralCode: uid.slice(0, 8).toUpperCase(),
     lifetimeCommissionCents: 0,
     pendingCommissionCents: 0,
     approvedByUid: uid,
@@ -194,6 +195,7 @@ export async function POST(request: Request) {
         tier: partnerProfilePayload.tier,
         completedTrackIds: partnerProfilePayload.completedTrackIds,
         activeTrackId: partnerProfilePayload.activeTrackId,
+        referralCode: partnerProfilePayload.referralCode,
       },
       eligibility: eligibilityPreview,
     });
@@ -215,6 +217,7 @@ export async function POST(request: Request) {
         accessModel: partnerProfilePayload.accessModel,
         activeTrackId: partnerProfilePayload.activeTrackId,
         completedTrackIds: partnerProfilePayload.completedTrackIds,
+        referralCode: partnerProfilePayload.referralCode,
         approvedByUid: partnerProfilePayload.approvedByUid,
         approvedAt: partnerProfilePayload.approvedAt,
         internalNotes: partnerProfilePayload.internalNotes,
@@ -249,6 +252,7 @@ export async function POST(request: Request) {
         tier: partnerProfilePayload.tier,
         completedTrackIds: partnerProfilePayload.completedTrackIds,
         activeTrackId: partnerProfilePayload.activeTrackId,
+        referralCode: partnerProfilePayload.referralCode,
       },
       eligibility: eligibilityResult,
     });

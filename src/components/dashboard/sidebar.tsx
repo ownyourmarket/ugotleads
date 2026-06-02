@@ -47,6 +47,8 @@ interface NavItem {
   enabled: boolean;
   badgeKey?: "dueToday";
   matchPrefix?: string;
+  /** When true, the link only highlights on an exact pathname match. */
+  matchExact?: boolean;
 }
 
 // Per-sub-account nav. `href` is templated with the active sub-account id at
@@ -73,7 +75,8 @@ const SUB_ACCOUNT_NAV: NavItem[] = [
   { href: "/reviews", label: "Reviews", icon: Star, enabled: true },
   { href: "/leads-scraper", label: "Lead Scraper", icon: Search, enabled: true },
   { href: "/reports", label: "Reports", icon: BarChart3, enabled: true },
-  { href: "/marketplace", label: "Marketplace", icon: ShoppingBag, enabled: true },
+  { href: "/marketplace", label: "Marketplace", icon: ShoppingBag, enabled: true, matchExact: true },
+  { href: "/marketplace/partner", label: "Partner Profile", icon: Users, enabled: true, matchExact: true },
   { href: "/get-started", label: "Get Started", icon: Compass, enabled: true },
   {
     href: "/dashboard/settings",
@@ -258,7 +261,7 @@ function SidebarContent() {
               const fullHref = `${subRoot ?? `/sa/${linkSubId}`}${item.href}`;
               const isActive =
                 pathname === fullHref ||
-                (item.href !== "/dashboard" && pathname.startsWith(fullHref));
+                (!item.matchExact && item.href !== "/dashboard" && pathname.startsWith(fullHref));
               if (!item.enabled) {
                 return (
                   <div

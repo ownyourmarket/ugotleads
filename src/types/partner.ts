@@ -43,8 +43,24 @@ export interface PartnerProfile {
    * subscriptionTier, and byokEnabled fields are the workspace state.
    */
   subAccountId: string | null;
-  /** partner_tracks/{id} currently enrolled in. */
+  /** partner_tracks/{id} currently enrolled in or most recently active. */
   activeTrackId: string | null;
+  /**
+   * All track IDs the partner has completed.
+   * Used for multi-track detection (Certified AI Consultant + Community Advocate).
+   * Defaults to [] when no tracks are completed.
+   * Extend by appending the track id on completion — do not replace.
+   *
+   * NOTE: this field was added in revenue_os_v2. Partners created before this
+   * field will have it missing/undefined — treat as [].
+   */
+  completedTrackIds: string[];
+  /**
+   * Short uppercase code used in referral links: /?ref=CODE
+   * Generated at profile creation / bootstrap. Null on profiles that pre-date
+   * this field — treat as "not yet assigned".
+   */
+  referralCode: string | null;
   lifetimeCommissionCents: number;
   pendingCommissionCents: number;
   approvedByUid: string | null;

@@ -6,7 +6,7 @@ import {
 } from "firebase-admin/firestore";
 import type { PartnerProfile, PartnerTrack } from "@/types/partner";
 import type { CreditWallet, CommissionRule } from "@/types/credits";
-import type { Product } from "@/types/products";
+import type { Product, AccessModel, EligibilityStatus } from "@/types/products";
 
 /**
  * Demo-data seeder for the UGotLeads public demo only.
@@ -515,6 +515,8 @@ export const SEED_PARTNER_PROFILE_TEMPLATE: Omit<
   accessModel: "subscription",
   stripeSubscriptionId: null,
   activeTrackId: null,
+  completedTrackIds: [],
+  referralCode: null,
   lifetimeCommissionCents: 0,
   pendingCommissionCents: 0,
   approvedByUid: null,
@@ -779,3 +781,87 @@ export const SEED_COMMISSION_RULE_CERTIFICATION_SALE: SeedCommissionRule = {
   partnerTier: null,
   isActive: true,
 };
+
+// ---------------------------------------------------------------------------
+// Product eligibility templates
+//
+// These describe which product_eligibility docs should be created when a
+// partner profile is bootstrapped. The partnerProfileId is filled in at
+// call time (bootstrap route). Doc id = `${partnerProfileId}_${productId}`.
+//
+// requiredTracks:
+//   - [] (empty)  → any active partner receives status "approved"
+//   - ["track_x"] → partner must have track_x in completedTrackIds for "approved";
+//                    otherwise status is "pending"
+//   - ["a","b"]   → partner must have ANY of a or b for "approved"
+//
+// accessModel is denormalized from the product at seed time.
+// ---------------------------------------------------------------------------
+
+export interface EligibilityTemplate {
+  /** Deterministic product doc id (matches PRODUCT_IDS in revenue-os-seeder.ts). */
+  productId: string;
+  /**
+   * Track ids that grant "approved" status.
+   * Empty = no track required — any active partner qualifies.
+   * Multiple = OR logic — partner needs at least one of them.
+   */
+  requiredTracks: string[];
+  accessModel: AccessModel;
+  /** Human-readable label for dry-run output. */
+  productName: string;
+}
+
+/**
+ * Eligibility rules for the six public seeded products.
+ * CRM Pro (prod_crm_pro) is excluded — it is draft/hidden and cannot be sold.
+ *
+ * Eligibility policy:
+ *   ugotleads_software   → Certified AI Consultant required to sell
+ *   myusa_education      → any active partner may sell (commissionable)
+ *   myusa_services       → Certified AI Consultant required to sell
+ *   myusa_resources      → any active partner may sell
+ *   myusa_media_products → Community Advocate OR Certified AI Consultant
+ */
+export const SEED_ELIGIBILITY_TEMPLATES: EligibilityTemplate[] = [
+  {
+    productId: "prod_ai_lead_followup",
+    productName: "AI Lead Follow-Up Pack",
+    requiredTracks: ["track_certified_ai_consultant"],
+    accessModel: "credit",
+  },
+  {
+    productId: "prod_ai_reputation",
+    productName: "AI Reputation Monitor",
+    requiredTracks: ["track_certified_ai_consultant"],
+    accessModel: "credit",
+  },
+  // prod_crm_pro intentionally excluded — draft product, not eligible for selling
+  {
+    productId: "prod_cert_ai_consultant_course",
+    productName: "Certified AI Consultant Foundations",
+    requiredTracks: [], // any active partner may sell
+    accessModel: "credit",
+  },
+  {
+    productId: "prod_dfy_crm_setup",
+    productName: "Done-For-You CRM Setup",
+    requiredTracks: ["track_certified_ai_consultant"],
+    accessModel: "credit",
+  },
+  {
+    productId: "prod_outreach_playbook",
+    productName: "Local Business Outreach Playbook",
+    requiredTracks: [], // any active partner
+    accessModel: "credit",
+  },
+  {
+    productId: "prod_directory_listing",
+    productName: "MyUSA Local Business Directory Listing",
+    requiredTracks: [
+      "track_community_advocate",
+      "track_certified_ai_consultant",
+    ], // OR logic — either track qualifies
+    accessModel: "credit",
+  },
+];
