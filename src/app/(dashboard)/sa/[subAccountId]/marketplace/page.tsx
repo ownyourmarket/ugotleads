@@ -37,10 +37,10 @@ const FAMILY_ORDER: ProductFamily[] = [
 
 export default function MarketplacePage() {
   const { user, agencyId, agencyRole } = useAuth();
-  const { agencyId: saAgencyId } = useSubAccount();
+  const { subAccountId, subAccount, agencyId: saAgencyId, isAdmin: saIsAdmin } = useSubAccount();
 
   const effectiveAgencyId = agencyId ?? saAgencyId;
-  const isAdmin = agencyRole === "owner";
+  const isAdmin = agencyRole === "owner" || saIsAdmin;
 
   // ---- Partner profile + track (real data) ----
   const {
@@ -69,8 +69,21 @@ export default function MarketplacePage() {
   const [rulesLoading, setRulesLoading] = useState(true);
 
   // ---- UI filters ----
-  const [selectedModel, setSelectedModel] = useState<AccessModel | null>(null);
+  // selectedModel mirrors subAccount.planMode as the persisted value but can
+  // also be overridden locally for catalog filtering before the Firestore
+  // onSnapshot propagates back.  Null = show all access models.
+  const [selectedModel, setSelectedModel] = useState<AccessModel | null>(
+    (subAccount?.planMode as AccessModel | null) ?? null,
+  );
   const [selectedFamily, setSelectedFamily] = useState<ProductFamily | null>(null);
+
+  // Sync selectedModel when subAccount.planMode changes (e.g. first load or
+  // another session updates it).
+  useEffect(() => {
+    if (subAccount?.planMode) {
+      setSelectedModel(subAccount.planMode as AccessModel);
+    }
+  }, [subAccount?.planMode]);
 
   // ---- Firestore: products ----
   useEffect(() => {
@@ -235,11 +248,13 @@ export default function MarketplacePage() {
         loading={partnerLoading}
       />
 
-      {/* ---- Access model selector ---- */}
+      {/* ---- Access model selector (persists to subAccount.planMode) ---- */}
       <section>
         <AccessModelSelector
           selected={selectedModel}
-          onSelect={(m) => setSelectedModel((prev) => (prev === m ? null : m))}
+          subAccountId={subAccountId}
+          partnerProfile={partnerProfile}
+          onSaved={(m) => setSelectedModel(m)}
         />
       </section>
 
