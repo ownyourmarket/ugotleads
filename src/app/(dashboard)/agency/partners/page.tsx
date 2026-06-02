@@ -15,6 +15,7 @@ import {
   Users,
   X,
 } from "lucide-react";
+import { serverTimestamp } from "firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
 import {
   subscribeToPartnerProfiles,
@@ -174,6 +175,10 @@ function PartnerDetailPanel({
       const updates: Parameters<typeof updatePartnerProfile>[1] = { status: newStatus };
       if (newStatus === "approved" || newStatus === "active") {
         updates.approvedByUid = uid;
+        // serverTimestamp() returns a FieldValue that Firestore resolves to the
+        // server's current time at write. approvedAt is Timestamp|FieldValue|null
+        // in the type, so this satisfies the helper's pick list.
+        updates.approvedAt = serverTimestamp();
       }
       await updatePartnerProfile(partner.id, updates);
       showToast(`Status set to ${newStatus}.`);
