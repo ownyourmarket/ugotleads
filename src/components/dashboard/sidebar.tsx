@@ -24,6 +24,7 @@ import {
   ClipboardCheck,
   ShieldCheck,
   PenLine,
+  Package,
   Receipt,
   ShoppingBag,
   DollarSign,
@@ -233,6 +234,20 @@ function SidebarContent() {
               >
                 <DollarSign className="h-4 w-4" />
                 Commissions
+              </Link>
+            )}
+            {agencyRole === "owner" && (
+              <Link
+                href="/agency/products"
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/agency/products")
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Package className="h-4 w-4" />
+                Products
               </Link>
             )}
             {agencyRole === "owner" && (

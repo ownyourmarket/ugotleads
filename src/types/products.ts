@@ -68,6 +68,14 @@ export interface Product {
   setupFeeCents: number;
   /** Visible in the partner marketplace when true. */
   isPublic: boolean;
+  /**
+   * When true, this product participates in the commission system.
+   * Commission events are still gated by PARTNER_COMMISSIONS_ENABLED and the
+   * existence of a matching commission_rule — this flag is an additional opt-out
+   * at the product level. Defaults to true for all access models.
+   * Undefined on pre-existing docs should be treated as true.
+   */
+  isCommissionable?: boolean;
   createdByUid: string;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
