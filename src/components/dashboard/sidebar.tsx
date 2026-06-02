@@ -24,6 +24,7 @@ import {
   ClipboardCheck,
   ShieldCheck,
   PenLine,
+  Receipt,
   ShoppingBag,
   DollarSign,
 } from "lucide-react";
@@ -78,6 +79,7 @@ const SUB_ACCOUNT_NAV: NavItem[] = [
   { href: "/reports", label: "Reports", icon: BarChart3, enabled: true },
   { href: "/marketplace", label: "Marketplace", icon: ShoppingBag, enabled: true, matchExact: true },
   { href: "/marketplace/partner", label: "Partner Profile", icon: Users, enabled: true, matchExact: true },
+  { href: "/marketplace/purchases", label: "My Purchases", icon: Receipt, enabled: true, matchExact: true },
   { href: "/get-started", label: "Get Started", icon: Compass, enabled: true },
   {
     href: "/dashboard/settings",
@@ -229,6 +231,20 @@ function SidebarContent() {
               >
                 <DollarSign className="h-4 w-4" />
                 Commissions
+              </Link>
+            )}
+            {agencyRole === "owner" && (
+              <Link
+                href="/agency/marketplace-purchases"
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/agency/marketplace-purchases")
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Receipt className="h-4 w-4" />
+                Marketplace Sales
               </Link>
             )}
             {agencyRole === "owner" && (
