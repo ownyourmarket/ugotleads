@@ -1,6 +1,6 @@
 "use client";
 
-import { Award, MapPin, Sparkles, Zap } from "lucide-react";
+import { Award, MapPin, Sparkles, Star, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { PartnerProfile, PartnerTrack } from "@/types/partner";
 
@@ -28,13 +28,10 @@ interface BannerConfig {
  *
  * Logic:
  *  - No profile / inactive → non-partner "Become certified" prompt
- *  - Active partner, track = AI Consultant → Certified AI Consultant message
- *  - Active partner, track = Community Advocate → Community Advocate message
- *  - Active partner, no specific track → generic partner message
- *
- * NOTE: "both tracks" requires a completedTrackIds[] field on PartnerProfile
- * (not yet in schema). Until that field exists we map on activeTrackId only.
- * Add completedTrackIds to PartnerProfile and extend this function when ready.
+ *  - Active partner, completedTrackIds includes BOTH tracks → dual-unlock banner
+ *  - Active partner, activeTrackId = AI Consultant → Certified AI Consultant banner
+ *  - Active partner, activeTrackId = Community Advocate → Community Advocate banner
+ *  - Active partner, no specific track → generic partner banner
  */
 function resolveBanner(
   profile: PartnerProfile | null,
@@ -53,16 +50,25 @@ function resolveBanner(
     };
   }
 
-  const activeTrackId = profile.activeTrackId;
+  // completedTrackIds was added in revenue_os_v2; treat missing/undefined as [].
+  const completedTrackIds: string[] = profile.completedTrackIds ?? [];
+  const hasBothTracks =
+    completedTrackIds.includes(TRACK_AI_CONSULTANT) &&
+    completedTrackIds.includes(TRACK_COMMUNITY_ADVOCATE);
 
-  // Check for "both tracks" — only possible if we have a completedTrackIds[]
-  // field. Left as a type-safe TODO; the condition below can never be true
-  // today but will work once the field is added.
-  // TODO: extend PartnerProfile with completedTrackIds: string[]
-  // const completedTrackIds: string[] = (profile as any).completedTrackIds ?? [];
-  // const hasBoth =
-  //   completedTrackIds.includes(TRACK_AI_CONSULTANT) &&
-  //   completedTrackIds.includes(TRACK_COMMUNITY_ADVOCATE);
+  if (hasBothTracks) {
+    return {
+      icon: Star,
+      title: "Certified AI Consultant & Community Advocate",
+      message:
+        "You are unlocked as both a Certified AI Consultant and a Support Local Community Advocate. Full product access enabled.",
+      className:
+        "bg-gradient-to-r from-violet-50 to-emerald-50 border-violet-200 dark:from-violet-950/30 dark:to-emerald-950/30 dark:border-violet-800",
+      iconClassName: "text-violet-600 dark:text-violet-400",
+    };
+  }
+
+  const activeTrackId = profile.activeTrackId;
 
   if (activeTrackId === TRACK_AI_CONSULTANT) {
     return {

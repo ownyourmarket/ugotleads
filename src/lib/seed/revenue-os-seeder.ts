@@ -1,7 +1,7 @@
 import "server-only";
 
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
-import type { Product, ProductFamily } from "@/types/products";
+import type { Product, ProductFamily, ProductEligibility } from "@/types/products";
 import type { PartnerTrack } from "@/types/partner";
 import type { CommissionRule } from "@/types/credits";
 import {
@@ -11,6 +11,7 @@ import {
   SEED_COMMISSION_RULE_PRODUCT_SALE,
   SEED_COMMISSION_RULE_SUBSCRIPTION_RENEWAL,
   SEED_COMMISSION_RULE_CERTIFICATION_SALE,
+  SEED_ELIGIBILITY_TEMPLATES,
 } from "./demo-data";
 
 // ---------------------------------------------------------------------------
@@ -244,6 +245,110 @@ export async function seedRevenueOs(
       };
       await db.collection("commission_rules").doc(docId).set(
         { ...doc, _seedTag: SEED_TAG },
+        { merge: false },
+      );
+    }
+  }
+
+  return result;
+}
+
+// ---------------------------------------------------------------------------
+// Partner eligibility seeder
+// ---------------------------------------------------------------------------
+
+export interface SeedEligibilityResult {
+  dryRun: boolean;
+  partnerUid: string;
+  agencyId: string;
+  eligibilities: SeedDryRunEntry[];
+  skipped: string[];
+  warnings: string[];
+}
+
+/**
+ * Seeds `product_eligibility` docs for a single partner.
+ *
+ * Iterates SEED_ELIGIBILITY_TEMPLATES, determines the correct EligibilityStatus
+ * for each product based on the partner's completedTrackIds, and writes
+ * deterministic docs at `product_eligibility/{partnerUid}_{productId}`.
+ *
+ * Status logic:
+ *   - Template has requiredTracks: [] (any partner) → "approved"
+ *   - Template has requiredTracks: [t1, t2, ...]  → "approved" if the partner
+ *     has completed ANY of those tracks (OR logic), otherwise "pending"
+ *
+ * Idempotent — uses setDoc with deterministic IDs.
+ * Production-guarded — same check as seedRevenueOs().
+ *
+ * @param db               Admin Firestore instance
+ * @param agencyId         Agency that owns these docs
+ * @param partnerUid       UID of the partner being bootstrapped (doc id = uid)
+ * @param completedTrackIds  Track IDs the partner has completed
+ * @param dryRun           When true, no Firestore writes; returns preview
+ */
+export async function seedPartnerEligibility(
+  db: Firestore,
+  agencyId: string,
+  partnerUid: string,
+  completedTrackIds: string[],
+  dryRun = true,
+): Promise<SeedEligibilityResult> {
+  const guardErr = productionGuard();
+  if (guardErr) throw new Error(guardErr);
+
+  const result: SeedEligibilityResult = {
+    dryRun,
+    partnerUid,
+    agencyId,
+    eligibilities: [],
+    skipped: [],
+    warnings: [],
+  };
+
+  const now = FieldValue.serverTimestamp();
+
+  for (const template of SEED_ELIGIBILITY_TEMPLATES) {
+    const docId = `${partnerUid}_${template.productId}`;
+
+    // Determine status: any required track completed → approved; else pending
+    const status =
+      template.requiredTracks.length === 0 ||
+      template.requiredTracks.some((t) => completedTrackIds.includes(t))
+        ? "approved"
+        : "pending";
+
+    const existing = dryRun
+      ? await db.collection("product_eligibility").doc(docId).get()
+      : null;
+
+    result.eligibilities.push({
+      collection: "product_eligibility",
+      docId,
+      action: dryRun && existing?.exists ? "overwrite" : "create",
+      name: `${template.productName} → ${status}`,
+    });
+
+    if (!dryRun) {
+      const eligDoc: Omit<ProductEligibility, "id"> = {
+        agencyId,
+        partnerProfileId: partnerUid,
+        productId: template.productId,
+        status,
+        accessModel: template.accessModel,
+        stripeSubscriptionId: null,
+        byokKey: null,
+        byokKeyLast4: null,
+        byokKeyValidatedAt: null,
+        reviewedByUid: null,
+        reviewedAt: null,
+        reviewNote: null,
+        expiresAt: null,
+        createdAt: now,
+        updatedAt: now,
+      };
+      await db.collection("product_eligibility").doc(docId).set(
+        { ...eligDoc, _seedTag: SEED_TAG },
         { merge: false },
       );
     }

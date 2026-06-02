@@ -215,7 +215,11 @@ function resolveAction(
     };
   }
 
-  // Partner, no eligibility doc yet
+  // Partner, no eligibility doc yet.
+  // Education products surface a more specific "Requires certification" label
+  // since the missing doc almost certainly means the partner hasn't completed
+  // the required track.  All other products default to "Eligibility pending" —
+  // a missing doc is NOT a grant; it means eligibility hasn't been evaluated yet.
   if (requiresCert) {
     return {
       label: "Requires certification",
@@ -226,10 +230,10 @@ function resolveAction(
   }
 
   return {
-    label: "Eligible to sell",
-    variant: "eligible_to_sell",
+    label: "Eligibility pending",
+    variant: "eligibility_pending",
     className:
-      "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300",
+      "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
   };
 }
 
