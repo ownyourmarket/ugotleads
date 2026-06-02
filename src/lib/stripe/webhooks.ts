@@ -6,13 +6,9 @@ import { LANDING_VARIANT } from "@/config/landing";
 import { ensureAffiliateAccount } from "@/lib/affiliate/account";
 import { createReferral } from "@/lib/affiliate/referrals";
 import type { SubscriptionStatus } from "@/types";
-// ── Partner commission hook (disabled by default) ─────────────────────────
-// Set PARTNER_COMMISSIONS_ENABLED=true to allow commission events to be
-// created when a product is sold. The helper validates all preconditions
-// (partner active, product commissionable, no duplicate) before writing.
-// This import is unused until the hook is wired to a real product-sale path;
-// the eslint disable prevents a lint error in the stub phase.
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+// ── Partner commission hook ───────────────────────────────────────────────
+// Activated for marketplace_product_purchase checkout sessions (Phase 8).
+// Gated by PARTNER_COMMISSIONS_ENABLED=true; safe/no-op by default.
 import { createCommissionEventForPayment } from "@/lib/commissions/create-event";
 
 export async function handleCheckoutCompleted(
@@ -32,6 +28,14 @@ export async function handleCheckoutCompleted(
   // Firebase auth account on the success page.
   if (session.metadata?.kind === "self_serve_subscription") {
     await handleSelfServeSubscription(session);
+    return;
+  }
+
+  // Marketplace product purchase — authenticated buyer. Attribution metadata
+  // was stamped by POST /api/marketplace/checkout. Creates a commission event
+  // when PARTNER_COMMISSIONS_ENABLED=true and a partner was attributed.
+  if (session.metadata?.kind === "marketplace_product_purchase") {
+    await handleMarketplaceProductPurchase(session);
     return;
   }
 
@@ -135,6 +139,113 @@ async function handleSelfServeSubscription(
   //     console.error("[self-serve] commission hook failed:", err)
   //   );
   // }
+}
+
+// ---------------------------------------------------------------------------
+// Marketplace product purchase — Phase 8 attribution
+// ---------------------------------------------------------------------------
+
+/**
+ * Handles checkout.session.completed for kind === "marketplace_product_purchase".
+ *
+ * Reads the attribution + commission snapshot stamped by POST /api/marketplace/checkout:
+ *   - agencyId, subAccountId, customerUserId, productId, productFamily
+ *   - referredByPartnerProfileId  ← partner who referred the buyer ("" = none)
+ *   - partnerReferralCode         ← raw code for audit
+ *   - commissionPercent           ← snapshotted at session creation
+ *   - commissionRuleId            ← snapshotted at session creation
+ *   - commissionHoldDays          ← hold window for refund period
+ *
+ * Commission event creation:
+ *   Only fires when ALL of:
+ *     1. PARTNER_COMMISSIONS_ENABLED=true
+ *     2. referredByPartnerProfileId is non-empty
+ *     3. commissionPercent > 0
+ *   Uses session.amount_total as the gross sale amount and recalculates
+ *   commissionAmountCents from the snapshotted commissionPercent so the payout
+ *   reflects the actual amount charged (not a sentinel).
+ *
+ * Idempotency:
+ *   paymentEventId = `checkout_${session.id}` — deterministic per Stripe session.
+ *   Re-delivering the same webhook returns { skipped } from createCommissionEventForPayment().
+ *
+ * ── Safety constraints ────────────────────────────────────────────────────────
+ * - No MLM, genealogy, binary, unilevel, or downline math.
+ * - No PartnerReferral doc created here (that collection tracks new-operator signups).
+ * - Does not activate live Stripe commission payouts.
+ */
+async function handleMarketplaceProductPurchase(
+  session: Stripe.Checkout.Session,
+): Promise<void> {
+  const sessionId = session.id;
+  const meta = session.metadata ?? {};
+
+  const agencyId = meta.agencyId ?? "";
+  const customerUserId = meta.customerUserId ?? "";
+  const productId = meta.productId ?? "";
+  const referredByPartnerProfileId = meta.referredByPartnerProfileId ?? "";
+  const commissionPercent = Number(meta.commissionPercent ?? "0");
+  const commissionRuleId = meta.commissionRuleId ?? "";
+  const holdDays = Number(meta.commissionHoldDays ?? "30");
+
+  if (!agencyId || !productId || !customerUserId) {
+    console.error(
+      `[marketplace-purchase] Session ${sessionId} missing required metadata (agencyId, productId, or customerUserId) — skipping.`,
+    );
+    return;
+  }
+
+  // ── Commission event ──────────────────────────────────────────────────────
+  // Only create when a partner was attributed and a commission rule was applied.
+  if (!referredByPartnerProfileId || commissionPercent <= 0) {
+    console.info(
+      `[marketplace-purchase] Session ${sessionId} — no partner attribution or zero commission. No commission event created.`,
+    );
+    return;
+  }
+
+  // Recalculate commission from the actual charged amount.
+  const saleAmountCents = session.amount_total ?? 0;
+  const commissionAmountCents = Math.floor((saleAmountCents * commissionPercent) / 100);
+
+  const holdUntil =
+    holdDays > 0
+      ? new Date(Date.now() + holdDays * 24 * 60 * 60 * 1000)
+      : null;
+
+  const result = await createCommissionEventForPayment({
+    agencyId,
+    partnerProfileId: referredByPartnerProfileId,
+    customerUserId,
+    customerSubAccountId: meta.subAccountId ?? null,
+    productId,
+    stripeEventId: null,                          // session id used via paymentEventId
+    paymentEventId: `checkout_${sessionId}`,      // deterministic idempotency key
+    saleAmountCents,
+    commissionAmountCents,
+    commissionPercent,
+    commissionRuleId: commissionRuleId || null,
+    holdUntil,
+    metadata: {
+      source: "marketplace_checkout",
+      stripeSessionId: sessionId,
+      partnerReferralCode: meta.partnerReferralCode ?? "",
+    },
+  });
+
+  if ("ok" in result) {
+    console.info(
+      `[marketplace-purchase] Commission event created: ${result.eventId} — ${commissionAmountCents}¢ for partner ${referredByPartnerProfileId}`,
+    );
+  } else if ("skipped" in result) {
+    console.info(
+      `[marketplace-purchase] Commission event skipped for session ${sessionId}: ${result.reason}`,
+    );
+  } else {
+    console.error(
+      `[marketplace-purchase] Commission event error for session ${sessionId}: ${result.message}`,
+    );
+  }
 }
 
 async function handleFoundersCheckout(session: Stripe.Checkout.Session) {

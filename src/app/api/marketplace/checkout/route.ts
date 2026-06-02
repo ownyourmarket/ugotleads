@@ -4,14 +4,28 @@ import { NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { getStripeServer } from "@/lib/stripe/server";
 import type { MemberStatus, Role } from "@/types";
+import type { PartnerTier } from "@/types/partner";
 
 /**
  * POST /api/marketplace/checkout
  *
  * Creates a Stripe Checkout Session for a marketplace product purchase.
- * This stub is safe by default: it only activates when
- * MARKETPLACE_CHECKOUT_ENABLED=true is set in the environment AND the
- * product passes all eligibility checks.
+ * Gated by MARKETPLACE_CHECKOUT_ENABLED=true (off in production by default).
+ *
+ * ── Phase 8 additions ────────────────────────────────────────────────────────
+ *
+ * Referral resolution:
+ *   If partnerReferralCode is supplied, this route resolves it to a
+ *   partner_profiles doc in the same agency. The resolved partnerProfileId is
+ *   stamped on the Stripe session metadata so the checkout.session.completed
+ *   webhook can attribute the commission without any ambiguity.
+ *
+ * Commission pre-calculation:
+ *   The applicable commission rule (product-specific > global) is resolved at
+ *   checkout creation time and its commissionPct, commissionAmountCents, and
+ *   commissionRuleId are stamped on the session metadata. Snapshotting at
+ *   checkout creation time means rule changes after the session is created do
+ *   not affect the commission paid for that sale.
  *
  * ── Security model ──────────────────────────────────────────────────────────
  *
@@ -24,27 +38,29 @@ import type { MemberStatus, Role } from "@/types";
  *   session cookie. Verified against Firebase Admin Auth; user must be active.
  *
  * Guard 3 — Product validation:
- *   Product must be: active, public, and (for subscription access model)
- *   have at least one Stripe price ID configured.
+ *   Product must be: active, public, and (for subscription) have at least one
+ *   Stripe price ID configured.
  *
  * ── What is NOT activated ───────────────────────────────────────────────────
- * - No live Stripe charges. Sessions are created in test mode only
- *   (gated by MARKETPLACE_CHECKOUT_ENABLED=true).
- * - No commission events. Commission wiring happens in Phase 8+ when
- *   checkout.session.completed webhooks stamp partnerProfileId.
- * - No live PARTNER_COMMISSIONS_ENABLED behavior.
+ * - No live commission events created here. The webhook handler
+ *   (handleMarketplaceProductPurchase in webhooks.ts) fires on
+ *   checkout.session.completed and calls createCommissionEventForPayment()
+ *   only when PARTNER_COMMISSIONS_ENABLED=true.
+ * - No PartnerReferral doc created here. That collection tracks partner-to-
+ *   partner operator signups, not product sales.
+ * - No MLM, downline, or genealogy logic.
  *
  * ── Request body ────────────────────────────────────────────────────────────
  *
  * POST /api/marketplace/checkout
  * {
- *   productId: string;              // products/{id}
- *   subAccountId: string;           // subAccounts/{id} the buyer operates
- *   billingInterval?: "monthly" | "annual"; // default "monthly"
- *   partnerReferralCode?: string | null;    // for future Phase 8 attribution
+ *   productId: string;
+ *   subAccountId: string;
+ *   billingInterval?: "monthly" | "annual";  // default "monthly"
+ *   partnerReferralCode?: string | null;      // from myusa_partner_ref cookie
  * }
  *
- * ── Stripe metadata stamped on the session ──────────────────────────────────
+ * ── Stripe session metadata ──────────────────────────────────────────────────
  *
  * {
  *   kind: "marketplace_product_purchase",
@@ -53,10 +69,17 @@ import type { MemberStatus, Role } from "@/types";
  *   customerUserId,
  *   productId,
  *   productFamily,
- *   referredByPartnerProfileId: null,  // resolved in Phase 8 from partnerReferralCode
- *   partnerReferralCode: string | null,
+ *   referredByPartnerProfileId,   // "" when no valid referral code
+ *   partnerReferralCode,          // "" when none
+ *   commissionAmountCents,        // "0" when no rule found
+ *   commissionPercent,            // "0" when no rule found
+ *   commissionRuleId,             // "" when no rule found
  * }
  */
+
+// Default refund-window hold for marketplace product commissions (days).
+// Prevents paying out commission before the customer's refund window closes.
+const COMMISSION_HOLD_DAYS = Number(process.env.COMMISSION_HOLD_DAYS ?? "30");
 
 interface CallerClaims {
   role?: Role;
@@ -87,14 +110,113 @@ async function requireActiveUser(
   if (claims.status !== "active")
     return NextResponse.json({ error: "Account inactive." }, { status: 403 });
 
-  // Accept any active user (owner or staff) — sub-account membership is checked
-  // against the subAccountId in the body below.
   const agencyId = claims.agencyId ?? "";
   if (!agencyId)
-    return NextResponse.json({ error: "No agency associated with this account." }, { status: 403 });
+    return NextResponse.json(
+      { error: "No agency associated with this account." },
+      { status: 403 },
+    );
 
   return { uid, agencyId };
 }
+
+// ---------------------------------------------------------------------------
+// Referral code resolution (Admin SDK)
+// ---------------------------------------------------------------------------
+
+/**
+ * Looks up a partner_profiles doc by referralCode within the given agency.
+ * Returns the partnerProfileId (=== uid) or null if not found / inactive.
+ *
+ * Only active/approved partners earn commission — a suspended or terminated
+ * partner's code silently resolves to null so checkout still works but no
+ * commission is attributed.
+ */
+async function resolveReferralCode(
+  agencyId: string,
+  referralCode: string,
+): Promise<string | null> {
+  const db = getAdminDb();
+  const snap = await db
+    .collection("partner_profiles")
+    .where("agencyId", "==", agencyId)
+    .where("referralCode", "==", referralCode)
+    .limit(1)
+    .get()
+    .catch(() => null);
+
+  if (!snap || snap.empty) return null;
+
+  const data = snap.docs[0].data() as { status: string };
+  const eligibleStatuses = ["active", "approved"];
+  if (!eligibleStatuses.includes(data.status)) return null;
+
+  return snap.docs[0].id; // doc id === uid === partnerProfileId
+}
+
+// ---------------------------------------------------------------------------
+// Commission rule resolution (Admin SDK)
+// ---------------------------------------------------------------------------
+
+interface ResolvedCommission {
+  commissionRuleId: string;
+  commissionPercent: number;
+  commissionAmountCents: number;
+}
+
+/**
+ * Finds the best matching active commission rule for a product + partner tier,
+ * then calculates the commission amount from the sale price.
+ *
+ * Preference order mirrors resolveCommissionRule() in product-card.tsx:
+ *   1. Product-specific + tier-specific
+ *   2. Product-specific + all tiers (partnerTier === null)
+ *   3. Global (productId === null) + tier-specific
+ *   4. Global + all tiers
+ *
+ * Returns null when no active rule covers the product.
+ */
+async function resolveCommission(
+  agencyId: string,
+  productId: string,
+  partnerTier: PartnerTier | null,
+  saleAmountCents: number,
+): Promise<ResolvedCommission | null> {
+  const db = getAdminDb();
+  const snap = await db
+    .collection("commission_rules")
+    .where("agencyId", "==", agencyId)
+    .where("isActive", "==", true)
+    .get()
+    .catch(() => null);
+
+  if (!snap || snap.empty) return null;
+
+  const active = snap.docs.map((d) => ({
+    id: d.id,
+    ...(d.data() as { productId: string | null; partnerTier: PartnerTier | null; commissionPct: number }),
+  }));
+
+  const candidates = [
+    active.find((r) => r.productId === productId && r.partnerTier === partnerTier),
+    active.find((r) => r.productId === productId && r.partnerTier === null),
+    active.find((r) => r.productId === null && r.partnerTier === partnerTier),
+    active.find((r) => r.productId === null && r.partnerTier === null),
+  ];
+
+  const rule = candidates.find(Boolean);
+  if (!rule) return null;
+
+  return {
+    commissionRuleId: rule.id,
+    commissionPercent: rule.commissionPct,
+    commissionAmountCents: Math.floor((saleAmountCents * rule.commissionPct) / 100),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Route handler
+// ---------------------------------------------------------------------------
 
 export async function POST(request: Request) {
   // Guard 1 — environment gate
@@ -126,7 +248,12 @@ export async function POST(request: Request) {
     body = {};
   }
 
-  const { productId, subAccountId, billingInterval = "monthly", partnerReferralCode = null } = body;
+  const {
+    productId,
+    subAccountId,
+    billingInterval = "monthly",
+    partnerReferralCode = null,
+  } = body;
 
   if (!productId) {
     return NextResponse.json({ error: "productId is required." }, { status: 400 });
@@ -137,7 +264,7 @@ export async function POST(request: Request) {
 
   const db = getAdminDb();
 
-  // ── Guard 3: validate product ─────────────────────────────────────────────
+  // ── Validate product ──────────────────────────────────────────────────────
   const productSnap = await db.doc(`products/${productId}`).get().catch(() => null);
   if (!productSnap?.exists) {
     return NextResponse.json({ error: `Product ${productId} not found.` }, { status: 404 });
@@ -155,7 +282,10 @@ export async function POST(request: Request) {
   };
 
   if (product.agencyId !== agencyId) {
-    return NextResponse.json({ error: "Product does not belong to your agency." }, { status: 403 });
+    return NextResponse.json(
+      { error: "Product does not belong to your agency." },
+      { status: 403 },
+    );
   }
   if (product.status !== "active") {
     return NextResponse.json(
@@ -165,70 +295,148 @@ export async function POST(request: Request) {
   }
   if (!product.isPublic) {
     return NextResponse.json(
-      { error: "Product is not publicly available.", reason: "Product is hidden from the marketplace." },
+      { error: "Product is not publicly available." },
       { status: 422 },
     );
   }
 
-  // For subscription products, require a Stripe price ID
-  if (product.accessModel === "subscription") {
-    const priceId =
-      billingInterval === "annual"
-        ? (product.stripePriceIdAnnual ?? product.stripePriceIdMonthly)
-        : (product.stripePriceIdMonthly ?? product.stripePriceIdAnnual);
-
-    if (!priceId) {
-      return NextResponse.json(
-        {
-          error: "No Stripe price ID configured for this product.",
-          reason: `Product ${productId} has no ${billingInterval} price ID. Configure it in the Admin panel.`,
-        },
-        { status: 422 },
-      );
-    }
-
-    // ── Create Stripe Checkout Session ─────────────────────────────────────
-    // Metadata is stamped now so the webhook can attribute the sale.
-    // Phase 8: resolve partnerReferralCode → partnerProfileId here.
-    const stripe = getStripeServer();
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-
-    const session = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      payment_method_types: ["card"],
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${appUrl}/sa/${subAccountId}/marketplace/products/${productId}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${appUrl}/sa/${subAccountId}/marketplace/products/${productId}?checkout=cancelled`,
-      metadata: {
-        kind: "marketplace_product_purchase",
-        agencyId,
-        subAccountId,
-        customerUserId: uid,
-        productId,
-        productFamily: product.productFamily ?? "",
-        // Phase 8: resolve partnerReferralCode → referredByPartnerProfileId
-        referredByPartnerProfileId: "",
-        partnerReferralCode: partnerReferralCode ?? "",
+  // ── Subscription products only ────────────────────────────────────────────
+  if (product.accessModel !== "subscription") {
+    return NextResponse.json(
+      {
+        error: "Checkout for this access model is not yet supported.",
+        reason: `Access model "${product.accessModel}" cannot be purchased through the marketplace checkout.`,
+        note: "Subscription products are supported. Credit and BYOK flows will be added in a later phase.",
       },
-    });
-
-    return NextResponse.json({
-      url: session.url,
-      sessionId: session.id,
-      productId,
-      subAccountId,
-      billingInterval,
-      note: "Stripe Checkout Session created. Redirect the user to the returned URL.",
-    });
+      { status: 422 },
+    );
   }
 
-  // Credit and BYOK products — checkout not yet implemented via this route
-  return NextResponse.json(
-    {
-      error: "Checkout for this access model is not yet supported.",
-      reason: `Access model "${product.accessModel}" cannot be purchased through the marketplace checkout stub.`,
-      note: "Subscription products are supported. Credit and BYOK flows will be added in a later phase.",
+  const priceId =
+    billingInterval === "annual"
+      ? (product.stripePriceIdAnnual ?? product.stripePriceIdMonthly)
+      : (product.stripePriceIdMonthly ?? product.stripePriceIdAnnual);
+
+  if (!priceId) {
+    return NextResponse.json(
+      {
+        error: "No Stripe price ID configured for this product.",
+        reason: `Product ${productId} has no ${billingInterval} price ID.`,
+      },
+      { status: 422 },
+    );
+  }
+
+  // ── Referral resolution ───────────────────────────────────────────────────
+  // Resolve the referral code → partnerProfileId before creating the session.
+  // A missing or invalid code is not an error — checkout proceeds without
+  // attribution. A suspended/terminated partner's code also resolves to null.
+  let referredByPartnerProfileId = "";
+  let resolvedPartnerTier: PartnerTier | null = null;
+
+  if (partnerReferralCode && partnerReferralCode.trim().length > 0) {
+    const resolved = await resolveReferralCode(agencyId, partnerReferralCode.trim());
+    if (resolved) {
+      referredByPartnerProfileId = resolved;
+      // Fetch the partner tier so commission resolution can be tier-specific.
+      const partnerSnap = await db.doc(`partner_profiles/${resolved}`).get().catch(() => null);
+      if (partnerSnap?.exists) {
+        const pd = partnerSnap.data() as { tier?: PartnerTier };
+        resolvedPartnerTier = pd.tier ?? null;
+      }
+    } else {
+      console.info(
+        `[checkout] Referral code "${partnerReferralCode}" not found or partner inactive — proceeding without attribution.`,
+      );
+    }
+  }
+
+  // ── Commission pre-calculation ────────────────────────────────────────────
+  // Only calculate when a valid partner was resolved — no partner, no commission.
+  // We use the Stripe price amount as a proxy for the sale amount.
+  // The session amount_total won't be known until the webhook fires, so we
+  // snapshot the rule now and recalculate from the actual amount_total in the
+  // webhook handler using the stamped commissionPercent.
+  let commissionAmountCents = 0;
+  let commissionPercent = 0;
+  let commissionRuleId = "";
+
+  if (referredByPartnerProfileId) {
+    // Use a sentinel sale amount for metadata purposes; the webhook recalculates
+    // from session.amount_total (the actual charged amount).
+    const sentinel = 0; // placeholder — see webhook handler
+    const resolved = await resolveCommission(
+      agencyId,
+      productId,
+      resolvedPartnerTier,
+      sentinel,
+    );
+    if (resolved) {
+      commissionPercent = resolved.commissionPercent;
+      commissionRuleId = resolved.commissionRuleId;
+      // commissionAmountCents will be recalculated in the webhook from
+      // session.amount_total × commissionPercent / 100. We stamp only
+      // commissionPercent + commissionRuleId here.
+      commissionAmountCents = 0; // recalculated at webhook time
+    } else {
+      console.info(
+        `[checkout] No active commission rule covers product ${productId} for partner ${referredByPartnerProfileId} — commission will be 0.`,
+      );
+    }
+  }
+
+  // ── Create Stripe Checkout Session ───────────────────────────────────────
+  const stripe = getStripeServer();
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+
+  const session = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    payment_method_types: ["card"],
+    line_items: [{ price: priceId, quantity: 1 }],
+    success_url: `${appUrl}/sa/${subAccountId}/marketplace/products/${productId}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${appUrl}/sa/${subAccountId}/marketplace/products/${productId}?checkout=cancelled`,
+    metadata: {
+      // ── Kind discriminator ────────────────────────────────────────────────
+      kind: "marketplace_product_purchase",
+      // ── Tenant / buyer ───────────────────────────────────────────────────
+      agencyId,
+      subAccountId,
+      customerUserId: uid,
+      // ── Product ──────────────────────────────────────────────────────────
+      productId,
+      productFamily: product.productFamily ?? "",
+      // ── Attribution ──────────────────────────────────────────────────────
+      // referredByPartnerProfileId: "" when no valid referral code was provided.
+      referredByPartnerProfileId,
+      partnerReferralCode: partnerReferralCode ?? "",
+      // ── Commission snapshot ───────────────────────────────────────────────
+      // commissionPercent is snapshotted at session creation so rule changes
+      // after this moment don't affect the payout for this sale.
+      // commissionAmountCents is recalculated in the webhook from
+      // session.amount_total × commissionPercent / 100.
+      commissionPercent: String(commissionPercent),
+      commissionRuleId,
+      // ── Hold window ───────────────────────────────────────────────────────
+      commissionHoldDays: String(COMMISSION_HOLD_DAYS),
     },
-    { status: 422 },
+  });
+
+  console.info(
+    `[checkout] Session ${session.id} created — product=${productId} partner=${referredByPartnerProfileId || "(none)"} rule=${commissionRuleId || "(none)"}`,
   );
+
+  return NextResponse.json({
+    url: session.url,
+    sessionId: session.id,
+    productId,
+    subAccountId,
+    billingInterval,
+    attribution: {
+      referredByPartnerProfileId: referredByPartnerProfileId || null,
+      partnerReferralCode: partnerReferralCode || null,
+      commissionPercent,
+      commissionRuleId: commissionRuleId || null,
+    },
+    note: "Stripe Checkout Session created. Redirect the user to the returned URL.",
+  });
 }

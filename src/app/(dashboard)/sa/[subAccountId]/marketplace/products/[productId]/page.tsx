@@ -27,6 +27,7 @@ import { usePartnerProfile } from "@/hooks/use-partner-profile";
 import { getProduct, getProductEligibility } from "@/lib/firestore/products";
 import { subscribeToCommissionRules } from "@/lib/firestore/commission";
 import { resolveCommissionRule, FAMILY_LABELS, FAMILY_COLORS } from "@/components/marketplace/product-card";
+import { readPartnerRefCookie } from "@/lib/cookies/partner-ref";
 import { cn } from "@/lib/utils";
 import type { Product, ProductEligibility } from "@/types/products";
 import type { CommissionRule } from "@/types/credits";
@@ -193,6 +194,15 @@ export default function ProductDetailPage() {
   const [commissionRules, setCommissionRules] = useState<CommissionRule[]>([]);
   const [rulesLoading, setRulesLoading] = useState(true);
 
+  // ---- Partner referral attribution ----
+  // Read myusa_partner_ref cookie once on mount so the code is available
+  // when the user clicks checkout. This is the MyUSA partner referral system —
+  // NOT the LeadStack founders affiliate (ls_ref / referrals collection).
+  const [partnerRefCode, setPartnerRefCode] = useState<string | null>(null);
+  useEffect(() => {
+    setPartnerRefCode(readPartnerRefCookie());
+  }, []);
+
   // ---- Checkout state ----
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
@@ -271,7 +281,9 @@ export default function ProductDetailPage() {
           productId: product.id,
           subAccountId,
           billingInterval,
-          partnerReferralCode: null, // TODO Phase 8: read from myusa_partner_ref cookie
+          // Phase 8: pass referral code so checkout route can resolve
+          // partnerProfileId and stamp attribution metadata on the Stripe session.
+          partnerReferralCode: partnerRefCode ?? null,
         }),
       });
       const data = await res.json() as {
