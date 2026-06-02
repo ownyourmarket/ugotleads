@@ -411,13 +411,23 @@ export default function ProductDetailPage() {
           label="Partner commission"
           icon={TrendingUp}
           value={
-            commissionRule === undefined
-              ? "Loading…"
-              : commissionRule
-                ? `${commissionRule.commissionPct}% — ${commissionRule.name}`
-                : "No active commission rule"
+            // isCommissionable === false explicitly disables commission for this product.
+            // Undefined is treated as true (backward compat with pre-Phase-12 docs).
+            product.isCommissionable === false
+              ? "Not commission-eligible"
+              : commissionRule === undefined
+                ? "Loading…"
+                : commissionRule
+                  ? `${commissionRule.commissionPct}% — ${commissionRule.name}`
+                  : "No active commission rule"
           }
-          valueClassName={commissionRule ? "text-emerald-700 dark:text-emerald-400" : undefined}
+          valueClassName={
+            product.isCommissionable === false
+              ? "text-zinc-500 dark:text-zinc-400"
+              : commissionRule
+                ? "text-emerald-700 dark:text-emerald-400"
+                : undefined
+          }
         />
 
         {/* Setup fee */}

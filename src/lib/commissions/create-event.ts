@@ -147,12 +147,27 @@ export async function createCommissionEventForPayment(
     console.warn(`[commissions] Product ${productId} not found — skipping.`);
     return { skipped: true, reason: `Product ${productId} not found` };
   }
-  const product = productSnap.data() as { agencyId: string; status: string; isPublic: boolean };
+  const product = productSnap.data() as {
+    agencyId: string;
+    status: string;
+    isPublic: boolean;
+    /** Undefined on pre-existing docs — treat as true for backward compat. */
+    isCommissionable?: boolean;
+  };
   if (product.agencyId !== agencyId) {
     return { skipped: true, reason: `Product ${productId} does not belong to agency ${agencyId}` };
   }
   if (product.status === "archived") {
     return { skipped: true, reason: `Product ${productId} is archived` };
+  }
+
+  // ── Guard: product-level commission opt-out ────────────────────────────
+  // isCommissionable === false explicitly disables commission creation for this
+  // product regardless of rules. Undefined is treated as true for backward
+  // compatibility with docs written before Phase 12 added this field.
+  if (product.isCommissionable === false) {
+    console.info(`[commissions] Product ${productId} has isCommissionable=false — skipping commission event creation.`);
+    return { skipped: true, reason: `Product ${productId} is not commissionable` };
   }
 
   // ── Validate: product is commissionable ────────────────────────────────
