@@ -6,6 +6,7 @@ import {
   setDoc,
   updateDoc,
   getDoc,
+  getDocs,
   onSnapshot,
   serverTimestamp,
   query,
@@ -13,7 +14,7 @@ import {
   type Unsubscribe,
 } from "firebase/firestore";
 import { getFirebaseDb } from "@/lib/firebase/client";
-import type { Product, ProductEligibility, EligibilityStatus } from "@/types/products";
+import type { Product, ProductEligibility, EligibilityStatus, ProductFamily } from "@/types/products";
 
 const PRODUCTS = "products";
 const PRODUCT_ELIGIBILITY = "product_eligibility";
@@ -123,6 +124,67 @@ export function subscribeToPartnerEligibilities(
     (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ProductEligibility, "id">) }))),
     (err) => onError?.(err),
   );
+}
+
+// ---------------------------------------------------------------------------
+// Product catalog queries — by family / owner / source
+// ---------------------------------------------------------------------------
+
+/**
+ * Real-time subscription to all products in an agency filtered by productFamily.
+ * Useful for marketplace pages that segment by ugotleads_software vs
+ * myusa_education vs myusa_services, etc.
+ */
+export function subscribeToProductsByFamily(
+  agencyId: string,
+  family: ProductFamily,
+  callback: (products: Product[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(getFirebaseDb(), PRODUCTS),
+    where("agencyId", "==", agencyId),
+    where("productFamily", "==", family),
+  );
+  return onSnapshot(
+    q,
+    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Product, "id">) }))),
+    (err) => onError?.(err),
+  );
+}
+
+/**
+ * One-shot fetch of products by owner identifier (e.g. "myusa_local").
+ * Supports building admin dashboards that show which entity offers each product.
+ */
+export async function getProductsByOwner(
+  agencyId: string,
+  owner: string,
+): Promise<Product[]> {
+  const q = query(
+    collection(getFirebaseDb(), PRODUCTS),
+    where("agencyId", "==", agencyId),
+    where("productOwner", "==", owner),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Product, "id">) }));
+}
+
+/**
+ * One-shot fetch of products by source label (e.g. "myusa_local", "partner_created").
+ * Useful for provenance audits or source-specific filtering in the marketplace.
+ */
+export async function getProductsBySource(
+  agencyId: string,
+  source: string,
+): Promise<Product[]> {
+  const q = query(
+    collection(getFirebaseDb(), PRODUCTS),
+    where("agencyId", "==", agencyId),
+    where("productSource", "==", source),
+  );
+  const snap = await getDocs(q);
+  return snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<Product, "id">) }));
 }
 
 export function subscribeToEligibilitiesByStatus(
