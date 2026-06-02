@@ -580,18 +580,24 @@ export const SEED_PRODUCT_AI_REPUTATION: SeedProduct = {
   productSource: "myusa_local",
 };
 
-/** uGotLeads platform software — subscription CRM workspace */
+/**
+ * uGotLeads platform software — subscription CRM workspace.
+ *
+ * Intentionally seeded as status: "draft", isPublic: false until Stripe price
+ * IDs are set. Do NOT flip to "active" or isPublic: true until both
+ * stripePriceIdMonthly and stripePriceIdAnnual are populated in Firestore.
+ */
 export const SEED_PRODUCT_CRM_PRO: SeedProduct = {
   name: "uGotLeads CRM Pro",
   description:
     "Full-access CRM workspace: pipeline, contacts, calendar, tasks, forms, and AI agents. Billed monthly per sub-account.",
-  status: "active",
+  status: "draft",       // not purchasable until Stripe price IDs are set
   accessModel: "subscription",
   creditCostPerUnit: 0,
-  stripePriceIdMonthly: null, // replace with real Stripe price_* at call site
+  stripePriceIdMonthly: null, // replace with real Stripe price_* before activating
   stripePriceIdAnnual: null,
   setupFeeCents: 0,
-  isPublic: true,
+  isPublic: false,       // hidden from marketplace until activated
   productFamily: "ugotleads_software",
   productOwner: "myusa_local",
   productSource: "myusa_local",
