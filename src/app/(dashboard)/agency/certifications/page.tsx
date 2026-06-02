@@ -21,7 +21,7 @@ import {
   subscribeToAgencyEligibilities,
   updateProductEligibility,
 } from "@/lib/firestore/products";
-import { DEFAULT_TRACK_META } from "@/app/(dashboard)/sa/[subAccountId]/training/page";
+import { DEFAULT_TRACK_META } from "@/lib/training/content";
 import type { PartnerProfile, PartnerTrack } from "@/types/partner";
 import type { TrackProgress } from "@/types/training";
 import type { Product, ProductEligibility, EligibilityRequirement } from "@/types/products";

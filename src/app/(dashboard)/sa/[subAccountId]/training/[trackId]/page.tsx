@@ -14,7 +14,6 @@ import {
   Clock,
   Square,
 } from "lucide-react";
-import { serverTimestamp } from "firebase/firestore";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
 import { usePartnerProfile } from "@/hooks/use-partner-profile";
@@ -23,10 +22,9 @@ import {
   subscribeToPartnerTrackProgress,
   upsertTrackProgress,
   updateTrackProgress,
-  submitTrackForReview,
   trackProgressDocId,
 } from "@/lib/firestore/training";
-import { DEFAULT_TRACK_MODULES, DEFAULT_TRACK_META } from "../page";
+import { DEFAULT_TRACK_MODULES, DEFAULT_TRACK_META } from "@/lib/training/content";
 import type { PartnerTrack, Certification } from "@/types/partner";
 import type { TrackProgress } from "@/types/training";
 import { cn } from "@/lib/utils";
@@ -148,13 +146,31 @@ export default function TrackDetailPage() {
     }
   }
 
-  // ---- Submit for review ----
+  // ---- Submit for review (server-validated via API route) ----
+  // The API route verifies all modules are complete server-side using Admin SDK,
+  // then sets status to "completed". Client cannot self-approve.
   async function handleSubmit() {
     if (!progress || !allChecked) return;
     setSaving(true);
     try {
-      await submitTrackForReview(progress.id);
-      showToast("Submitted for review. Your agency owner will be notified.");
+      const res = await fetch(`/api/training/${trackId}/submit`, {
+        method: "POST",
+        credentials: "include",
+      });
+      const data = await res.json() as {
+        ok?: boolean;
+        skipped?: boolean;
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok) {
+        showToast(data.error ?? "Submit failed. Please try again.");
+      } else {
+        showToast(data.message ?? "Submitted for review.");
+        // Status will update via Firestore subscription
+      }
+    } catch {
+      showToast("Network error. Please try again.");
     } finally {
       setSaving(false);
     }

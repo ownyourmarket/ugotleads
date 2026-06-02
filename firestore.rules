@@ -745,6 +745,79 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // =========================================================================
+    // Certification progress
+    // =========================================================================
+
+    // track_progress/{progressId}  (id = "${partnerProfileId}_${trackId}")
+    //
+    // Security model:
+    //   READ  — agency owner reads all; partner reads only their own doc.
+    //   CREATE — partner creates their own doc with "in_progress" status only.
+    //            Admin-only fields (approvedAt, approvedByUid, completedAt,
+    //            revokedAt, revokedByUid) must be null on creation.
+    //   UPDATE — split into two paths:
+    //     a) Partner path: may only touch learner-safe fields
+    //        (completedModuleIndices, totalModules, updatedAt).
+    //        Cannot change status, agencyId, uid, or any admin field.
+    //        Status transitions to "completed" / "approved" / "revoked"
+    //        must go through the server API route (Admin SDK bypasses rules).
+    //     b) Agency-owner path: unrestricted within the agency (used for
+    //        approveTrackProgress and revokeTrackProgress from the admin UI).
+    //   DELETE — blocked for all callers. Use status changes instead.
+    //   NO PUBLIC ACCESS.
+
+    match /track_progress/{progressId} {
+      // ── Read ──────────────────────────────────────────────────────────────
+      allow read: if isAgencyOwner(resource.data.agencyId)
+                  || (isActive() && resource.data.uid == request.auth.uid);
+
+      // ── Create ────────────────────────────────────────────────────────────
+      // Partner creates their own initial progress doc when checking the first
+      // module. Status must be "in_progress"; all admin-only fields must be null.
+      allow create: if isActive()
+                    && request.auth.token.agencyId == request.resource.data.agencyId
+                    && request.resource.data.uid == request.auth.uid
+                    && request.resource.data.partnerProfileId == request.auth.uid
+                    // Status: only in_progress on create (completed/approved go through API)
+                    && request.resource.data.status == "in_progress"
+                    // Admin-only timestamp fields must be null
+                    && request.resource.data.completedAt == null
+                    && request.resource.data.approvedAt == null
+                    && request.resource.data.approvedByUid == null
+                    && request.resource.data.revokedAt == null
+                    && request.resource.data.revokedByUid == null;
+
+      // ── Update — partner path ─────────────────────────────────────────────
+      // Partner can update their own doc, but only completedModuleIndices,
+      // totalModules, and updatedAt. All other fields including status must
+      // remain unchanged. Status "completed"/"approved"/"revoked" are set
+      // exclusively by the server (Admin SDK via API route or admin UI).
+      allow update: if isActive()
+                    && resource.data.uid == request.auth.uid
+                    // Tenant + identity fields stay locked
+                    && request.resource.data.agencyId == resource.data.agencyId
+                    && request.resource.data.uid == resource.data.uid
+                    && request.resource.data.partnerProfileId == resource.data.partnerProfileId
+                    // Status stays at in_progress; partner cannot self-promote
+                    && request.resource.data.status == "in_progress"
+                    && resource.data.status == "in_progress"
+                    // Admin-only fields stay exactly as they were
+                    && request.resource.data.completedAt == resource.data.completedAt
+                    && request.resource.data.approvedAt == resource.data.approvedAt
+                    && request.resource.data.approvedByUid == resource.data.approvedByUid
+                    && request.resource.data.revokedAt == resource.data.revokedAt
+                    && request.resource.data.revokedByUid == resource.data.revokedByUid;
+
+      // ── Update — agency owner path ────────────────────────────────────────
+      // Agency owner can approve/revoke and update any field within their agency.
+      // (This matches the existing pattern for partner_profiles, products, etc.)
+      allow update: if isAgencyOwner(resource.data.agencyId);
+
+      // ── Delete — blocked ──────────────────────────────────────────────────
+      allow delete: if false;
+    }
+
     // Default: deny everything else.
     match /{document=**} {
       allow read, write: if false;
