@@ -385,6 +385,7 @@ export default function MarketplacePage() {
                           ? undefined // undefined = loading
                           : getCommissionRule(product.id)
                       }
+                      detailHref={`/sa/${subAccountId}/marketplace/products/${product.id}`}
                     />
                   ))}
                 </div>
@@ -428,6 +429,7 @@ export default function MarketplacePage() {
                 commissionRule={
                   rulesLoading ? undefined : getCommissionRule(product.id)
                 }
+                detailHref={`/sa/${subAccountId}/marketplace/products/${product.id}`}
               />
             ))}
           </div>

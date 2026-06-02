@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { cn } from "@/lib/utils";
 import type { Product, ProductFamily, AccessModel, ProductEligibility } from "@/types/products";
 import type { CommissionRule } from "@/types/credits";
@@ -259,6 +260,12 @@ export interface ProductCardProps {
    * Undefined = rules not loaded yet.
    */
   commissionRule?: CommissionRule | null;
+  /**
+   * When provided, the "View details" action button becomes a <Link> pointing
+   * to this URL. Ignored for all other action variants.
+   * Expected value: `/sa/${subAccountId}/marketplace/products/${product.id}`
+   */
+  detailHref?: string;
 }
 
 export function ProductCard({
@@ -267,6 +274,7 @@ export function ProductCard({
   isPartner = false,
   eligibility,
   commissionRule,
+  detailHref,
 }: ProductCardProps) {
   const family = product.productFamily ?? null;
   const familyLabel = family ? FAMILY_LABELS[family] : "Uncategorized";
@@ -398,32 +406,44 @@ export function ProductCard({
         )}
       </div>
 
-      {/* Action button */}
+      {/* Action button — Link for view_details (when href provided), button otherwise */}
       <div className="mt-4">
-        <button
-          type="button"
-          disabled={
-            action.variant === "coming_soon" ||
-            action.variant === "eligibility_pending"
-          }
-          className={cn(
-            "w-full rounded-lg px-3 py-2 text-xs font-semibold transition-colors",
-            action.className,
-          )}
-        >
-          <span className="flex items-center justify-center gap-1.5">
-            {action.variant === "eligible_to_sell" && (
-              <CheckCircle2 className="h-3.5 w-3.5" />
+        {action.variant === "view_details" && detailHref ? (
+          <Link
+            href={detailHref}
+            className={cn(
+              "flex w-full items-center justify-center rounded-lg px-3 py-2 text-xs font-semibold transition-colors",
+              action.className,
             )}
-            {action.variant === "eligibility_pending" && (
-              <Clock className="h-3.5 w-3.5" />
-            )}
-            {(action.variant === "coming_soon") && (
-              <XCircle className="h-3.5 w-3.5" />
-            )}
+          >
             {action.label}
-          </span>
-        </button>
+          </Link>
+        ) : (
+          <button
+            type="button"
+            disabled={
+              action.variant === "coming_soon" ||
+              action.variant === "eligibility_pending"
+            }
+            className={cn(
+              "w-full rounded-lg px-3 py-2 text-xs font-semibold transition-colors",
+              action.className,
+            )}
+          >
+            <span className="flex items-center justify-center gap-1.5">
+              {action.variant === "eligible_to_sell" && (
+                <CheckCircle2 className="h-3.5 w-3.5" />
+              )}
+              {action.variant === "eligibility_pending" && (
+                <Clock className="h-3.5 w-3.5" />
+              )}
+              {action.variant === "coming_soon" && (
+                <XCircle className="h-3.5 w-3.5" />
+              )}
+              {action.label}
+            </span>
+          </button>
+        )}
       </div>
 
       {/* Admin-only section: status + visibility */}
