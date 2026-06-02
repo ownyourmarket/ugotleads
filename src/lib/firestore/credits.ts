@@ -65,10 +65,18 @@ export async function createCreditWallet(
 }
 
 /**
- * Atomically apply a credit delta and record the transaction.
- * Use for ALL balance mutations — never update the wallet doc directly.
- * Balance is clamped at 0 (can't go negative).
- * Returns the new credit_transactions doc id.
+ * @deprecated This client-SDK implementation is blocked by Firestore rules
+ * (`allow update: if false` on credit_wallets, `allow create: if false` on
+ * credit_transactions). It will throw a permission-denied error in production.
+ *
+ * Use instead:
+ *   - serverApplyCreditDelta()  — for purchases, refunds, and manual adjustments
+ *     via API routes (POST /api/credits/adjust)
+ *   - spendCredits()            — for debit operations (AI runs, product usage)
+ * Both live in src/lib/credits/server.ts and require the Admin SDK (server-only).
+ *
+ * This function is kept to avoid import breakage in files that reference it, but
+ * it MUST NOT be called from any production code path. Remove in a future cleanup.
  */
 export async function applyCreditDelta(
   partnerProfileId: string,
