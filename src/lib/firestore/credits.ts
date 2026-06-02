@@ -135,3 +135,24 @@ export function subscribeToCreditTransactions(
     (err) => onError?.(err),
   );
 }
+
+/**
+ * Real-time subscription to ALL credit wallets for an agency.
+ * Used by the agency admin credits page.
+ * No composite index required — single-field equality on agencyId.
+ */
+export function subscribeToAgencyWallets(
+  agencyId: string,
+  callback: (wallets: CreditWallet[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(getFirebaseDb(), CREDIT_WALLETS),
+    where("agencyId", "==", agencyId),
+  );
+  return onSnapshot(
+    q,
+    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<CreditWallet, "id">) }))),
+    (err) => onError?.(err),
+  );
+}
