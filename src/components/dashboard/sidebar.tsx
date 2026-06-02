@@ -25,6 +25,7 @@ import {
   ShieldCheck,
   PenLine,
   ShoppingBag,
+  DollarSign,
 } from "lucide-react";
 import { signOutUser } from "@/lib/firebase/auth";
 import { useDueTodayCount } from "@/hooks/use-due-today";
@@ -214,6 +215,20 @@ function SidebarContent() {
               >
                 <ShieldCheck className="h-4 w-4" />
                 Compliance
+              </Link>
+            )}
+            {agencyRole === "owner" && (
+              <Link
+                href="/agency/commissions"
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/agency/commissions")
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <DollarSign className="h-4 w-4" />
+                Commissions
               </Link>
             )}
             {agencyRole === "owner" && (

@@ -109,6 +109,13 @@ export interface CommissionEvent {
   status: CommissionStatus;
   partnerReferralId: string | null;
   stripeEventId: string | null;
+  /**
+   * Optional hold/refund-window timestamp. When set and in the future,
+   * the event is visible in the dashboard but should not be paid out
+   * until this time has passed. Naming follows the project's camelCase
+   * timestamp pattern (paidOutAt, voidedAt, etc.).
+   */
+  holdUntil: Timestamp | FieldValue | null;
   paidOutAt: Timestamp | FieldValue | null;
   paidOutNote: string | null;
   voidedAt: Timestamp | FieldValue | null;

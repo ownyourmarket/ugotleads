@@ -6,6 +6,14 @@ import { LANDING_VARIANT } from "@/config/landing";
 import { ensureAffiliateAccount } from "@/lib/affiliate/account";
 import { createReferral } from "@/lib/affiliate/referrals";
 import type { SubscriptionStatus } from "@/types";
+// ── Partner commission hook (disabled by default) ─────────────────────────
+// Set PARTNER_COMMISSIONS_ENABLED=true to allow commission events to be
+// created when a product is sold. The helper validates all preconditions
+// (partner active, product commissionable, no duplicate) before writing.
+// This import is unused until the hook is wired to a real product-sale path;
+// the eslint disable prevents a lint error in the stub phase.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { createCommissionEventForPayment } from "@/lib/commissions/create-event";
 
 export async function handleCheckoutCompleted(
   session: Stripe.Checkout.Session,
@@ -88,6 +96,45 @@ async function handleSelfServeSubscription(
     }
     console.error(`[self-serve] pendingSignups write failed for ${sessionId}:`, err);
   }
+
+  // ── Partner commission hook ──────────────────────────────────────────────
+  // STUB — not yet wired to a real product / partner resolution.
+  //
+  // When PARTNER_COMMISSIONS_ENABLED=true AND this session carries
+  // `metadata.partnerProfileId` + `metadata.productId`, this is where we
+  // would call createCommissionEventForPayment(). In Phase 5 we only
+  // establish the call-site; the metadata stamping and full wiring happen
+  // in Phase 6 once checkout flows stamp partner attribution.
+  //
+  // To activate (Phase 6+):
+  //   1. Stamp { partnerProfileId, productId, commissionAmountCents,
+  //              commissionPercent } into session.metadata at checkout creation.
+  //   2. Uncomment and complete the block below.
+  //   3. Set PARTNER_COMMISSIONS_ENABLED=true in the environment.
+  //
+  // if (
+  //   process.env.PARTNER_COMMISSIONS_ENABLED === "true" &&
+  //   session.metadata?.partnerProfileId &&
+  //   session.metadata?.productId
+  // ) {
+  //   createCommissionEventForPayment({
+  //     agencyId: session.metadata.agencyId ?? "",
+  //     partnerProfileId: session.metadata.partnerProfileId,
+  //     customerUserId: session.metadata.uid ?? "",
+  //     customerSubAccountId: session.metadata.subAccountId ?? null,
+  //     productId: session.metadata.productId,
+  //     stripeEventId: sessionId,      // checkout session id as idempotency key
+  //     paymentEventId: null,
+  //     saleAmountCents: session.amount_total ?? 0,
+  //     commissionAmountCents: Number(session.metadata.commissionAmountCents ?? 0),
+  //     commissionPercent: Number(session.metadata.commissionPercent ?? 0),
+  //     commissionRuleId: session.metadata.commissionRuleId ?? null,
+  //     holdUntil: null,
+  //     metadata: { sessionId },
+  //   }).catch((err) =>
+  //     console.error("[self-serve] commission hook failed:", err)
+  //   );
+  // }
 }
 
 async function handleFoundersCheckout(session: Stripe.Checkout.Session) {
