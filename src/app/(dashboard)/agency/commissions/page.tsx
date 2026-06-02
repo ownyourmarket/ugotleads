@@ -6,6 +6,7 @@ import {
   CheckCircle2,
   ChevronDown,
   Circle,
+  Clock,
   Loader2,
   XCircle,
 } from "lucide-react";
@@ -46,6 +47,19 @@ function formatDate(val: unknown): string {
     day: "numeric",
     year: "numeric",
   });
+}
+
+/**
+ * Returns hold status for a commission event:
+ *   "on_hold"  — holdUntil is set and the date is still in the future
+ *   "ready"    — holdUntil is set but has already passed
+ *   "none"     — no holdUntil set
+ */
+function holdStatus(event: CommissionEvent): "on_hold" | "ready" | "none" {
+  if (!event.holdUntil) return "none";
+  const d = tsToDate(event.holdUntil);
+  if (!d) return "none";
+  return d > new Date() ? "on_hold" : "ready";
 }
 
 const TRIGGER_LABELS: Record<string, string> = {
@@ -353,6 +367,7 @@ export default function CommissionDashboardPage() {
                   <th className="px-4 py-3 font-medium text-right">Rate</th>
                   <th className="px-4 py-3 font-medium text-right">Commission</th>
                   <th className="px-4 py-3 font-medium">Status</th>
+                  <th className="px-4 py-3 font-medium">Hold</th>
                   <th className="px-4 py-3 font-medium">Date</th>
                   {isOwner && (
                     <th className="px-4 py-3 font-medium">Actions</th>
@@ -410,6 +425,36 @@ export default function CommissionDashboardPage() {
                             {event.voidReason}
                           </p>
                         )}
+                      </td>
+                      {/* ── Hold window column ── */}
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const hs = holdStatus(event);
+                          if (hs === "on_hold") {
+                            return (
+                              <div>
+                                <span className="inline-flex items-center gap-1 rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-sky-700 dark:bg-sky-900/30 dark:text-sky-300">
+                                  <Clock className="h-2.5 w-2.5" />
+                                  On hold
+                                </span>
+                                <p className="mt-0.5 text-[10px] text-muted-foreground">
+                                  until {formatDate(event.holdUntil)}
+                                </p>
+                              </div>
+                            );
+                          }
+                          if (hs === "ready") {
+                            return (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                                <CheckCircle2 className="h-2.5 w-2.5" />
+                                Ready
+                              </span>
+                            );
+                          }
+                          return (
+                            <span className="text-[10px] text-muted-foreground">—</span>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-3 text-xs text-muted-foreground">
                         {formatDate(event.createdAt)}
