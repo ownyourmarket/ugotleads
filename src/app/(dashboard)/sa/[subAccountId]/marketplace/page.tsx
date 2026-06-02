@@ -1,18 +1,26 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Package, ShoppingBag, Layers } from "lucide-react";
+import { Layers, Package, ShoppingBag } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { useSubAccount } from "@/context/sub-account-context";
-import { subscribeToProducts } from "@/lib/firestore/products";
-import type { Product, ProductFamily, AccessModel } from "@/types/products";
-import { ProductCard, FAMILY_LABELS, FAMILY_COLORS } from "@/components/marketplace/product-card";
+import { usePartnerProfile } from "@/hooks/use-partner-profile";
+import { subscribeToProducts, subscribeToPartnerEligibilities } from "@/lib/firestore/products";
+import { subscribeToCommissionRules } from "@/lib/firestore/commission";
+import type { Product, ProductFamily, AccessModel, ProductEligibility } from "@/types/products";
+import type { CommissionRule } from "@/types/credits";
+import {
+  ProductCard,
+  resolveCommissionRule,
+  FAMILY_LABELS,
+  FAMILY_COLORS,
+} from "@/components/marketplace/product-card";
 import { AccessModelSelector } from "@/components/marketplace/access-model-selector";
 import { PartnerBanner } from "@/components/marketplace/partner-banner";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
-// Family ordering — controls display order on the page
+// Family ordering
 // ---------------------------------------------------------------------------
 
 const FAMILY_ORDER: ProductFamily[] = [
@@ -28,57 +36,117 @@ const FAMILY_ORDER: ProductFamily[] = [
 // ---------------------------------------------------------------------------
 
 export default function MarketplacePage() {
-  const { agencyId, agencyRole } = useAuth();
+  const { user, agencyId, agencyRole } = useAuth();
   const { agencyId: saAgencyId } = useSubAccount();
 
   const effectiveAgencyId = agencyId ?? saAgencyId;
   const isAdmin = agencyRole === "owner";
 
-  // All products from Firestore
+  // ---- Partner profile + track (real data) ----
+  const {
+    profile: partnerProfile,
+    track: partnerTrack,
+    loading: partnerLoading,
+  } = usePartnerProfile(user?.uid);
+
+  const isPartner =
+    !!partnerProfile &&
+    (partnerProfile.status === "active" || partnerProfile.status === "approved");
+
+  // ---- Products ----
   const [allProducts, setAllProducts] = useState<Product[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [productsLoading, setProductsLoading] = useState(true);
 
-  // Access model filter
+  // ---- Product eligibility (only when user is a partner) ----
+  // Map: productId → ProductEligibility
+  const [eligibilityMap, setEligibilityMap] = useState<
+    Map<string, ProductEligibility>
+  >(new Map());
+  const [eligibilityLoading, setEligibilityLoading] = useState(false);
+
+  // ---- Commission rules ----
+  const [commissionRules, setCommissionRules] = useState<CommissionRule[]>([]);
+  const [rulesLoading, setRulesLoading] = useState(true);
+
+  // ---- UI filters ----
   const [selectedModel, setSelectedModel] = useState<AccessModel | null>(null);
-
-  // Family filter
   const [selectedFamily, setSelectedFamily] = useState<ProductFamily | null>(null);
 
-  // ---- Firestore subscription ----
+  // ---- Firestore: products ----
   useEffect(() => {
     if (!effectiveAgencyId) return;
-
     const unsub = subscribeToProducts(
       effectiveAgencyId,
       (products) => {
         setAllProducts(products);
-        setLoading(false);
+        setProductsLoading(false);
       },
       (err) => {
-        console.error("[marketplace] subscribeToProducts error:", err);
-        setLoading(false);
+        console.error("[marketplace] subscribeToProducts:", err);
+        setProductsLoading(false);
       },
     );
-
     return () => unsub();
   }, [effectiveAgencyId]);
 
-  // ---- Derived: public products (for regular view) ----
+  // ---- Firestore: commission rules ----
+  useEffect(() => {
+    if (!effectiveAgencyId) return;
+    const unsub = subscribeToCommissionRules(
+      effectiveAgencyId,
+      (rules) => {
+        setCommissionRules(rules);
+        setRulesLoading(false);
+      },
+      (err) => {
+        console.error("[marketplace] subscribeToCommissionRules:", err);
+        setRulesLoading(false);
+      },
+    );
+    return () => unsub();
+  }, [effectiveAgencyId]);
+
+  // ---- Firestore: product eligibility (partner only) ----
+  useEffect(() => {
+    if (!isPartner || !partnerProfile?.id) {
+      setEligibilityMap(new Map());
+      setEligibilityLoading(false);
+      return;
+    }
+
+    setEligibilityLoading(true);
+
+    const unsub = subscribeToPartnerEligibilities(
+      partnerProfile.id,
+      (items) => {
+        const map = new Map<string, ProductEligibility>();
+        for (const item of items) {
+          map.set(item.productId, item);
+        }
+        setEligibilityMap(map);
+        setEligibilityLoading(false);
+      },
+      (err) => {
+        console.error("[marketplace] subscribeToPartnerEligibilities:", err);
+        setEligibilityLoading(false);
+      },
+    );
+    return () => unsub();
+  }, [isPartner, partnerProfile?.id]);
+
+  // ---- Derived: public vs draft ----
   const publicProducts = useMemo(
     () => allProducts.filter((p) => p.isPublic && p.status === "active"),
     [allProducts],
   );
 
-  // ---- Derived: draft/hidden products (admin-only section) ----
   const draftProducts = useMemo(
     () =>
-      isAdmin
-        ? allProducts.filter((p) => !p.isPublic || p.status !== "active")
-        : [],
+      isAdmin ? allProducts.filter((p) => !p.isPublic || p.status !== "active") : [],
     [allProducts, isAdmin],
   );
 
-  // ---- Derived: filtered products ----
+  // ---- Derived: filtered ----
   const filteredPublic = useMemo(() => {
     let result = publicProducts;
     if (selectedModel) result = result.filter((p) => p.accessModel === selectedModel);
@@ -86,7 +154,7 @@ export default function MarketplacePage() {
     return result;
   }, [publicProducts, selectedModel, selectedFamily]);
 
-  // ---- Derived: products grouped by family ----
+  // ---- Derived: grouped by family ----
   const groupedProducts = useMemo(() => {
     const groups: Record<ProductFamily, Product[]> = {
       ugotleads_software: [],
@@ -97,24 +165,25 @@ export default function MarketplacePage() {
     };
     for (const p of filteredPublic) {
       const family = p.productFamily;
-      if (family && family in groups) {
-        groups[family].push(p);
-      }
+      if (family && family in groups) groups[family].push(p);
     }
     return groups;
   }, [filteredPublic]);
 
   const activeFamily = useMemo(
-    () =>
-      FAMILY_ORDER.filter(
-        (f) => groupedProducts[f].length > 0,
-      ),
+    () => FAMILY_ORDER.filter((f) => groupedProducts[f].length > 0),
     [groupedProducts],
   );
 
-  // ---- Stat counts ----
+  const loading = productsLoading || rulesLoading || partnerLoading;
   const totalPublic = publicProducts.length;
   const totalDraft = draftProducts.length;
+
+  // ---- Commission rule resolver (memoised closure) ----
+  const getCommissionRule = useMemo(() => {
+    return (productId: string): CommissionRule | null =>
+      resolveCommissionRule(productId, partnerProfile?.tier ?? null, commissionRules);
+  }, [commissionRules, partnerProfile?.tier]);
 
   return (
     <div className="min-h-screen space-y-8 p-6">
@@ -135,7 +204,6 @@ export default function MarketplacePage() {
           </p>
         </div>
 
-        {/* Stat chips */}
         {!loading && (
           <div className="flex items-center gap-3">
             <div className="rounded-lg border bg-card px-3 py-2 text-center">
@@ -160,26 +228,18 @@ export default function MarketplacePage() {
         )}
       </div>
 
-      {/* ---- Partner banner ---- */}
-      {/*
-        TODO: Replace isPartner and activeTrackId with real partner profile data.
-        Once src/lib/firestore/partners.ts is built and a usePartnerProfile() hook exists,
-        read PartnerProfile.status === "active" → isPartner, and PartnerProfile.activeTrackId.
-        Do NOT fake permissions. Until then, this banner safely renders nothing.
-      */}
+      {/* ---- Partner banner (real data) ---- */}
       <PartnerBanner
-        isPartner={false}
-        activeTrackId={null}
-        loading={false}
+        profile={partnerProfile}
+        track={partnerTrack}
+        loading={partnerLoading}
       />
 
       {/* ---- Access model selector ---- */}
       <section>
         <AccessModelSelector
           selected={selectedModel}
-          onSelect={(m) =>
-            setSelectedModel((prev) => (prev === m ? null : m))
-          }
+          onSelect={(m) => setSelectedModel((prev) => (prev === m ? null : m))}
         />
       </section>
 
@@ -198,36 +258,29 @@ export default function MarketplacePage() {
           >
             All families
           </button>
-          {FAMILY_ORDER.filter((f) => publicProducts.some((p) => p.productFamily === f)).map(
-            (family) => {
-              const style = FAMILY_COLORS[family];
-              return (
-                <button
-                  key={family}
-                  type="button"
-                  onClick={() =>
-                    setSelectedFamily((prev) =>
-                      prev === family ? null : family,
-                    )
-                  }
-                  className={cn(
-                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
-                    selectedFamily === family
-                      ? style.badge + " border-transparent"
-                      : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
-                  )}
-                >
-                  <span
-                    className={cn(
-                      "h-1.5 w-1.5 rounded-full",
-                      selectedFamily === family ? "" : style.dot,
-                    )}
-                  />
-                  {FAMILY_LABELS[family]}
-                </button>
-              );
-            },
-          )}
+          {FAMILY_ORDER.filter((f) =>
+            publicProducts.some((p) => p.productFamily === f),
+          ).map((family) => {
+            const style = FAMILY_COLORS[family];
+            return (
+              <button
+                key={family}
+                type="button"
+                onClick={() =>
+                  setSelectedFamily((prev) => (prev === family ? null : family))
+                }
+                className={cn(
+                  "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                  selectedFamily === family
+                    ? style.badge + " border-transparent"
+                    : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                )}
+              >
+                <span className={cn("h-1.5 w-1.5 rounded-full", style.dot)} />
+                {FAMILY_LABELS[family]}
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -237,13 +290,13 @@ export default function MarketplacePage() {
           {Array.from({ length: 6 }).map((_, i) => (
             <div
               key={i}
-              className="h-44 animate-pulse rounded-xl border bg-muted/40"
+              className="h-52 animate-pulse rounded-xl border bg-muted/40"
             />
           ))}
         </div>
       )}
 
-      {/* ---- No results ---- */}
+      {/* ---- No results after filtering ---- */}
       {!loading && filteredPublic.length === 0 && totalPublic > 0 && (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed py-14 text-center">
           <Layers className="h-8 w-8 text-muted-foreground/50" />
@@ -263,7 +316,7 @@ export default function MarketplacePage() {
         </div>
       )}
 
-      {/* ---- Empty state (no seeded products) ---- */}
+      {/* ---- Empty catalog ---- */}
       {!loading && totalPublic === 0 && (
         <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed py-14 text-center">
           <Package className="h-8 w-8 text-muted-foreground/50" />
@@ -285,7 +338,6 @@ export default function MarketplacePage() {
 
             return (
               <section key={family}>
-                {/* Section header */}
                 <div className="mb-4 flex items-center gap-2">
                   <span
                     className={cn(
@@ -301,13 +353,23 @@ export default function MarketplacePage() {
                   </span>
                 </div>
 
-                {/* Product grid */}
                 <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {products.map((product) => (
                     <ProductCard
                       key={product.id}
                       product={product}
                       isAdmin={isAdmin}
+                      isPartner={isPartner}
+                      eligibility={
+                        eligibilityLoading
+                          ? undefined // undefined = loading (card shows "…")
+                          : (eligibilityMap.get(product.id) ?? null)
+                      }
+                      commissionRule={
+                        rulesLoading
+                          ? undefined // undefined = loading
+                          : getCommissionRule(product.id)
+                      }
                     />
                   ))}
                 </div>
@@ -317,7 +379,7 @@ export default function MarketplacePage() {
         </div>
       )}
 
-      {/* ---- Admin: draft / hidden products ---- */}
+      {/* ---- Admin: draft / hidden ---- */}
       {isAdmin && !loading && draftProducts.length > 0 && (
         <section>
           <div className="mb-4 flex items-center gap-2">
@@ -334,8 +396,7 @@ export default function MarketplacePage() {
           </div>
           <p className="mb-4 text-xs text-muted-foreground">
             These products are not visible to partners or marketplace visitors.
-            Activate them once Stripe price IDs and public settings are
-            configured.
+            Activate them once Stripe price IDs and public settings are configured.
           </p>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {draftProducts.map((product) => (
@@ -343,6 +404,15 @@ export default function MarketplacePage() {
                 key={product.id}
                 product={product}
                 isAdmin={true}
+                isPartner={isPartner}
+                eligibility={
+                  eligibilityLoading
+                    ? undefined
+                    : (eligibilityMap.get(product.id) ?? null)
+                }
+                commissionRule={
+                  rulesLoading ? undefined : getCommissionRule(product.id)
+                }
               />
             ))}
           </div>

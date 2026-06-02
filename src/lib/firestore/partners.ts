@@ -132,6 +132,25 @@ export async function updatePartnerProfile(
 // partner_tracks
 // ---------------------------------------------------------------------------
 
+/**
+ * Real-time subscription to a single partner track doc by id.
+ * Calls callback(null) when the doc does not exist.
+ */
+export function subscribeToPartnerTrack(
+  trackId: string,
+  callback: (track: PartnerTrack | null) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  return onSnapshot(
+    doc(getFirebaseDb(), PARTNER_TRACKS, trackId),
+    (snap) => {
+      if (!snap.exists()) { callback(null); return; }
+      callback({ id: snap.id, ...(snap.data() as Omit<PartnerTrack, "id">) });
+    },
+    (err) => onError?.(err),
+  );
+}
+
 export function subscribeToPartnerTracks(
   agencyId: string,
   callback: (tracks: PartnerTrack[]) => void,

@@ -1,40 +1,19 @@
 "use client";
 
-import { Award, MapPin, Zap } from "lucide-react";
+import { Award, MapPin, Sparkles, Zap } from "lucide-react";
 import { cn } from "@/lib/utils";
+import type { PartnerProfile, PartnerTrack } from "@/types/partner";
 
 // ---------------------------------------------------------------------------
-// Partner track identifiers (deterministic, matches seeder slug IDs)
+// Known seeder track IDs (deterministic slugs from revenue-os-seeder.ts)
 // ---------------------------------------------------------------------------
 
-// TODO: Replace these constants with real partner profile data once partner
-// Firestore reads and PartnerProfile context are wired. See:
-//   - src/types/partner.ts → PartnerProfile.activeTrackId
-//   - src/lib/firestore/partners.ts (not yet built)
-// Do NOT fake permissions here — use null-safe defaults.
-export type KnownTrack =
-  | "track_certified_ai_consultant"
-  | "track_community_advocate"
-  | null;
+const TRACK_AI_CONSULTANT = "track_certified_ai_consultant";
+const TRACK_COMMUNITY_ADVOCATE = "track_community_advocate";
 
-export interface PartnerBannerProps {
-  /**
-   * Whether the current user has an approved PartnerProfile in this agency.
-   * TODO: derive from a usePartnerProfile() hook once partner reads are wired.
-   * Default: false (safe — shows nothing rather than false permissions).
-   */
-  isPartner?: boolean;
-
-  /**
-   * The active (or most recently completed) partner track docId.
-   * Null when the user has no track or partner data isn't loaded yet.
-   * TODO: read from PartnerProfile.activeTrackId once partner reads are wired.
-   */
-  activeTrackId?: KnownTrack;
-
-  /** Pass true while partner data is still loading to suppress the banner. */
-  loading?: boolean;
-}
+// ---------------------------------------------------------------------------
+// Banner configurations
+// ---------------------------------------------------------------------------
 
 interface BannerConfig {
   icon: typeof Zap;
@@ -44,16 +23,51 @@ interface BannerConfig {
   iconClassName: string;
 }
 
+/**
+ * Resolves the correct banner based on real partner profile + track data.
+ *
+ * Logic:
+ *  - No profile / inactive → non-partner "Become certified" prompt
+ *  - Active partner, track = AI Consultant → Certified AI Consultant message
+ *  - Active partner, track = Community Advocate → Community Advocate message
+ *  - Active partner, no specific track → generic partner message
+ *
+ * NOTE: "both tracks" requires a completedTrackIds[] field on PartnerProfile
+ * (not yet in schema). Until that field exists we map on activeTrackId only.
+ * Add completedTrackIds to PartnerProfile and extend this function when ready.
+ */
 function resolveBanner(
-  isPartner: boolean,
-  activeTrackId: KnownTrack,
-): BannerConfig | null {
-  if (!isPartner) return null;
+  profile: PartnerProfile | null,
+  track: PartnerTrack | null,
+): BannerConfig {
+  // No profile or inactive/suspended/terminated — show the "become a partner" prompt
+  if (!profile || profile.status === "suspended" || profile.status === "terminated") {
+    return {
+      icon: Sparkles,
+      title: "Join the MyUSA Local Partner Network",
+      message:
+        "Become certified to sell and operate MyUSA Local offers powered by uGotLeads.",
+      className:
+        "bg-zinc-50 border-zinc-200 dark:bg-zinc-900/40 dark:border-zinc-700",
+      iconClassName: "text-zinc-500 dark:text-zinc-400",
+    };
+  }
 
-  if (activeTrackId === "track_certified_ai_consultant") {
+  const activeTrackId = profile.activeTrackId;
+
+  // Check for "both tracks" — only possible if we have a completedTrackIds[]
+  // field. Left as a type-safe TODO; the condition below can never be true
+  // today but will work once the field is added.
+  // TODO: extend PartnerProfile with completedTrackIds: string[]
+  // const completedTrackIds: string[] = (profile as any).completedTrackIds ?? [];
+  // const hasBoth =
+  //   completedTrackIds.includes(TRACK_AI_CONSULTANT) &&
+  //   completedTrackIds.includes(TRACK_COMMUNITY_ADVOCATE);
+
+  if (activeTrackId === TRACK_AI_CONSULTANT) {
     return {
       icon: Award,
-      title: "Certified AI Consultant",
+      title: track?.name ?? "Certified AI Consultant",
       message:
         "You can sell and operate AI, CRM, and growth products for clients.",
       className:
@@ -62,10 +76,10 @@ function resolveBanner(
     };
   }
 
-  if (activeTrackId === "track_community_advocate") {
+  if (activeTrackId === TRACK_COMMUNITY_ADVOCATE) {
     return {
       icon: MapPin,
-      title: "Support Local Community Advocate",
+      title: track?.name ?? "Support Local Community Advocate",
       message:
         "You can refer local businesses into listings, spotlights, audits, and local growth offers.",
       className:
@@ -74,7 +88,7 @@ function resolveBanner(
     };
   }
 
-  // Generic partner (no specific track identified)
+  // Generic active partner — no specific track set or unrecognised track
   return {
     icon: Zap,
     title: "MyUSA Local Partner",
@@ -86,16 +100,23 @@ function resolveBanner(
   };
 }
 
-export function PartnerBanner({
-  isPartner = false,
-  activeTrackId = null,
-  loading = false,
-}: PartnerBannerProps) {
-  if (loading || !isPartner) return null;
+// ---------------------------------------------------------------------------
+// Component
+// ---------------------------------------------------------------------------
 
-  const banner = resolveBanner(isPartner, activeTrackId);
-  if (!banner) return null;
+export interface PartnerBannerProps {
+  /** Real partner profile from Firestore (null = not a partner). */
+  profile: PartnerProfile | null;
+  /** Active track doc (null when no track or not yet loaded). */
+  track: PartnerTrack | null;
+  /** Suppress the banner while partner data is loading. */
+  loading?: boolean;
+}
 
+export function PartnerBanner({ profile, track, loading = false }: PartnerBannerProps) {
+  if (loading) return null;
+
+  const banner = resolveBanner(profile, track);
   const Icon = banner.icon;
 
   return (
