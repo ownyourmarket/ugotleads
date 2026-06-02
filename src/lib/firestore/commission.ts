@@ -106,6 +106,27 @@ export async function createCommissionEvent(
   return ref.id;
 }
 
+/**
+ * Real-time subscription to ALL commission events for an agency.
+ * Used by the admin commission dashboard. Ordered newest-first.
+ */
+export function subscribeToAgencyCommissionEvents(
+  agencyId: string,
+  callback: (events: CommissionEvent[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(getFirebaseDb(), COMMISSION_EVENTS),
+    where("agencyId", "==", agencyId),
+    orderBy("createdAt", "desc"),
+  );
+  return onSnapshot(
+    q,
+    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<CommissionEvent, "id">) }))),
+    (err) => onError?.(err),
+  );
+}
+
 export async function updateCommissionEventStatus(
   id: string,
   status: CommissionStatus,
