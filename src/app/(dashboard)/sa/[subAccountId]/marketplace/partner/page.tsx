@@ -8,7 +8,9 @@ import {
   Check,
   ChevronRight,
   ClipboardCopy,
+  DollarSign,
   ShoppingBag,
+  TrendingUp,
   User,
   Users,
 } from "lucide-react";
@@ -17,8 +19,10 @@ import { useSubAccount } from "@/context/sub-account-context";
 import { usePartnerProfile } from "@/hooks/use-partner-profile";
 import { subscribeToCertifications } from "@/lib/firestore/partners";
 import { subscribeToPartnerReferrals } from "@/lib/firestore/partner-referrals";
+import { subscribeToAttributedPurchases } from "@/lib/firestore/marketplace-purchases";
 import type { Certification } from "@/types/partner";
 import type { PartnerReferral } from "@/types/credits";
+import type { MarketplacePurchase } from "@/types/marketplace";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -99,6 +103,10 @@ export default function PartnerProfilePage() {
   const [referrals, setReferrals] = useState<PartnerReferral[]>([]);
   const [referralsLoading, setReferralsLoading] = useState(true);
 
+  // ---- Attributed marketplace purchases ----
+  const [attributedPurchases, setAttributedPurchases] = useState<MarketplacePurchase[]>([]);
+  const [attributedLoading, setAttributedLoading] = useState(true);
+
   useEffect(() => {
     if (!effectiveAgencyId) return;
     const unsub = subscribeToCertifications(
@@ -136,6 +144,27 @@ export default function PartnerProfilePage() {
     return () => unsub();
   }, [partnerProfile?.id]);
 
+  useEffect(() => {
+    if (!partnerProfile?.id) {
+      setAttributedPurchases([]);
+      setAttributedLoading(false);
+      return;
+    }
+    setAttributedLoading(true);
+    const unsub = subscribeToAttributedPurchases(
+      partnerProfile.id,
+      (purchases) => {
+        setAttributedPurchases(purchases);
+        setAttributedLoading(false);
+      },
+      (err) => {
+        console.error("[partner-profile] subscribeToAttributedPurchases:", err);
+        setAttributedLoading(false);
+      },
+    );
+    return () => unsub();
+  }, [partnerProfile?.id]);
+
   // ---- Copy referral link ----
   const [copied, setCopied] = useState(false);
 
@@ -160,6 +189,17 @@ export default function PartnerProfilePage() {
     const completedIds = partnerProfile.completedTrackIds ?? [];
     return certifications.filter((c) => completedIds.includes(c.trackId));
   }, [certifications, partnerProfile]);
+
+  // ---- Attributed sales derived stats ----
+  const attributedSalesCount = attributedPurchases.filter(
+    (p) => p.paymentStatus === "paid",
+  ).length;
+
+  const attributedSalesVolumeCents = attributedPurchases
+    .filter((p) => p.paymentStatus === "paid")
+    .reduce((sum, p) => sum + p.amountTotalCents, 0);
+
+  const recentAttributedPurchases = attributedPurchases.slice(0, 10);
 
   const loading = partnerLoading || certsLoading || referralsLoading;
 
@@ -453,6 +493,130 @@ export default function PartnerProfilePage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </section>
+
+          {/* ---- Attributed sales ---- */}
+          <section className="rounded-xl border bg-card p-5">
+            <div className="mb-4 flex items-center gap-2">
+              <TrendingUp className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold text-foreground">
+                Attributed Sales
+              </h2>
+              <span className="ml-1 rounded-md bg-muted px-1.5 py-0.5 text-[11px] text-muted-foreground tabular-nums">
+                {attributedSalesCount}
+              </span>
+            </div>
+
+            {/* Stats row */}
+            <div className="mb-4 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Paid sales
+                </p>
+                <p className="mt-1 text-lg font-bold tabular-nums text-foreground">
+                  {attributedSalesCount}
+                </p>
+              </div>
+              <div className="rounded-lg border bg-muted/30 p-3">
+                <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                  Sales volume
+                </p>
+                <p className="mt-1 text-lg font-bold tabular-nums text-foreground">
+                  {new Intl.NumberFormat("en-US", {
+                    style: "currency",
+                    currency: "USD",
+                    minimumFractionDigits: 2,
+                  }).format(attributedSalesVolumeCents / 100)}
+                </p>
+              </div>
+            </div>
+
+            {attributedLoading ? (
+              <div className="space-y-2">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="h-10 animate-pulse rounded-lg bg-muted/40" />
+                ))}
+              </div>
+            ) : recentAttributedPurchases.length === 0 ? (
+              <div className="flex flex-col items-center gap-2 rounded-lg border border-dashed py-8 text-center">
+                <DollarSign className="h-7 w-7 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">No attributed sales yet.</p>
+                <p className="text-xs text-muted-foreground">
+                  When customers purchase using your referral code, their sales will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-[11px] uppercase tracking-wider text-muted-foreground">
+                      <th className="pb-2 pr-4 font-medium">Product</th>
+                      <th className="pb-2 pr-4 font-medium">Amount</th>
+                      <th className="pb-2 pr-4 font-medium">Payment</th>
+                      <th className="pb-2 pr-4 font-medium">Commission</th>
+                      <th className="pb-2 font-medium">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y">
+                    {recentAttributedPurchases.map((p) => {
+                      const dateVal = p.createdAt as { toDate?: () => Date } | Date | null;
+                      const date =
+                        dateVal && "toDate" in dateVal
+                          ? (dateVal.toDate?.() ?? null)
+                          : (dateVal as Date | null);
+                      return (
+                        <tr key={p.id} className="text-xs">
+                          <td className="py-2 pr-4 font-medium text-foreground">
+                            {p.productName}
+                          </td>
+                          <td className="py-2 pr-4 tabular-nums text-foreground">
+                            {new Intl.NumberFormat("en-US", {
+                              style: "currency",
+                              currency: (p.currency ?? "usd").toUpperCase(),
+                              minimumFractionDigits: 2,
+                            }).format(p.amountTotalCents / 100)}
+                          </td>
+                          <td className="py-2 pr-4">
+                            <span
+                              className={cn(
+                                "inline-flex items-center rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                                p.paymentStatus === "paid"
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300"
+                                  : "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300",
+                              )}
+                            >
+                              {p.paymentStatus === "paid"
+                                ? "Paid"
+                                : p.paymentStatus === "no_payment_required"
+                                  ? "Free"
+                                  : "Unpaid"}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4">
+                            {p.commissionEventId ? (
+                              <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
+                                Linked
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
+                          </td>
+                          <td className="py-2 text-muted-foreground">
+                            {date
+                              ? date.toLocaleDateString("en-US", {
+                                  month: "short",
+                                  day: "numeric",
+                                  year: "numeric",
+                                })
+                              : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
             )}
           </section>
