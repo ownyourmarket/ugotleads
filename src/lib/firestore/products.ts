@@ -204,3 +204,25 @@ export function subscribeToEligibilitiesByStatus(
     (err) => onError?.(err),
   );
 }
+
+/**
+ * Real-time subscription to ALL product_eligibility rows for an agency.
+ * Used by the admin eligibility manager to show every partner/product pair.
+ *
+ * No composite index required — single-field equality on agencyId.
+ */
+export function subscribeToAgencyEligibilities(
+  agencyId: string,
+  callback: (items: ProductEligibility[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  const q = query(
+    collection(getFirebaseDb(), PRODUCT_ELIGIBILITY),
+    where("agencyId", "==", agencyId),
+  );
+  return onSnapshot(
+    q,
+    (snap) => callback(snap.docs.map((d) => ({ id: d.id, ...(d.data() as Omit<ProductEligibility, "id">) }))),
+    (err) => onError?.(err),
+  );
+}

@@ -69,6 +69,16 @@ export interface Product {
   /** Visible in the partner marketplace when true. */
   isPublic: boolean;
   /**
+   * Controls what a partner must complete before they can sell / earn from
+   * this product. Undefined on pre-existing docs is treated as
+   * "manual_approval" (the safest default — approval is never implicit).
+   *
+   * This field is distinct from product visibility (isPublic). A public product
+   * can be viewed and purchased by customers; eligibility controls whether a
+   * partner can sell it and earn commission from it.
+   */
+  eligibilityRequirement?: EligibilityRequirement;
+  /**
    * When true, this product participates in the commission system.
    * Commission events are still gated by PARTNER_COMMISSIONS_ENABLED and the
    * existence of a matching commission_rule — this flag is an additional opt-out
@@ -86,6 +96,27 @@ export type EligibilityStatus =
   | "approved"  // access granted
   | "denied"    // not approved
   | "revoked";  // was approved, access withdrawn
+
+/**
+ * What a partner must complete before they can sell or earn from a product.
+ *
+ * "none"                          — any active/approved partner can sell
+ * "track_certified_ai_consultant" — must have completed the Certified AI Consultant track
+ * "track_community_advocate"      — must have completed the Community Advocate track
+ * "either_track"                  — either of the two tracks above
+ * "both_tracks"                   — both tracks required
+ * "manual_approval"               — agency owner must explicitly approve (default)
+ *
+ * Undefined on existing Product docs is treated as "manual_approval" — the
+ * safest default. Approval is never implicit.
+ */
+export type EligibilityRequirement =
+  | "none"
+  | "track_certified_ai_consultant"
+  | "track_community_advocate"
+  | "either_track"
+  | "both_tracks"
+  | "manual_approval";
 
 /**
  * Records whether a partner is eligible for a product.
