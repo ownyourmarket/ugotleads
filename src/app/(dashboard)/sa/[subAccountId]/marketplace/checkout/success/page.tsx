@@ -172,7 +172,8 @@ export default function CheckoutSuccessPage() {
               </li>
               <li className="flex items-start gap-2">
                 <Package className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground" />
-                Access to your product will be configured automatically once payment is confirmed.
+                Once payment is confirmed, your product appears under{" "}
+                <strong className="text-foreground">My Products</strong> — open it there to get started.
               </li>
               {session?.metadata?.partnerReferralCode && (
                 <li className="flex items-start gap-2">
@@ -189,11 +190,18 @@ export default function CheckoutSuccessPage() {
         {/* ── Actions ── */}
         <div className="flex flex-col gap-2">
           <Link
-            href={`/sa/${subAccountId}/marketplace/purchases`}
+            href={`/sa/${subAccountId}/marketplace/access`}
             className={cn(
               "inline-flex w-full items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium",
               "bg-primary text-primary-foreground hover:bg-primary/90",
             )}
+          >
+            <Package className="h-4 w-4" />
+            Go to My Products
+          </Link>
+          <Link
+            href={`/sa/${subAccountId}/marketplace/purchases`}
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg border py-2.5 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
           >
             <Receipt className="h-4 w-4" />
             View My Purchases

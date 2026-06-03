@@ -102,6 +102,16 @@ function CommissionBadge({ commissionEventId }: { commissionEventId: string | nu
   );
 }
 
+function FulfilledBadge({ fulfilledAt }: { fulfilledAt: unknown }) {
+  if (!fulfilledAt) return <span className="text-xs text-muted-foreground">—</span>;
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+      <CheckCircle2 className="h-3 w-3" />
+      Fulfilled
+    </span>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -202,6 +212,7 @@ export default function SubAccountMarketplacePurchasesPage() {
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Referred by</th>
                   <th className="px-4 py-3 font-medium">Commission</th>
+                  <th className="px-4 py-3 font-medium">Fulfillment</th>
                   <th className="px-4 py-3 font-medium">Date</th>
                 </tr>
               </thead>
@@ -236,6 +247,9 @@ export default function SubAccountMarketplacePurchasesPage() {
                     </td>
                     <td className="px-4 py-3">
                       <CommissionBadge commissionEventId={p.commissionEventId} />
+                    </td>
+                    <td className="px-4 py-3">
+                      <FulfilledBadge fulfilledAt={p.fulfilledAt} />
                     </td>
                     <td className="px-4 py-3 text-xs text-muted-foreground">
                       {formatDate(p.createdAt)}

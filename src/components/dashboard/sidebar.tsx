@@ -84,6 +84,7 @@ const SUB_ACCOUNT_NAV: NavItem[] = [
   { href: "/marketplace", label: "Marketplace", icon: ShoppingBag, enabled: true, matchExact: true },
   { href: "/marketplace/cockpit", label: "Revenue Cockpit", icon: TrendingUp, enabled: true, matchExact: true },
   { href: "/marketplace/partner", label: "Partner Profile", icon: Users, enabled: true, matchExact: true },
+  { href: "/marketplace/access", label: "My Products", icon: Package, enabled: true, matchExact: true },
   { href: "/marketplace/purchases", label: "My Purchases", icon: Receipt, enabled: true, matchExact: true },
   { href: "/training", label: "Training", icon: Award, enabled: true, matchExact: false },
   { href: "/credits", label: "Credits", icon: Coins, enabled: true, matchExact: false },
