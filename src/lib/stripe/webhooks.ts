@@ -1,5 +1,5 @@
 import type Stripe from "stripe";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { sendFoundersWelcomeEmail } from "@/lib/stripe/welcome-email";
 import { LANDING_VARIANT } from "@/config/landing";
@@ -10,6 +10,10 @@ import type { SubscriptionStatus } from "@/types";
 // Activated for marketplace_product_purchase checkout sessions (Phase 8).
 // Gated by PARTNER_COMMISSIONS_ENABLED=true; safe/no-op by default.
 import { createCommissionEventForPayment } from "@/lib/commissions/create-event";
+// ── Purchase fulfillment hook (Phase 20) ──────────────────────────────────
+// Grants the customer a product_entitlements row when a paid purchase completes.
+import { grantProductEntitlement } from "@/lib/fulfillment/grant-entitlement";
+import type { AccessModel, ProductFamily } from "@/types/products";
 
 export async function handleCheckoutCompleted(
   session: Stripe.Checkout.Session,
@@ -183,31 +187,138 @@ async function handleMarketplaceProductPurchase(
   const agencyId = meta.agencyId ?? "";
   const customerUserId = meta.customerUserId ?? "";
   const productId = meta.productId ?? "";
-  const referredByPartnerProfileId = meta.referredByPartnerProfileId ?? "";
+  const subAccountId = meta.subAccountId ?? "";
+  const referredByPartnerProfileId = (meta.referredByPartnerProfileId ?? "").trim();
+  const partnerReferralCode = (meta.partnerReferralCode ?? "").trim();
   const commissionPercent = Number(meta.commissionPercent ?? "0");
   const commissionRuleId = meta.commissionRuleId ?? "";
   const holdDays = Number(meta.commissionHoldDays ?? "30");
 
   if (!agencyId || !productId || !customerUserId) {
     console.error(
-      `[marketplace-purchase] Session ${sessionId} missing required metadata (agencyId, productId, or customerUserId) — skipping.`,
+      `[marketplace-purchase] Session ${sessionId} missing required metadata — skipping.`,
     );
     return;
   }
 
-  // ── Commission event ──────────────────────────────────────────────────────
+  const db = getAdminDb();
+  const now = FieldValue.serverTimestamp();
+  const saleAmountCents = session.amount_total ?? 0;
+
+  // ── Step 1: fetch product name snapshot ──────────────────────────────────
+  // Best-effort — if the product is gone we still record the purchase.
+  const productSnap = await db.doc(`products/${productId}`).get().catch(() => null);
+  const productName =
+    (productSnap?.data() as { name?: string } | undefined)?.name ?? productId;
+  const productFamily =
+    (productSnap?.data() as { productFamily?: string | null } | undefined)?.productFamily ?? null;
+
+  // ── Step 2: write marketplace_purchases doc (idempotent) ─────────────────
+  // Doc id === sessionId so Stripe retries are naturally idempotent.
+  // We use .create() which throws ALREADY_EXISTS (code 6) on a duplicate.
+  const purchaseRef = db.doc(`marketplace_purchases/${sessionId}`);
+  let purchaseAlreadyExisted = false;
+
+  try {
+    await purchaseRef.create({
+      id: sessionId,
+      agencyId,
+      subAccountId,
+      customerUserId,
+      productId,
+      productName,
+      productFamily: productFamily ?? null,
+      stripeSessionId: sessionId,
+      stripePaymentIntentId:
+        typeof session.payment_intent === "string" ? session.payment_intent : null,
+      amountTotalCents: saleAmountCents,
+      currency: session.currency ?? "usd",
+      checkoutStatus: session.status ?? "complete",
+      paymentStatus: session.payment_status ?? "paid",
+      referredByPartnerProfileId: referredByPartnerProfileId || null,
+      partnerReferralCode: partnerReferralCode || null,
+      commissionEventId: null,
+      createdAt: now,
+      updatedAt: now,
+    });
+    console.info(`[marketplace-purchase] Purchase recorded: marketplace_purchases/${sessionId}`);
+  } catch (err) {
+    const code = (err as { code?: number })?.code;
+    if (code === 6) {
+      // ALREADY_EXISTS — duplicate webhook delivery; purchase already recorded.
+      purchaseAlreadyExisted = true;
+      console.info(
+        `[marketplace-purchase] Duplicate webhook for session ${sessionId} — purchase already recorded, checking commission.`,
+      );
+    } else {
+      console.error(
+        `[marketplace-purchase] Failed to write marketplace_purchases/${sessionId}:`,
+        err,
+      );
+      // Non-fatal — still attempt commission creation below.
+    }
+  }
+
+  // ── Step 2.5: fulfillment — grant the customer a product entitlement ──────
+  // Runs for EVERY paid purchase, regardless of partner attribution, so it must
+  // precede the no-attribution early return below. Idempotent + best-effort:
+  // failure here is logged but does not block commission processing.
+  const isPaid = (session.payment_status ?? "paid") === "paid";
+  if (isPaid) {
+    const accessModel =
+      ((productSnap?.data() as { accessModel?: AccessModel } | undefined)?.accessModel ??
+        "subscription") as AccessModel;
+
+    const fulfill = await grantProductEntitlement({
+      agencyId,
+      customerUserId,
+      productId,
+      subAccountId: subAccountId || null,
+      productName,
+      productFamily: (productFamily ?? null) as ProductFamily | null,
+      accessModel,
+      grantingSessionId: sessionId,
+    });
+
+    if ("ok" in fulfill) {
+      console.info(
+        `[marketplace-purchase] Entitlement ${fulfill.entitlementId}${fulfill.alreadyActive ? " (already active)" : " granted"} for session ${sessionId}`,
+      );
+      // Best-effort backfill — failure does not affect the entitlement itself.
+      purchaseRef
+        .update({
+          entitlementId: fulfill.entitlementId,
+          fulfilledAt: Timestamp.now(),
+          updatedAt: Timestamp.now(),
+        })
+        .catch((err) => {
+          console.error(
+            `[marketplace-purchase] Failed to backfill entitlementId on purchase ${sessionId}:`,
+            err,
+          );
+        });
+    } else {
+      console.error(
+        `[marketplace-purchase] Entitlement grant failed for session ${sessionId}: ${fulfill.message}`,
+      );
+    }
+  } else {
+    console.info(
+      `[marketplace-purchase] Session ${sessionId} payment_status="${session.payment_status}" — not paid, skipping entitlement grant.`,
+    );
+  }
+
+  // ── Step 3: commission event ──────────────────────────────────────────────
   // Only create when a partner was attributed and a commission rule was applied.
+  // createCommissionEventForPayment() is its own gate (PARTNER_COMMISSIONS_ENABLED).
   if (!referredByPartnerProfileId || commissionPercent <= 0) {
     console.info(
-      `[marketplace-purchase] Session ${sessionId} — no partner attribution or zero commission. No commission event created.`,
+      `[marketplace-purchase] Session ${sessionId} — no partner attribution or zero commission. Purchase recorded${purchaseAlreadyExisted ? " (already existed)" : ""}, no commission event.`,
     );
     return;
   }
 
-  // Recalculate commission from the actual charged amount.
-  const saleAmountCents = session.amount_total ?? 0;
   const commissionAmountCents = Math.floor((saleAmountCents * commissionPercent) / 100);
-
   const holdUntil =
     holdDays > 0
       ? new Date(Date.now() + holdDays * 24 * 60 * 60 * 1000)
@@ -217,10 +328,10 @@ async function handleMarketplaceProductPurchase(
     agencyId,
     partnerProfileId: referredByPartnerProfileId,
     customerUserId,
-    customerSubAccountId: meta.subAccountId ?? null,
+    customerSubAccountId: subAccountId || null,
     productId,
-    stripeEventId: null,                          // session id used via paymentEventId
-    paymentEventId: `checkout_${sessionId}`,      // deterministic idempotency key
+    stripeEventId: null,
+    paymentEventId: `checkout_${sessionId}`,   // deterministic idempotency key
     saleAmountCents,
     commissionAmountCents,
     commissionPercent,
@@ -229,7 +340,7 @@ async function handleMarketplaceProductPurchase(
     metadata: {
       source: "marketplace_checkout",
       stripeSessionId: sessionId,
-      partnerReferralCode: meta.partnerReferralCode ?? "",
+      partnerReferralCode,
     },
   });
 
@@ -237,6 +348,17 @@ async function handleMarketplaceProductPurchase(
     console.info(
       `[marketplace-purchase] Commission event created: ${result.eventId} — ${commissionAmountCents}¢ for partner ${referredByPartnerProfileId}`,
     );
+    // ── Step 4: attach commissionEventId to purchase record ──────────────
+    // Best-effort update — failure here does not affect the commission itself.
+    purchaseRef.update({
+      commissionEventId: result.eventId,
+      updatedAt: Timestamp.now(),
+    }).catch((err) => {
+      console.error(
+        `[marketplace-purchase] Failed to attach commissionEventId to purchase ${sessionId}:`,
+        err,
+      );
+    });
   } else if ("skipped" in result) {
     console.info(
       `[marketplace-purchase] Commission event skipped for session ${sessionId}: ${result.reason}`,

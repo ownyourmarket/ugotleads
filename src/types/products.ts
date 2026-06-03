@@ -156,3 +156,55 @@ export interface ProductEligibility {
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
+
+// ---------------------------------------------------------------------------
+// Product entitlements (customer access)
+// ---------------------------------------------------------------------------
+
+/**
+ * "active"  — customer currently has access to the product
+ * "revoked" — access was withdrawn (e.g. refund, subscription cancelled)
+ */
+export type EntitlementStatus = "active" | "revoked";
+
+/**
+ * Records that a CUSTOMER has access to a product after a completed purchase.
+ *
+ * Doc id is deterministic: `${customerUserId}_${productId}`
+ * Collection: product_entitlements/{id}
+ *
+ * ── Distinct from product_eligibility ─────────────────────────────────────────
+ * product_eligibility (keyed by partnerProfileId) records whether a PARTNER may
+ * SELL / earn from a product — it drives the agency partner-sell manager and the
+ * commission writer.
+ *
+ * product_entitlements (keyed by customerUserId) records whether a CUSTOMER has
+ * ACCESS to a product they purchased. These are separate concerns and live in
+ * separate collections so customer access never pollutes the partner-sell system.
+ *
+ * ── Write access ──────────────────────────────────────────────────────────────
+ * Server-only (Admin SDK). Written by the checkout.session.completed webhook via
+ * grantProductEntitlement(). Clients can READ their own (customerUserId == uid);
+ * agency owners can read all rows in their agency.
+ */
+export interface ProductEntitlement {
+  id: string;                       // `${customerUserId}_${productId}`
+  agencyId: string;
+  subAccountId: string | null;
+  customerUserId: string;
+  productId: string;
+  /** Denormalized product name at grant time — survives product renames. */
+  productName: string;
+  productFamily: ProductFamily | null;
+  /** Denormalized from the product at grant time. */
+  accessModel: AccessModel;
+  status: EntitlementStatus;
+  /** How this entitlement was granted. Extensible for future sources. */
+  source: "marketplace_purchase";
+  /** Stripe checkout session id that granted this entitlement. Null if granted another way. */
+  grantingSessionId: string | null;
+  grantedAt: Timestamp | FieldValue | null;
+  revokedAt: Timestamp | FieldValue | null;
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
+}

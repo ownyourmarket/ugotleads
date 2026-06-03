@@ -674,6 +674,17 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // product_entitlements/{id}  (id = "${customerUserId}_${productId}")
+    // Customer ACCESS rights after a purchase. Distinct from product_eligibility
+    // (partner SELL rights). Server-only writes (Admin SDK via fulfillment hook).
+    // Customer reads their own; agency owner reads all rows in their agency.
+    match /product_entitlements/{id} {
+      allow read: if isAgencyOwner(resource.data.agencyId)
+                  || (isActive()
+                      && resource.data.customerUserId == request.auth.uid);
+      allow write: if false;
+    }
+
     // partner_referrals/{id}  (separate from /referrals — see README)
     match /partner_referrals/{id} {
       allow read: if isAgencyOwner(resource.data.agencyId)
