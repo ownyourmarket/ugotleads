@@ -207,6 +207,15 @@ export default function ProductDetailPage() {
   const [checkoutLoading, setCheckoutLoading] = useState(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
 
+  // ---- BYOK key setup state ----
+  const [byokInput, setByokInput] = useState("");
+  const [byokShowForm, setByokShowForm] = useState(false);
+  const [byokSaving, setByokSaving] = useState(false);
+  const [byokError, setByokError] = useState<string | null>(null);
+  const [byokSuccess, setByokSuccess] = useState<string | null>(null);
+  // Local mirror of byokKeyLast4 to reflect saves without a full eligibility re-fetch
+  const [byokKeyLast4Local, setByokKeyLast4Local] = useState<string | null>(null);
+
   // ---- Load product ----
   useEffect(() => {
     if (!productId) return;
@@ -227,7 +236,11 @@ export default function ProductDetailPage() {
     }
     setEligibility(undefined);
     getProductEligibility(partnerProfile.id, productId)
-      .then(setEligibility)
+      .then((e) => {
+        setEligibility(e);
+        // Sync local BYOK state from Firestore
+        setByokKeyLast4Local(e?.byokKeyLast4 ?? null);
+      })
       .catch((err) => {
         console.error("[product-detail] getProductEligibility:", err);
         setEligibility(null);
@@ -307,6 +320,63 @@ export default function ProductDetailPage() {
       setCheckoutLoading(false);
     }
   }
+
+  // ---- BYOK handlers ----
+  async function handleByokSave() {
+    if (!byokInput.trim() || byokSaving) return;
+    setByokSaving(true);
+    setByokError(null);
+    setByokSuccess(null);
+    try {
+      const res = await fetch(`/api/byok/${productId}/setup`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ apiKey: byokInput.trim() }),
+      });
+      const data = await res.json() as { ok?: boolean; error?: string; byokKeyLast4?: string; message?: string };
+      if (!res.ok) {
+        setByokError(data.error ?? "Save failed.");
+      } else {
+        setByokKeyLast4Local(data.byokKeyLast4 ?? null);
+        setByokInput("");
+        setByokShowForm(false);
+        setByokSuccess("API key saved. Only the last 4 characters are shown.");
+        setTimeout(() => setByokSuccess(null), 5000);
+      }
+    } catch {
+      setByokError("Network error. Please try again.");
+    } finally {
+      setByokSaving(false);
+    }
+  }
+
+  async function handleByokClear() {
+    setByokSaving(true);
+    setByokError(null);
+    setByokSuccess(null);
+    try {
+      const res = await fetch(`/api/byok/${productId}/setup`, {
+        method: "DELETE",
+        credentials: "include",
+      });
+      const data = await res.json() as { ok?: boolean; error?: string; message?: string };
+      if (!res.ok) {
+        setByokError(data.error ?? "Remove failed.");
+      } else {
+        setByokKeyLast4Local(null);
+        setByokShowForm(false);
+        setByokSuccess("API key removed.");
+        setTimeout(() => setByokSuccess(null), 4000);
+      }
+    } catch {
+      setByokError("Network error. Please try again.");
+    } finally {
+      setByokSaving(false);
+    }
+  }
+
+  const effectiveByokLast4 = byokKeyLast4Local ?? eligibility?.byokKeyLast4 ?? null;
 
   // ---- Render: loading ----
   if (product === undefined || partnerLoading) {
@@ -521,6 +591,108 @@ export default function ProductDetailPage() {
         </div>
       )}
 
+      {/* ---- BYOK key setup (partner, BYOK products only) ---- */}
+      {isPartner && product.accessModel === "byok" && (
+        <div className="rounded-xl border bg-card p-5">
+          <div className="mb-3 flex items-center gap-2">
+            <Key className="h-4 w-4 text-muted-foreground" />
+            <h2 className="text-sm font-semibold text-foreground">Your API key</h2>
+          </div>
+
+          {eligibility === undefined ? (
+            <div className="h-4 w-48 animate-pulse rounded bg-muted/60" />
+          ) : !eligibility || eligibility.status !== "approved" ? (
+            <p className="text-sm text-muted-foreground">
+              You need an <strong>approved</strong> eligibility for this product before you can
+              configure your API key. Contact your agency owner.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {/* Key status */}
+              {effectiveByokLast4 && !byokShowForm ? (
+                <div className="flex items-center gap-3 rounded-lg border bg-muted/30 px-4 py-3">
+                  <ShieldCheck className="h-4 w-4 flex-shrink-0 text-emerald-500" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">API key configured</p>
+                    <p className="font-mono text-xs text-muted-foreground">
+                      ••••••••{effectiveByokLast4}
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => { setByokShowForm(true); setByokError(null); }}
+                      className="rounded-md px-3 py-1.5 text-xs font-medium border bg-card text-muted-foreground hover:bg-muted hover:text-foreground"
+                    >
+                      Replace
+                    </button>
+                    <button
+                      type="button"
+                      disabled={byokSaving}
+                      onClick={handleByokClear}
+                      className="rounded-md px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 bg-red-50 hover:bg-red-100 dark:text-red-400 dark:border-red-800 dark:bg-red-950/20 disabled:opacity-60"
+                    >
+                      {byokSaving ? "Removing…" : "Remove"}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <div>
+                    <label className="mb-1.5 block text-xs font-medium text-muted-foreground">
+                      {effectiveByokLast4 ? "New API key (replaces existing)" : "API key"}
+                    </label>
+                    <input
+                      type="password"
+                      value={byokInput}
+                      onChange={(e) => setByokInput(e.target.value)}
+                      placeholder="Paste your API key here"
+                      autoComplete="off"
+                      className="w-full rounded-lg border bg-background px-3 py-2 font-mono text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <p className="mt-1 text-[11px] text-muted-foreground">
+                      Your key is stored securely and never displayed in full. Only the last 4
+                      characters will be shown after saving.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      disabled={byokSaving || !byokInput.trim()}
+                      onClick={handleByokSave}
+                      className="rounded-lg bg-primary px-4 py-2 text-xs font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-60"
+                    >
+                      {byokSaving ? "Saving…" : "Save API key"}
+                    </button>
+                    {byokShowForm && effectiveByokLast4 && (
+                      <button
+                        type="button"
+                        onClick={() => { setByokShowForm(false); setByokInput(""); setByokError(null); }}
+                        className="rounded-lg border px-4 py-2 text-xs font-medium text-muted-foreground hover:bg-muted"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Error / success feedback */}
+              {byokError && (
+                <p className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  {byokError}
+                </p>
+              )}
+              {byokSuccess && (
+                <p className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:border-emerald-800 dark:bg-emerald-900/20 dark:text-emerald-300">
+                  {byokSuccess}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* ---- Checkout readiness + action ---- */}
       {readinessConfig && (
         <div className="rounded-xl border bg-card p-5">
@@ -576,9 +748,9 @@ export default function ProductDetailPage() {
             </div>
           )}
 
-          {canCheckout && product.accessModel !== "subscription" && (
+          {canCheckout && product.accessModel === "credit" && (
             <p className="text-xs text-muted-foreground italic">
-              Checkout for {product.accessModel === "credit" ? "credit-based" : "BYOK"} products is not yet available via the marketplace UI.
+              Checkout for credit-based products is not yet available via the marketplace UI.
             </p>
           )}
         </div>
