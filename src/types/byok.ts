@@ -33,14 +33,24 @@ export interface ByokKey {
    */
   provider: string | null;
   /**
-   * Full API key supplied by the partner.
-   * MUST NEVER be returned to clients or included in API responses.
-   * Set to null when the key is intentionally removed (see clearedAt).
+   * AES-256-GCM ciphertext of the partner's API key, hex-encoded.
+   * Null when cleared. Decrypted server-side via lib/byok/crypto.ts using
+   * BYOK_KEY_ENCRYPTION_SECRET. NEVER returned to clients.
    */
-  apiKey: string | null;
+  encryptedKey: string | null;
   /**
-   * Last 4 characters of the key — safe to mirror on the eligibility doc
-   * and display in the partner UI for identification.
+   * AES-256-GCM initialization vector, hex-encoded (24 hex chars = 12 bytes).
+   * Null when cleared.
+   */
+  iv: string | null;
+  /**
+   * AES-256-GCM authentication tag, hex-encoded (32 hex chars = 16 bytes).
+   * Required for decryption integrity check. Null when cleared.
+   */
+  authTag: string | null;
+  /**
+   * Last 4 characters of the plaintext key — safe to mirror on the eligibility
+   * doc and display in the partner UI for identification.
    */
   keyLast4: string | null;
   validatedAt: Timestamp | FieldValue | null;

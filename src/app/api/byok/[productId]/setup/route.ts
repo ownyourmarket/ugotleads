@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
+import { encryptByokKey } from "@/lib/byok/crypto";
 import type { ByokKey } from "@/types/byok";
 import type { MemberStatus, Role } from "@/types";
 
@@ -200,31 +201,61 @@ export async function POST(
   }
 
   const byokKeyLast4 = apiKey.slice(-4);
+
+  // ── Encrypt the key before any storage ────────────────────────────────────
+  // encryptByokKey throws if BYOK_KEY_ENCRYPTION_SECRET is not set.
+  // Return a clear 500 configuration error rather than storing a raw key.
+  let sealed: ReturnType<typeof encryptByokKey>;
+  try {
+    sealed = encryptByokKey(apiKey);
+  } catch (err) {
+    const detail = err instanceof Error ? err.message : "Encryption error.";
+    console.error("[byok] Encryption configuration error:", detail);
+    return NextResponse.json(
+      {
+        error:
+          "BYOK key storage is not configured. " +
+          "Set BYOK_KEY_ENCRYPTION_SECRET in your environment.",
+        note: "Generate with: openssl rand -hex 32",
+      },
+      { status: 500 },
+    );
+  }
+  // apiKey is no longer referenced after this point — sealed holds the
+  // encrypted form. The raw string leaves scope when this function returns.
+
   const db = getAdminDb();
   const byokDocId = `${uid}_${productId}`;
   const byokRef = db.collection("byok_keys").doc(byokDocId);
 
-  // ── Write full key to server-only byok_keys collection ────────────────────
+  // ── Write encrypted key to server-only byok_keys collection ──────────────
   // Check if a doc already exists to preserve createdAt.
   const existing = await byokRef.get().catch(() => null);
 
   if (!existing?.exists) {
-    await byokRef.set({
+    // Type cast needed because FieldValue is not assignable to the
+    // Timestamp | FieldValue | null union in the plain ByokKey type.
+    const payload: Omit<ByokKey, "id"> & { id: string } = {
       id: byokDocId,
       agencyId,
       partnerProfileId: uid,
       productId,
       provider: null,
-      apiKey,                                  // full key — server-only
+      encryptedKey: sealed.encryptedKey,
+      iv: sealed.iv,
+      authTag: sealed.authTag,
       keyLast4: byokKeyLast4,
       validatedAt: FieldValue.serverTimestamp(),
       clearedAt: null,
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
-    } as Omit<ByokKey, "createdAt" | "updatedAt" | "validatedAt"> & Record<string, unknown>);
+    };
+    await byokRef.set(payload as Record<string, unknown>);
   } else {
     await byokRef.update({
-      apiKey,                                  // full key — server-only
+      encryptedKey: sealed.encryptedKey,
+      iv: sealed.iv,
+      authTag: sealed.authTag,
       keyLast4: byokKeyLast4,
       validatedAt: FieldValue.serverTimestamp(),
       clearedAt: null,
@@ -233,8 +264,8 @@ export async function POST(
   }
 
   // ── Write safe display fields only to product_eligibility ─────────────────
-  // byokKey is intentionally NOT written here. The eligibility doc is
-  // client-readable; it only receives the last 4 chars and status flags.
+  // No encrypted fields are written here. The eligibility doc is
+  // client-readable and receives only the last 4 chars and status flags.
   await db.doc(`product_eligibility/${eligibilityId}`).update({
     byokKeyLast4,
     byokKeyValidatedAt: FieldValue.serverTimestamp(),
@@ -243,10 +274,10 @@ export async function POST(
   });
 
   console.info(
-    `[byok] Partner ${uid} saved BYOK key for product ${productId} (last4: ${byokKeyLast4}) → byok_keys/${byokDocId}`,
+    `[byok] Partner ${uid} saved BYOK key for product ${productId} (last4: ${byokKeyLast4}) → byok_keys/${byokDocId} [encrypted]`,
   );
 
-  // IMPORTANT: Never include the full apiKey in the response.
+  // IMPORTANT: Never include apiKey, encryptedKey, iv, or authTag in the response.
   return NextResponse.json({
     ok: true,
     productId,
@@ -278,7 +309,10 @@ export async function DELETE(
   const byokSnap = await byokRef.get().catch(() => null);
   if (byokSnap?.exists) {
     await byokRef.update({
-      apiKey: null,
+      // Clear all encrypted fields — tombstone via clearedAt
+      encryptedKey: null,
+      iv: null,
+      authTag: null,
       keyLast4: null,
       clearedAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
