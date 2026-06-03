@@ -14,6 +14,10 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/hooks/use-auth";
 import { subscribeToProducts, createProduct, updateProduct } from "@/lib/firestore/products";
+import {
+  checkSubscriptionReadiness,
+  READINESS_BADGE,
+} from "@/lib/products/subscription-readiness";
 import type { Product, ProductStatus, AccessModel, ProductFamily } from "@/types/products";
 import { cn } from "@/lib/utils";
 
@@ -159,6 +163,23 @@ function ProductFormDialog({ product, agencyId, createdByUid, onClose }: Product
       setError("Product name is required.");
       return;
     }
+
+    // Guard: prevent saving active + public subscription with no Stripe price IDs.
+    // This catches the most dangerous accidental activation scenario.
+    if (
+      form.status === "active" &&
+      form.isPublic &&
+      form.accessModel === "subscription" &&
+      !form.stripePriceIdMonthly.trim() &&
+      !form.stripePriceIdAnnual.trim()
+    ) {
+      setError(
+        "Cannot save an active + public subscription product without at least one Stripe price ID. " +
+        "Add a price ID first, or change status to Draft.",
+      );
+      return;
+    }
+
     setError(null);
     setSaving(true);
     try {
@@ -775,6 +796,7 @@ export default function AgencyProductsPage() {
                   <th className="px-4 py-3 font-medium">Public</th>
                   <th className="px-4 py-3 font-medium">Stripe prices</th>
                   <th className="px-4 py-3 font-medium">Commission</th>
+                  <th className="px-4 py-3 font-medium">Readiness</th>
                   <th className="px-4 py-3 font-medium">Actions</th>
                 </tr>
               </thead>
@@ -917,6 +939,25 @@ export default function AgencyProductsPage() {
                         >
                           {isCommissionable ? "Yes" : "No"}
                         </span>
+                      </td>
+
+                      {/* Readiness badge */}
+                      <td className="px-4 py-3">
+                        {(() => {
+                          const readiness = checkSubscriptionReadiness(p);
+                          const badge = READINESS_BADGE[readiness.state];
+                          return (
+                            <span
+                              className={cn(
+                                "inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                                badge.className,
+                              )}
+                              title={readiness.blockers[0] ?? readiness.warnings[0]}
+                            >
+                              {badge.label}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       {/* Actions */}
