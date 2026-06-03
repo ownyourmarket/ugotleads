@@ -3,11 +3,15 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   Award,
   BarChart3,
   CheckCircle2,
+  ChevronDown,
   Clock,
   DollarSign,
+  Info,
+  ShieldCheck,
   ShoppingBag,
   TrendingUp,
   Users,
@@ -22,6 +26,33 @@ import type { MarketplacePurchase } from "@/types/marketplace";
 import type { CommissionEvent } from "@/types/credits";
 import type { PartnerProfile } from "@/types/partner";
 import { cn } from "@/lib/utils";
+
+// ---------------------------------------------------------------------------
+// Readiness payload (from GET /api/agency/readiness)
+// ---------------------------------------------------------------------------
+
+type ReadinessSeverity = "ok" | "warn" | "blocked" | "info";
+
+interface ReadinessItem {
+  key: string;
+  label: string;
+  severity: ReadinessSeverity;
+  detail: string;
+}
+
+interface ReadinessResponse {
+  ok: boolean;
+  env: { isProd: boolean };
+  summary: { blockers: number; warnings: number; total: number };
+  checklist: ReadinessItem[];
+}
+
+const READINESS_DOT: Record<ReadinessSeverity, string> = {
+  ok: "bg-emerald-500",
+  warn: "bg-amber-500",
+  blocked: "bg-red-500",
+  info: "bg-sky-400",
+};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -104,6 +135,10 @@ export default function AgencyRevenueCockpitPage() {
   const [partners, setPartners] = useState<PartnerProfile[]>([]);
   const [loading, setLoading] = useState(true);
 
+  // ── Production readiness snapshot (server-computed) ──────────────────────
+  const [readiness, setReadiness] = useState<ReadinessResponse | null>(null);
+  const [showReadiness, setShowReadiness] = useState(false);
+
   useEffect(() => {
     if (!agencyId || !isOwner) { setLoading(false); return; }
 
@@ -116,6 +151,16 @@ export default function AgencyRevenueCockpitPage() {
 
     return () => { u1(); u2(); u3(); };
   }, [agencyId, isOwner]);
+
+  useEffect(() => {
+    if (!isOwner) return;
+    fetch("/api/agency/readiness", { credentials: "include" })
+      .then((r) => r.json())
+      .then((data: ReadinessResponse & { error?: string }) => {
+        if (data.ok) setReadiness(data);
+      })
+      .catch(() => { /* readiness is best-effort */ });
+  }, [isOwner]);
 
   // ── Derived: purchases ─────────────────────────────────────────────────
   const paidPurchases = useMemo(
@@ -236,6 +281,66 @@ export default function AgencyRevenueCockpitPage() {
           </Link>
         </div>
       </div>
+
+      {/* ── Production readiness checklist ── */}
+      {readiness && (
+        <div className="rounded-xl border bg-card">
+          <button
+            type="button"
+            onClick={() => setShowReadiness((v) => !v)}
+            className="flex w-full items-center justify-between px-5 py-4 text-left"
+          >
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold text-foreground">Production readiness</h2>
+              {readiness.summary.blockers > 0 && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                  <AlertTriangle className="h-2.5 w-2.5" />
+                  {readiness.summary.blockers} blocker{readiness.summary.blockers !== 1 ? "s" : ""}
+                </span>
+              )}
+              {readiness.summary.blockers === 0 && readiness.summary.warnings > 0 && (
+                <span className="inline-flex rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                  {readiness.summary.warnings} warning{readiness.summary.warnings !== 1 ? "s" : ""}
+                </span>
+              )}
+              {readiness.summary.blockers === 0 && readiness.summary.warnings === 0 && (
+                <span className="inline-flex rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                  All clear
+                </span>
+              )}
+            </div>
+            <ChevronDown className={cn("h-4 w-4 text-muted-foreground transition-transform", showReadiness && "rotate-180")} />
+          </button>
+          {showReadiness && (
+            <div className="border-t px-5 py-4">
+              <ul className="space-y-2.5">
+                {readiness.checklist.map((item) => (
+                  <li key={item.key} className="flex items-start gap-2.5">
+                    <span className={cn("mt-1.5 h-2 w-2 flex-shrink-0 rounded-full", READINESS_DOT[item.severity])} />
+                    <div className="min-w-0">
+                      <p className="text-xs font-medium text-foreground">
+                        {item.label}
+                        {item.severity === "blocked" && (
+                          <span className="ml-2 text-[10px] font-semibold uppercase text-red-600 dark:text-red-400">Blocker</span>
+                        )}
+                        {item.severity === "info" && (
+                          <Info className="ml-1 inline h-3 w-3 text-sky-400" />
+                        )}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">{item.detail}</p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-3 text-[11px] text-muted-foreground/70">
+                Point-in-time snapshot. Refresh the page to re-run checks. Secrets are reported as
+                set/unset only — never displayed.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Loading */}
       {loading && (

@@ -402,10 +402,13 @@ export default function AgencyEntitlementsPage() {
                       <td className="px-4 py-3 text-xs text-muted-foreground">{fmtDate(e.grantedAt)}</td>
                       <td className="px-4 py-3">
                         {purchase ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+                          <a
+                            href="/agency/marketplace-purchases"
+                            className="inline-flex items-center gap-1 text-[11px] text-emerald-600 hover:underline dark:text-emerald-400"
+                          >
                             <Link2 className="h-3 w-3" />
-                            Linked
-                          </span>
+                            View purchase
+                          </a>
                         ) : (
                           <span className="text-[11px] text-amber-600 dark:text-amber-400">No link</span>
                         )}

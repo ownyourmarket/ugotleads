@@ -77,6 +77,12 @@ export interface MarketplacePurchase {
   entitlementId?: string | null;
   /** Set when the customer's product entitlement was granted. */
   fulfilledAt?: Timestamp | FieldValue | null;
+  /** How fulfillment happened. "webhook" = automatic; "manual_repair" = owner repair tool. */
+  fulfillmentSource?: "webhook" | "manual_repair";
+  /** uid of the agency owner who ran a manual repair. Null for webhook fulfillment. */
+  fulfilledByUid?: string | null;
+  /** Optional note recorded during a manual repair. */
+  fulfillmentNote?: string | null;
 
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;

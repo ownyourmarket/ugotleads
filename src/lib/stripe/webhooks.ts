@@ -289,6 +289,7 @@ async function handleMarketplaceProductPurchase(
         .update({
           entitlementId: fulfill.entitlementId,
           fulfilledAt: Timestamp.now(),
+          fulfillmentSource: "webhook",
           updatedAt: Timestamp.now(),
         })
         .catch((err) => {

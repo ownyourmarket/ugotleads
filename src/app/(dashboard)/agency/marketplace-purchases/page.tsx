@@ -142,9 +142,42 @@ export default function AgencyMarketplacePurchasesPage() {
   const [purchases, setPurchases] = useState<MarketplacePurchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
+  const [repairing, setRepairing] = useState<string | null>(null);
+  const [repairMsg, setRepairMsg] = useState<string | null>(null);
 
   // Only agency owners may view this page
   const isOwner = agencyRole === "owner";
+
+  async function handleRepair(sessionId: string, productName: string) {
+    if (!window.confirm(`Grant access for "${productName}"? This creates the customer's product entitlement now.`)) {
+      return;
+    }
+    setRepairing(sessionId);
+    setRepairMsg(null);
+    try {
+      const res = await fetch("/api/agency/marketplace-purchases/fulfill", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId }),
+      });
+      const data = (await res.json()) as { status?: string; error?: string; note?: string };
+      if (!res.ok || data.status === "error") {
+        setRepairMsg(`❌ ${data.error ?? "Repair failed."}`);
+      } else if (data.status === "fulfilled") {
+        setRepairMsg("✅ Access granted. The purchase will show Fulfilled momentarily.");
+      } else if (data.status === "already_fulfilled") {
+        setRepairMsg("Already fulfilled — no action taken.");
+      } else {
+        setRepairMsg(`⚠️ ${data.status}: ${data.note ?? ""}`);
+      }
+      setTimeout(() => setRepairMsg(null), 5000);
+    } catch {
+      setRepairMsg("❌ Network error.");
+    } finally {
+      setRepairing(null);
+    }
+  }
 
   useEffect(() => {
     if (!agencyId || !isOwner) {
@@ -387,13 +420,23 @@ export default function AgencyMarketplacePurchasesPage() {
                           Fulfilled
                         </span>
                       ) : p.paymentStatus === "paid" ? (
-                        <span
-                          className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
-                          title="Paid purchase with no entitlement — fulfillment may have failed or rules/deploy pending."
-                        >
-                          <AlertTriangle className="h-3 w-3" />
-                          Not fulfilled
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                            title="Paid purchase with no entitlement — fulfillment may have failed or rules/deploy pending."
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            Not fulfilled
+                          </span>
+                          <button
+                            type="button"
+                            disabled={repairing === p.stripeSessionId}
+                            onClick={() => handleRepair(p.stripeSessionId, p.productName)}
+                            className="rounded-md border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 hover:bg-amber-100 disabled:opacity-60 dark:border-amber-700 dark:bg-amber-950/30 dark:text-amber-300"
+                          >
+                            {repairing === p.stripeSessionId ? "Granting…" : "Grant access"}
+                          </button>
+                        </div>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>
                       )}
@@ -427,6 +470,13 @@ export default function AgencyMarketplacePurchasesPage() {
           >
             Clear filter
           </button>
+        </div>
+      )}
+
+      {/* ---- Repair toast ---- */}
+      {repairMsg && (
+        <div className="fixed bottom-6 right-6 z-50 max-w-sm rounded-xl border bg-card px-4 py-3 shadow-lg">
+          <p className="text-sm font-medium text-foreground">{repairMsg}</p>
         </div>
       )}
     </div>
