@@ -311,6 +311,17 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // ---------- BYOK keys (server-only) ----------
+    // byok_keys/{id}  (id = "${partnerProfileId}_${productId}")
+    //
+    // Stores the full partner-supplied API key for BYOK products.
+    // NEVER readable or writable from the client SDK — Admin SDK only.
+    // Safe display fields (keyLast4, byokConfigured) are mirrored onto
+    // the readable product_eligibility doc by the API route.
+    match /byok_keys/{id} {
+      allow read, write: if false;
+    }
+
     // ---------- purchases ----------
     // Anonymous one-time purchases (founders cohort). Written by the
     // Stripe webhook handler via the Admin SDK; never read or written by

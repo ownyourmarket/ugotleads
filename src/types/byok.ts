@@ -1,0 +1,51 @@
+// src/types/byok.ts
+import type { Timestamp, FieldValue } from "firebase/firestore";
+
+/**
+ * Server-only record of a partner's BYOK API key for a specific product.
+ *
+ * Doc id: `${partnerProfileId}_${productId}`
+ * Collection: byok_keys/{id}
+ *
+ * ── Security ────────────────────────────────────────────────────────────────
+ * This collection is UNREADABLE from the client SDK. All reads and writes go
+ * through the Admin SDK (API routes only). The `apiKey` field is NEVER returned
+ * in any API response or logged to any output stream accessible to clients.
+ *
+ * Safe display fields (last4, validatedAt, byokConfigured) are maintained on
+ * the partner's `product_eligibility` doc, which is client-readable.
+ *
+ * ── Key lifecycle ────────────────────────────────────────────────────────────
+ * SET:   apiKey = full key, clearedAt = null
+ * CLEAR: apiKey = null, clearedAt = serverTimestamp()
+ *
+ * Docs are never deleted — clearedAt serves as the tombstone. This preserves
+ * the audit trail (timestamps, provider, last4) after a key is removed.
+ */
+export interface ByokKey {
+  id: string;                         // `${partnerProfileId}_${productId}`
+  agencyId: string;
+  partnerProfileId: string;
+  productId: string;
+  /**
+   * Third-party provider identifier. Null in Phase 17 (not yet used for routing).
+   * Future values: "openai" | "google" | "anthropic" | "custom"
+   */
+  provider: string | null;
+  /**
+   * Full API key supplied by the partner.
+   * MUST NEVER be returned to clients or included in API responses.
+   * Set to null when the key is intentionally removed (see clearedAt).
+   */
+  apiKey: string | null;
+  /**
+   * Last 4 characters of the key — safe to mirror on the eligibility doc
+   * and display in the partner UI for identification.
+   */
+  keyLast4: string | null;
+  validatedAt: Timestamp | FieldValue | null;
+  /** Timestamp when the key was intentionally removed by the partner. */
+  clearedAt: Timestamp | FieldValue | null;
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
+}

@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
+import type { ByokKey } from "@/types/byok";
 import type { MemberStatus, Role } from "@/types";
 
 /**
@@ -12,6 +13,17 @@ import type { MemberStatus, Role } from "@/types";
  * BYOK ("Bring Your Own Key") products require partners to provide their own
  * API key (e.g. OpenAI, Google, or another provider). The platform uses that
  * key on the partner's behalf when they access the product.
+ *
+ * ── Phase 17 hardening: split-storage design ────────────────────────────────
+ * The full API key is stored ONLY in the server-only `byok_keys` collection
+ * (allow read, write: if false in Firestore rules). The partner's
+ * `product_eligibility` doc receives only safe display fields:
+ *   byokKeyLast4     — last 4 chars, shown in the UI
+ *   byokKeyValidatedAt — timestamp
+ *   byokConfigured   — boolean convenience flag
+ *
+ * This means a partner reading their own eligibility doc (allowed by rules)
+ * never sees the full key. The key is inaccessible from any client path.
  *
  * ── Security model ──────────────────────────────────────────────────────────
  *
@@ -161,7 +173,7 @@ export async function POST(
 
   const resolved = await resolveCallerAndEligibility(request, productId);
   if (resolved instanceof NextResponse) return resolved;
-  const { uid, eligibilityId } = resolved;
+  const { uid, agencyId, eligibilityId } = resolved;
 
   // Parse body
   let body: { apiKey?: string };
@@ -189,18 +201,52 @@ export async function POST(
 
   const byokKeyLast4 = apiKey.slice(-4);
   const db = getAdminDb();
+  const byokDocId = `${uid}_${productId}`;
+  const byokRef = db.collection("byok_keys").doc(byokDocId);
 
+  // ── Write full key to server-only byok_keys collection ────────────────────
+  // Check if a doc already exists to preserve createdAt.
+  const existing = await byokRef.get().catch(() => null);
+
+  if (!existing?.exists) {
+    await byokRef.set({
+      id: byokDocId,
+      agencyId,
+      partnerProfileId: uid,
+      productId,
+      provider: null,
+      apiKey,                                  // full key — server-only
+      keyLast4: byokKeyLast4,
+      validatedAt: FieldValue.serverTimestamp(),
+      clearedAt: null,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    } as Omit<ByokKey, "createdAt" | "updatedAt" | "validatedAt"> & Record<string, unknown>);
+  } else {
+    await byokRef.update({
+      apiKey,                                  // full key — server-only
+      keyLast4: byokKeyLast4,
+      validatedAt: FieldValue.serverTimestamp(),
+      clearedAt: null,
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+
+  // ── Write safe display fields only to product_eligibility ─────────────────
+  // byokKey is intentionally NOT written here. The eligibility doc is
+  // client-readable; it only receives the last 4 chars and status flags.
   await db.doc(`product_eligibility/${eligibilityId}`).update({
-    byokKey: apiKey,
     byokKeyLast4,
     byokKeyValidatedAt: FieldValue.serverTimestamp(),
+    byokConfigured: true,
     updatedAt: FieldValue.serverTimestamp(),
   });
 
   console.info(
-    `[byok] Partner ${uid} saved BYOK key for product ${productId} (last4: ${byokKeyLast4})`,
+    `[byok] Partner ${uid} saved BYOK key for product ${productId} (last4: ${byokKeyLast4}) → byok_keys/${byokDocId}`,
   );
 
+  // IMPORTANT: Never include the full apiKey in the response.
   return NextResponse.json({
     ok: true,
     productId,
@@ -224,15 +270,34 @@ export async function DELETE(
   const { uid, eligibilityId } = resolved;
 
   const db = getAdminDb();
+  const byokDocId = `${uid}_${productId}`;
+  const byokRef = db.collection("byok_keys").doc(byokDocId);
 
+  // ── Clear the full key in byok_keys (tombstone, not delete) ───────────────
+  // Set apiKey = null + clearedAt so the audit record is preserved.
+  const byokSnap = await byokRef.get().catch(() => null);
+  if (byokSnap?.exists) {
+    await byokRef.update({
+      apiKey: null,
+      keyLast4: null,
+      clearedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
+  }
+  // If no byok_keys doc exists (key was stored in old design), that's fine —
+  // we still clear the eligibility display fields below.
+
+  // ── Clear safe display fields on product_eligibility ─────────────────────
   await db.doc(`product_eligibility/${eligibilityId}`).update({
-    byokKey: null,
     byokKeyLast4: null,
     byokKeyValidatedAt: null,
+    byokConfigured: false,
     updatedAt: FieldValue.serverTimestamp(),
   });
 
-  console.info(`[byok] Partner ${uid} cleared BYOK key for product ${productId}`);
+  console.info(
+    `[byok] Partner ${uid} cleared BYOK key for product ${productId} → byok_keys/${byokDocId}`,
+  );
 
   return NextResponse.json({
     ok: true,

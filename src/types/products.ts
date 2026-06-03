@@ -132,10 +132,21 @@ export interface ProductEligibility {
   accessModel: AccessModel;        // denormalized from product
   stripeSubscriptionId: string | null;
   /**
-   * Operator-provided key for byok products.
-   * Never returned to clients in API responses — show byokKeyLast4 only.
+   * True when the partner has a valid BYOK key stored in the server-only
+   * `byok_keys` collection. False / undefined when no key is set.
+   *
+   * This field is safe to store here and read by the client.
+   * The actual key lives exclusively in byok_keys/{partnerProfileId}_{productId}
+   * which is unreadable from the client SDK.
    */
-  byokKey: string | null;
+  byokConfigured?: boolean;
+  /**
+   * Last 4 characters of the BYOK key — safe display field.
+   * Null when no key has been configured or after the key is removed.
+   *
+   * NOTE: byokKey was removed from this type in Phase 17 security hardening.
+   * The full key is now stored server-only in the `byok_keys` collection.
+   */
   byokKeyLast4: string | null;
   byokKeyValidatedAt: Timestamp | FieldValue | null;
   reviewedByUid: string | null;

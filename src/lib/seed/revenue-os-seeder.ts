@@ -337,7 +337,9 @@ export async function seedPartnerEligibility(
         status,
         accessModel: template.accessModel,
         stripeSubscriptionId: null,
-        byokKey: null,
+        // byokKey removed from product_eligibility in Phase 17 hardening.
+        // Full keys now live in server-only byok_keys collection.
+        byokConfigured: false,
         byokKeyLast4: null,
         byokKeyValidatedAt: null,
         reviewedByUid: null,
