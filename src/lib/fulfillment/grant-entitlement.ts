@@ -28,7 +28,35 @@ import "server-only";
 
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { appendPartnerNetworkEvent } from "@/lib/partner-network/outbox";
 import type { AccessModel, ProductFamily } from "@/types/products";
+
+/**
+ * Best-effort emit of an entitlement.granted event to the partner-network
+ * outbox. No-op unless PARTNER_NETWORK_EVENTS_ENABLED=true. Never throws.
+ */
+async function emitEntitlementGranted(
+  input: GrantEntitlementInput,
+  entitlementId: string,
+): Promise<void> {
+  try {
+    await appendPartnerNetworkEvent({
+      agencyId: input.agencyId,
+      eventType: "entitlement.granted",
+      entityType: "product_entitlement",
+      entityId: entitlementId,
+      payload: {
+        customerUserId: input.customerUserId,
+        productId: input.productId,
+        subAccountId: input.subAccountId ?? null,
+        accessModel: input.accessModel,
+        grantingSessionId: input.grantingSessionId ?? null,
+      },
+    });
+  } catch {
+    /* best-effort — outbox failures never block fulfillment */
+  }
+}
 
 export interface GrantEntitlementInput {
   agencyId: string;
@@ -80,6 +108,7 @@ export async function grantProductEntitlement(
         updatedAt: FieldValue.serverTimestamp(),
       });
       console.info(`[fulfillment] Re-activated entitlement ${entitlementId}`);
+      await emitEntitlementGranted(input, entitlementId);
       return { ok: true, entitlementId, alreadyActive: false };
     }
 
@@ -102,6 +131,7 @@ export async function grantProductEntitlement(
       updatedAt: FieldValue.serverTimestamp(),
     });
     console.info(`[fulfillment] Granted entitlement ${entitlementId} for product ${input.productId}`);
+    await emitEntitlementGranted(input, entitlementId);
     return { ok: true, entitlementId, alreadyActive: false };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Firestore write failed.";

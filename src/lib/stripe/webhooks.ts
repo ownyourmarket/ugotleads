@@ -13,6 +13,7 @@ import { createCommissionEventForPayment } from "@/lib/commissions/create-event"
 // ── Purchase fulfillment hook (Phase 20) ──────────────────────────────────
 // Grants the customer a product_entitlements row when a paid purchase completes.
 import { grantProductEntitlement } from "@/lib/fulfillment/grant-entitlement";
+import { appendPartnerNetworkEvent } from "@/lib/partner-network/outbox";
 import type { AccessModel, ProductFamily } from "@/types/products";
 
 export async function handleCheckoutCompleted(
@@ -303,6 +304,24 @@ async function handleMarketplaceProductPurchase(
         `[marketplace-purchase] Entitlement grant failed for session ${sessionId}: ${fulfill.message}`,
       );
     }
+
+    // Best-effort: emit marketplace.purchase.paid to the partner-network outbox.
+    // No-op unless PARTNER_NETWORK_EVENTS_ENABLED=true. Never blocks the webhook.
+    await appendPartnerNetworkEvent({
+      agencyId,
+      eventType: "marketplace.purchase.paid",
+      entityType: "marketplace_purchase",
+      entityId: sessionId,
+      payload: {
+        productId,
+        customerUserId,
+        subAccountId: subAccountId || null,
+        amountCents: saleAmountCents,
+        currency: session.currency ?? "usd",
+        referredByPartnerProfileId: referredByPartnerProfileId || null,
+        partnerReferralCode: partnerReferralCode || null,
+      },
+    }).catch(() => { /* best-effort */ });
   } else {
     console.info(
       `[marketplace-purchase] Session ${sessionId} payment_status="${session.payment_status}" — not paid, skipping entitlement grant.`,
@@ -360,6 +379,22 @@ async function handleMarketplaceProductPurchase(
         err,
       );
     });
+
+    // Best-effort: emit commission.event.created to the partner-network outbox.
+    // No-op unless PARTNER_NETWORK_EVENTS_ENABLED=true. Flat single-level fact only.
+    await appendPartnerNetworkEvent({
+      agencyId,
+      eventType: "commission.event.created",
+      entityType: "commission_event",
+      entityId: result.eventId,
+      payload: {
+        partnerProfileId: referredByPartnerProfileId,
+        productId,
+        commissionCents: commissionAmountCents,
+        commissionPct: commissionPercent,
+        stripeSessionId: sessionId,
+      },
+    }).catch(() => { /* best-effort */ });
   } else if ("skipped" in result) {
     console.info(
       `[marketplace-purchase] Commission event skipped for session ${sessionId}: ${result.reason}`,

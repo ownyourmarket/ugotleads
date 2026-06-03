@@ -674,6 +674,15 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // partner_network_events/{id}  (id = idempotencyKey)
+    // Append-only outbox for the future MyUSA Partner Network / MLM engine.
+    // Agency owner reads their agency's events; ALL writes are server-only
+    // (Admin SDK via appendPartnerNetworkEvent). No client create/update/delete.
+    match /partner_network_events/{id} {
+      allow read: if isAgencyOwner(resource.data.agencyId);
+      allow write: if false;
+    }
+
     // product_entitlements/{id}  (id = "${customerUserId}_${productId}")
     // Customer ACCESS rights after a purchase. Distinct from product_eligibility
     // (partner SELL rights). Server-only writes (Admin SDK via fulfillment hook).
