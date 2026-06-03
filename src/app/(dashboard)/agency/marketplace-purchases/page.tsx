@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
+  AlertTriangle,
   CheckCircle2,
   Clock,
   Receipt,
@@ -332,6 +333,7 @@ export default function AgencyMarketplacePurchasesPage() {
                   <th className="px-4 py-3 font-medium">Status</th>
                   <th className="px-4 py-3 font-medium">Partner code</th>
                   <th className="px-4 py-3 font-medium">Commission</th>
+                  <th className="px-4 py-3 font-medium">Fulfillment</th>
                   <th className="px-4 py-3 font-medium">Date</th>
                 </tr>
               </thead>
@@ -373,6 +375,24 @@ export default function AgencyMarketplacePurchasesPage() {
                       {p.commissionEventId ? (
                         <span className="inline-flex items-center rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-violet-700 dark:bg-violet-900/30 dark:text-violet-300">
                           Linked
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      {p.fulfilledAt ? (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Fulfilled
+                        </span>
+                      ) : p.paymentStatus === "paid" ? (
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+                          title="Paid purchase with no entitlement — fulfillment may have failed or rules/deploy pending."
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          Not fulfilled
                         </span>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>

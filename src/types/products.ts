@@ -205,6 +205,10 @@ export interface ProductEntitlement {
   grantingSessionId: string | null;
   grantedAt: Timestamp | FieldValue | null;
   revokedAt: Timestamp | FieldValue | null;
+  /** uid of the agency owner who last revoked/reactivated. Null if never touched by admin. */
+  reviewedByUid?: string | null;
+  /** Agency-owner-only internal note. Not shown to the customer. */
+  internalNote?: string | null;
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }

@@ -327,6 +327,20 @@ function SidebarContent() {
             )}
             {agencyRole === "owner" && (
               <Link
+                href="/agency/entitlements"
+                className={cn(
+                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                  pathname.startsWith("/agency/entitlements")
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                <Package className="h-4 w-4" />
+                Entitlements
+              </Link>
+            )}
+            {agencyRole === "owner" && (
+              <Link
                 href="/agency/marketplace-purchases"
                 className={cn(
                   "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
