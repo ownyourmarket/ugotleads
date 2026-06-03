@@ -264,6 +264,10 @@ export async function spendCredits(
         referenceId: input.operationId,
         referenceType: null,
         createdByUid: null,
+        // Persist metadata for audit — only when provided and non-empty
+        ...(input.metadata && Object.keys(input.metadata).length > 0
+          ? { metadata: input.metadata }
+          : {}),
         createdAt: FieldValue.serverTimestamp(),
       } as Omit<CreditTransaction, "id">);
     });

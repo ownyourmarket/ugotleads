@@ -50,6 +50,13 @@ export interface CreditTransaction {
   referenceId: string | null;
   referenceType: "ai_run" | "stripe_event" | "admin_approval" | null;
   createdByUid: string | null;     // null for system-generated
+  /**
+   * Optional freeform audit data stored alongside the transaction.
+   * Values must be JSON-serializable primitives (string, number, boolean, null).
+   * Hidden from partner-facing UI — for internal audit and debugging only.
+   * Examples: { source: "ai_run", channel: "web_chat", model: "claude-haiku-4-5" }
+   */
+  metadata?: Record<string, string | number | boolean | null>;
   createdAt: Timestamp | FieldValue | null;
 }
 

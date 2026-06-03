@@ -201,7 +201,9 @@ export async function POST(request: Request) {
     reason,
     operationId,
     metadata: {
-      source: "dev_test_harness",
+      source: "dev_test",
+      feature: "credit_spend_test",
+      operationId,
       callerUid: uid,
     },
   });
