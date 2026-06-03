@@ -7,6 +7,7 @@ import {
   ChevronDown,
   Eye,
   EyeOff,
+  Info,
   Package,
   Pencil,
   Plus,
@@ -583,6 +584,7 @@ export default function AgencyProductsPage() {
   const [editingProduct, setEditingProduct] = useState<Product | null | "new">(null);
   const [archiveConfirm, setArchiveConfirm] = useState<string | null>(null);
   const [toastMsg, setToastMsg] = useState<string | null>(null);
+  const [showChecklist, setShowChecklist] = useState(false);
 
   useEffect(() => {
     if (!agencyId || !isOwner) { setLoading(false); return; }
@@ -686,6 +688,67 @@ export default function AgencyProductsPage() {
           <Plus className="h-4 w-4" />
           New product
         </button>
+      </div>
+
+      {/* ── Test-mode activation checklist (collapsible) ── */}
+      <div className="rounded-xl border border-sky-200 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/20">
+        <button
+          type="button"
+          onClick={() => setShowChecklist((v) => !v)}
+          className="flex w-full items-center justify-between px-4 py-3 text-left"
+        >
+          <div className="flex items-center gap-2">
+            <Info className="h-4 w-4 flex-shrink-0 text-sky-600 dark:text-sky-400" />
+            <span className="text-xs font-semibold text-sky-700 dark:text-sky-300">
+              Test-mode checkout activation checklist
+            </span>
+          </div>
+          <ChevronDown
+            className={cn(
+              "h-4 w-4 text-sky-500 transition-transform",
+              showChecklist ? "rotate-180" : "",
+            )}
+          />
+        </button>
+        {showChecklist && (
+          <div className="border-t border-sky-200 px-4 pb-4 pt-3 dark:border-sky-800">
+            <p className="mb-3 text-xs text-sky-700 dark:text-sky-300">
+              Complete all items below before enabling test checkout. Do NOT set
+              <code className="mx-1 rounded bg-sky-100 px-1 font-mono dark:bg-sky-900/30">
+                MARKETPLACE_CHECKOUT_ENABLED=true
+              </code>
+              in production until live checkout is explicitly approved.
+            </p>
+            <ol className="space-y-1.5 text-xs text-sky-800 dark:text-sky-200">
+              {[
+                { label: "Stripe test keys set (STRIPE_SECRET_KEY starts with sk_test_)", note: "Stripe Dashboard → Developers → API keys → Test mode" },
+                { label: "Stripe webhook secret set (STRIPE_WEBHOOK_SECRET starts with whsec_)", note: "stripe listen --forward-to localhost:3000/api/webhooks/stripe" },
+                { label: "Subscription product status: Active", note: "Set in Product Manager above" },
+                { label: "Subscription product isPublic: true", note: "Set in Product Manager above" },
+                { label: "Stripe monthly or annual price ID present", note: "Copy from Stripe Dashboard → Products → Prices" },
+                { label: "MARKETPLACE_CHECKOUT_ENABLED=true in .env.local", note: "Server restarts needed after changing env vars" },
+                { label: "Stripe webhook forwarding running (separate terminal)", note: "stripe listen --forward-to localhost:3000/api/webhooks/stripe" },
+                { label: "(Optional) PARTNER_COMMISSIONS_ENABLED=true for commission testing", note: "Only needed if testing the partner commission flow" },
+              ].map((item, i) => (
+                <li key={i} className="flex items-start gap-2">
+                  <span className="mt-0.5 flex h-4 w-4 flex-shrink-0 items-center justify-center rounded-full border border-sky-400 text-[9px] font-bold text-sky-600 dark:text-sky-400">
+                    {i + 1}
+                  </span>
+                  <div>
+                    <span className="font-medium">{item.label}</span>
+                    <span className="ml-1 text-sky-600 dark:text-sky-400">— {item.note}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+            <p className="mt-3 text-[11px] text-sky-600 dark:text-sky-400">
+              Use the dev-only route to verify readiness:{" "}
+              <code className="rounded bg-sky-100 px-1 font-mono dark:bg-sky-900/30">
+                POST /api/dev-only/validate-subscription-product
+              </code>
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Filter bar */}

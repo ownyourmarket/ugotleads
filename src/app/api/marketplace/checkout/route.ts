@@ -396,8 +396,10 @@ export async function POST(request: Request) {
     mode: "subscription",
     payment_method_types: ["card"],
     line_items: [{ price: priceId, quantity: 1 }],
-    success_url: `${appUrl}/sa/${subAccountId}/marketplace/products/${productId}?checkout=success&session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url: `${appUrl}/sa/${subAccountId}/marketplace/products/${productId}?checkout=cancelled`,
+    // Dedicated success/cancel pages (Phase 19).
+    // {CHECKOUT_SESSION_ID} is replaced by Stripe with the actual session id.
+    success_url: `${appUrl}/sa/${subAccountId}/marketplace/checkout/success?session_id={CHECKOUT_SESSION_ID}&productId=${productId}`,
+    cancel_url: `${appUrl}/sa/${subAccountId}/marketplace/checkout/cancel?productId=${productId}`,
     metadata: {
       // ── Kind discriminator ────────────────────────────────────────────────
       kind: "marketplace_product_purchase",
