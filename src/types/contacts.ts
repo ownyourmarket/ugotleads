@@ -64,6 +64,16 @@ export interface Contact {
   emailOptedOut: boolean;
   smsOptedOut: boolean;
   /**
+   * Voice opt-out. Optional/absent reads as not-opted-out. Set when a
+   * contact asks not to be called by the AI voice agent. Added by the
+   * voice port. */
+  voiceOptedOut?: boolean;
+  /**
+   * Timestamp of the last outbound AI voice call. Powers "recently
+   * contacted" suppression on bulk campaigns without scanning every
+   * campaign. Undefined = never called. Added by the voice port. */
+  lastOutboundCallAt?: Timestamp | FieldValue | null;
+  /**
    * Best-effort location, captured at contact creation. Populated by
    * /api/forms/[id]/submit via ipapi.co (city + lat/lng) with a phone
    * country-code fallback (country only, lat/lng resolved to country

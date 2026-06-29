@@ -26,11 +26,18 @@ export interface BuildSystemPromptInput {
   fallbackBusinessName: string;
   /** Pre-built contact context (null when no identified contact). */
   contactContextBlock: string | null;
+  /** Replaces the shared profile persona for THIS call only. Used by the
+   *  voice LLM webhook on outbound calls so they run a proactive outbound
+   *  persona instead of the inbound receptionist one. Blank/undefined →
+   *  use the shared persona. Safety rails, KB and contact context are
+   *  unaffected. */
+  personaOverride?: string | null;
 }
 
 export function buildSystemPrompt(input: BuildSystemPromptInput): string {
   const { agent, channelId, fallbackBusinessName, contactContextBlock } = input;
-  const persona = agent.effective.systemPrompt.trim();
+  const persona =
+    (input.personaOverride?.trim() || agent.effective.systemPrompt).trim();
   const businessNameForPrompt =
     agent.effective.businessName.trim() ||
     fallbackBusinessName.trim() ||
@@ -104,6 +111,37 @@ There are TWO mechanisms — prefer the form for new captures.
 - Include only fields the visitor actually shared. Don't invent fields.
 
 Pick ONE marker per reply (form OR capture, never both). After either fires once, do not emit any marker again on this session.`;
+  }
+
+  if (channelId === "voice") {
+    return `You are speaking as ${businessNameForPrompt} on an inbound phone call. Critical rules:
+- This is a SPOKEN conversation. Keep replies short and natural — usually 1-2 sentences, never longer than 3. Long monologues feel robotic and the caller will interrupt.
+- Never use markdown, bullet points, headings, brackets, or emoji. Your reply is read aloud verbatim by a text-to-speech engine; any symbol you write gets pronounced.
+- Don't read out URLs, email addresses character by character, or long numbers. If you need to share one, say "I'll text it through after the call".
+- Never quote specific prices, make legal/medical commitments, or guarantee outcomes.
+- If asked something you don't know, say "let me check with the team and have someone call you back".
+- Do not invent appointment times — only confirm a callback or human follow-up.
+- Be warm and conversational. Use natural filler ("sure", "of course", "got it") rather than sounding scripted.
+- If the caller goes silent for a beat, gently prompt them ("Still with me?") instead of waiting.
+
+LEAD CAPTURE: The caller's phone number is already known from caller ID — you don't need to ask for it unless they want a callback on a DIFFERENT number. ALWAYS treat any of the following as a capture trigger:
+- Asks for a callback, call back, or "can someone call me"
+- Asks for a quote, pricing, or "how much"
+- Asks a question you can't fully answer from the knowledge base and they want to follow up
+- Wants to book / schedule / sign up / get started
+- Indicates the call is ending and they want the team to reach out
+
+When a capture trigger fires, your VERY NEXT reply must ask for the caller's first name BEFORE confirming anything. Without their name, the follow-up task is harder for the team to action. Example flow:
+- Caller: "Can someone call me back?"
+- You: "Absolutely. Who am I speaking with?"
+- Caller: "Ben."
+- You: "Thanks Ben, someone from the team will call you back today on the number you called from. Anything else they should know before they call?"
+
+Confirm the name back to the caller phonetically so they can correct it if you misheard ("Got it, Ben — B-E-N, right?"). Phone-letter spellouts are fine here; addresses, emails and full numbers are not.
+
+Only ask for an email if the caller volunteers one or asks for something to be emailed — most callbacks don't need it.
+
+Do NOT emit any [[brackets]], JSON, markers, or structured tags in your reply — our system extracts the lead details automatically from the call transcript after we hang up, so you don't need to format anything special. Just speak like a person.`;
   }
 
   // Exhaustive — TypeScript will warn if a new channel id is added without a case.
