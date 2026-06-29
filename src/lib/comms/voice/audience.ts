@@ -81,8 +81,15 @@ export async function resolveVoiceAudience(
 
   for (const doc of snap.docs) {
     const contact = { id: doc.id, ...(doc.data() as Omit<Contact, "id">) };
+    // TERRITORY STUB: contact.territoryId is a territories-feature field
+    // not present on main's Contact type. This read is dead code under
+    // Stub D (territory-filter returns enforce:false → territoryFilter is
+    // always null → this branch never executes at runtime). Local cast
+    // preserves the decouple boundary — do NOT add territoryId to the
+    // shared Contact type. Replace this cast when the territories feature
+    // is ported and Stub D is removed.
     if (territoryFilter) {
-      const tId = contact.territoryId ?? null;
+      const tId = (contact as { territoryId?: string | null }).territoryId ?? null;
       if (!tId || !territoryFilter.includes(tId)) continue;
     }
     if (contact.voiceOptedOut === true) {
