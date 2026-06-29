@@ -69,9 +69,7 @@ function badRequest(message: string, status: number): NextResponse {
 function authorize(request: Request): boolean {
   const expected = process.env.VAPI_WEBHOOK_SECRET?.trim();
   if (!expected) return false;
-  // Secret travels as a `?s=` query param. URL params are auto-decoded
-  // by URLSearchParams so we compare against the raw secret value.
-  const provided = new URL(request.url).searchParams.get("s")?.trim() ?? "";
+  const provided = request.headers.get("x-vapi-secret")?.trim() ?? "";
   return provided.length > 0 && provided === expected;
 }
 
@@ -179,12 +177,12 @@ export async function POST(
   ctx: { params: Promise<{ subAccountId: string }> },
 ) {
   if (!authorize(request)) {
-    // Make the #1 cause of "custom-llm 500" visible: the ?s= secret on the
-    // assistant URL doesn't match this server's VAPI_WEBHOOK_SECRET (stale
-    // secret baked in at provision time, or the assistant points at a
-    // different deployment). Fix: re-save Voice settings to re-PATCH the
-    // assistant with the current URL + secret.
-    const provided = new URL(request.url).searchParams.get("s");
+    // Make the #1 cause of "custom-llm 500" visible: the x-vapi-secret header
+    // doesn't match this server's VAPI_WEBHOOK_SECRET (stale secret baked in
+    // at provision time, or the assistant points at a different deployment).
+    // Fix: re-save Voice settings to re-PATCH the assistant with the current
+    // URL + header secret.
+    const provided = request.headers.get("x-vapi-secret");
     const expected = process.env.VAPI_WEBHOOK_SECRET?.trim();
     console.warn(
       `[vapi/llm] 401 — webhook secret mismatch. providedSecret=${

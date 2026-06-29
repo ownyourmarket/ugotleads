@@ -939,3 +939,16 @@ Because Stub D leaves territory scoping unenforced (audience returns unfiltered)
 **To swap a stub for the real implementation:** port the owning upstream feature (module + its deps + any Firestore collections/rules/routes), then delete the stub file (for E, also remove its `export * from "./voice-territory-stub"` line in `src/types/index.ts`). Re-run `pnpm build` and re-test the affected voice path.
 
 **Also pulled verbatim from upstream as standalone leaf utils (no stubbing needed):** `src/lib/time/window.ts`, `src/lib/contacts/phone-timezone.ts`, `src/lib/client/tasks.ts` (zero internal dependencies each).
+
+### 🔐 Voice Webhook Auth (Posture 3)
+
+V1 voice webhook auth uses a global `VAPI_WEBHOOK_SECRET` read from the `x-vapi-secret` header. This closes the query-string-in-logs leak path that the original `?s=` scheme created.
+
+Known remaining limitations (deferred to a future hardening surface):
+- Single global secret, not per-assistant/per-tenant
+- No HMAC body signature, so a captured request can be replayed against a forged `subAccountId` path by a holder of the secret
+- Mitigation depends on Vercel env-var hygiene and rotating the secret on personnel/contractor changes
+
+Next hardening surface (when scheduled): per-assistant secrets + HMAC body signature with payload-to-path tenant binding.
+
+**Deploy step:** the three Vapi webhook configs (`/api/webhooks/vapi/{end-of-call,llm,status}/[subAccountId]`) must be updated in the Vapi dashboard to send the secret as the `x-vapi-secret` header instead of the `?s=` query param.

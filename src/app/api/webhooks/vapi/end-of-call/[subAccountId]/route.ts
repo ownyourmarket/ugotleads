@@ -72,8 +72,7 @@ interface VapiServerMessage {
 function authorize(request: Request): boolean {
   const expected = process.env.VAPI_WEBHOOK_SECRET?.trim();
   if (!expected) return false;
-  // See LLM route's authorize() for why the secret is in the URL.
-  const provided = new URL(request.url).searchParams.get("s")?.trim() ?? "";
+  const provided = request.headers.get("x-vapi-secret")?.trim() ?? "";
   return provided.length > 0 && provided === expected;
 }
 
