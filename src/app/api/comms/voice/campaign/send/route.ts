@@ -90,6 +90,24 @@ export async function POST(request: Request) {
   const access = await requireSubAccountMember(request, subAccountId);
   if (access instanceof NextResponse) return access;
 
+  // ── V1 outbound-voice posture (Posture B) ─────────────────────────────
+  // Gate campaign send to sub-account owners/admins. Collaborators are
+  // blocked because territory scoping isn't enforced yet — the real
+  // territory filter is stubbed (returns unfiltered), so a collaborator
+  // could otherwise reach the full sub-account audience instead of just
+  // their assigned territory. Lift this gate when the territories feature
+  // ports and the real filter replaces the stub. See CLAUDE.md "Voice
+  // Port — Stubbed Integration Points" + lib/auth/territory-filter.ts.
+  if (access.subAccountRole !== "agencyOwner" && access.subAccountRole !== "admin") {
+    return NextResponse.json(
+      {
+        error:
+          "Outbound voice campaigns are available to sub-account owners/admins until territory scoping ships.",
+      },
+      { status: 403 },
+    );
+  }
+
   const db = getAdminDb();
 
   // Agency gate.

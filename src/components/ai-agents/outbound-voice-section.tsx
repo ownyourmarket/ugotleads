@@ -176,7 +176,31 @@ export function OutboundVoiceSection() {
     });
   }, [isAdmin, subAccountId]);
 
-  if (!isAdmin) return null;
+  // V1 outbound-voice posture (Posture B): campaign send is gated to
+  // sub-account owners/admins until territory scoping ships (the territory
+  // filter is stubbed/unfiltered). Collaborators see a notice instead of the
+  // controls. The API route (api/comms/voice/campaign/send) enforces the same
+  // rule server-side. See CLAUDE.md "Voice Port — Stubbed Integration Points".
+  if (!isAdmin) {
+    return (
+      <section className="mx-auto max-w-3xl">
+        <div className="flex items-start gap-4 rounded-xl border border-border/60 bg-muted/30 p-5">
+          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-orange-500/10 text-orange-600 dark:text-orange-400">
+            <PhoneOutgoing className="h-6 w-6" />
+          </span>
+          <div>
+            <h1 className="text-lg font-semibold tracking-tight">
+              Outbound Voice
+            </h1>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Outbound voice campaigns are available to sub-account
+              owners/admins until territory scoping ships.
+            </p>
+          </div>
+        </div>
+      </section>
+    );
+  }
 
   const gateOn = subAccount?.outboundVoiceEnabledByAgency === true;
   const provisioned = !!(

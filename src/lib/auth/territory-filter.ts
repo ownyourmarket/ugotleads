@@ -19,6 +19,13 @@ import "server-only";
  *   Port the upstream territories feature (this module + its deps + the
  *   `territories` collection + rules + routes), then delete this file.
  *
+ * V1 POSTURE: gated. Outbound voice campaign send is restricted to
+ *   owner/admin roles — enforced server-side in
+ *   `api/comms/voice/campaign/send` (403 for collaborators) and in the UI
+ *   (`components/ai-agents/outbound-voice-section.tsx` shows a notice instead
+ *   of the controls for non-admins). Lift the gate when the territories
+ *   feature ports and the real filter replaces this stub.
+ *
  * 🔐 SECURITY NOTE — CONFIRM ACCEPTABLE FOR V1 VOICE SHIP:
  *   This stub returns `enforce:false`, meaning OUTBOUND voice campaigns are
  *   NOT territory-scoped. A collaborator launching a campaign would reach the

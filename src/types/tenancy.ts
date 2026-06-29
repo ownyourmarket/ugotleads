@@ -67,6 +67,12 @@ export interface SubAccountDoc {
   bookingConfig: BookingConfig | null;
   sendWindow: SendWindow | null;
   /**
+   * Agency-level gate for OUTBOUND AI voice campaigns (the linked Vapi
+   * assistant/number are shared with inbound). Defaults to `false` at
+   * creation (explicit allowlist). Read `=== true`. Added by the voice port.
+   */
+  outboundVoiceEnabledByAgency?: boolean;
+  /**
    * Generic booking-page URL surfaced via the {{bookingLink}} merge tag in
    * email + SMS templates. Calendly is the canonical case but any URL works
    * (Cal.com, TidyCal, SavvyCal, Stripe Payment Link, etc.). Null when the
