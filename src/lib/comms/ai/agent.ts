@@ -5,6 +5,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import {
   DEFAULT_AI_AGENT_PROFILE,
   DEFAULT_AI_CHANNEL_CONFIG,
+  DEFAULT_VOICE_CONFIG,
   DEFAULT_WEB_CHAT_CONFIG,
   type AiAgentProfile,
   type AiChannelConfig,
@@ -14,19 +15,24 @@ import {
 const PROFILE_DOC = "profile";
 // The `as const` keeps the literal-string type for ConfiguredChannelId.
 // Marked `_` because the runtime value is unused — we only need the type.
-const _SUPPORTED_CHANNELS = ["sms", "web-chat"] as const;
+const _SUPPORTED_CHANNELS = ["sms", "web-chat", "voice"] as const;
 export type ConfiguredChannelId = (typeof _SUPPORTED_CHANNELS)[number];
 
 /**
  * Channel-specific default seed for a freshly-created config doc.
  * SMS uses the shared default as-is; web-chat layers on its widget defaults
- * (welcome message, accent color, allowed domains, position).
+ * (welcome message, accent color, allowed domains, position); voice layers
+ * on greeting + Vapi voice render defaults (linkage ids stay null until
+ * the first successful provisioning round-trip).
  */
 function defaultsForChannel(
   channelId: ConfiguredChannelId,
 ): Omit<AiChannelConfig, "createdAt" | "updatedAt"> {
   if (channelId === "web-chat") {
     return { ...DEFAULT_AI_CHANNEL_CONFIG, webChat: { ...DEFAULT_WEB_CHAT_CONFIG } };
+  }
+  if (channelId === "voice") {
+    return { ...DEFAULT_AI_CHANNEL_CONFIG, voice: { ...DEFAULT_VOICE_CONFIG } };
   }
   return { ...DEFAULT_AI_CHANNEL_CONFIG };
 }
@@ -106,6 +112,7 @@ async function maybeMigrateLegacy(subAccountId: string): Promise<void> {
     escalationNotifyEmailOverride: null,
     totalTokensUsed: legacy.totalTokensUsed ?? 0,
     webChat: null,
+    voice: null,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
   };

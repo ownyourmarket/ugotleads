@@ -909,3 +909,33 @@ Common issues and fixes:
 - **Refresh KB returns 502 with a Firecrawl error** — usually the URL is paywalled, behind Cloudflare anti-bot, or returned a 404. Try a simpler URL (the bare domain root) or check the site is publicly accessible without JS.
 - **Captured a Web Chat lead but no follow-up email arrived** — the agent profile's `escalationNotifyEmail` is blank (or Resend isn't configured). The Task still creates, only the email is skipped. Set the email on AI Agents → Overview → "Default escalation email" or use the per-channel override.
 - **Inline capture form doesn't appear after asking for details** — the bot didn't emit the `[[form fields="…"]]` marker. Open AI Agents → Overview → "Test this persona" and ask the same question — if the marker doesn't appear in your test reply, the persona prompt may be overriding the safety-rail instructions (e.g. "always be concise" can suppress markers). Tweak the persona to not contradict the lead-capture instructions.
+
+---
+
+## Voice Port — Stubbed Integration Points
+
+The Voice Agent (Vapi) feature was ported from upstream `leadstack-agency` **decoupled** from three upstream features that voice was built on top of but which were intentionally scoped OUT of this deployment: **territories**, **webhooks**, and the upstream **AI capture/follow-up refactor** (`lib/comms/ai/*`, which on this repo still lives as `lib/comms/web-chat/*`). To keep the port additive and buildable, five integration points are replaced with local **stub modules** that no-op or return safe defaults. Each stub file carries a full TODO header.
+
+Every stub is clearly labeled `⚠️ VOICE-PORT STUB` at the top of its file. **This section is the spec for the next port surfaces** — when territories / webhooks / the AI refactor are ported, swap each stub for the real thing per its TODO and delete the stub.
+
+| # | Stub file | Replaces (upstream owner) | Behavior while stubbed | Feature delta until swapped |
+|---|---|---|---|---|
+| A | `src/lib/comms/ai/capture.ts` (`reconcileContactFromCapture`) | Upstream AI capture refactor (`lib/comms/ai/capture.ts`); equivalent here is `lib/comms/web-chat/capture.ts` | Logs + returns `null` | Inbound voice calls do NOT auto-create/link a CRM Contact from captured caller details. Outbound calls still resolve via `payload.metaContactId`. |
+| B | `src/lib/comms/ai/follow-up.ts` (`createCaptureFollowUp`) | Upstream AI follow-up refactor (`lib/comms/ai/follow-up.ts`); equivalent here is `lib/comms/web-chat/follow-up.ts` | Logs + returns `{taskId:null, emailSent:false, errors:[]}` | Inbound callback requests create no follow-up Task and send no escalation email. (Outbound campaign Tasks are written directly by `end-of-call.ts` and are unaffected.) |
+| C | `src/lib/api/webhooks/dispatch.ts` (`emitWebhookEvent`) | Upstream WEBHOOKS feature (`webhookEvents`/`webhookSubscriptions`/`deliveries` collections + routes) | Logs + returns (suppresses) | `voice.call.completed` / `voice.call.captured` outbound webhooks are suppressed. No CRM data lost; only external notifications dropped. |
+| D | `src/lib/auth/territory-filter.ts` (`loadEffectiveTerritoryScope`) | Upstream TERRITORIES feature (`territories` collection + routes) | Returns `{enforce:false, ids:null}` (unfiltered) | 🔐 Outbound voice campaigns are NOT territory-scoped. **Mitigated by the V1 gate below** — campaign send is owner/admin-only, so collaborators can't launch an unscoped campaign. |
+| E | `src/types/voice-territory-stub.ts` (`GLOBAL_TERRITORY_ID`, re-exported via `@/types`) | Upstream territories types | Constant `"__GLOBAL__"` | Voice campaign follow-up Tasks are stamped with the placeholder territory id. Harmless while territories is absent. |
+
+### 🔐 V1 Outbound-Voice Posture (Posture B — gated)
+
+Because Stub D leaves territory scoping unenforced (audience returns unfiltered), **outbound voice campaign send is gated to sub-account owners/admins** in v1:
+
+- **API:** `api/comms/voice/campaign/send` returns **403** for any caller whose `subAccountRole` is not `agencyOwner` or `admin`.
+- **UI:** `components/ai-agents/outbound-voice-section.tsx` renders a notice ("Outbound voice campaigns are available to sub-account owners/admins until territory scoping ships.") instead of the campaign controls for non-admins (`!isAdmin`).
+- **Agency gate (separate, also required):** `SubAccountDoc.outboundVoiceEnabledByAgency` must be `=== true` before any outbound call is placed (`api/comms/voice/call`). Defaults to `false`/undefined (explicit allowlist).
+
+**UN-GATE TRIGGER:** when the territories feature is ported and the real `loadEffectiveTerritoryScope` replaces Stub D, remove the owner/admin role check in the campaign send route + restore collaborator access in the UI. Until then, collaborators cannot launch outbound voice campaigns.
+
+**To swap a stub for the real implementation:** port the owning upstream feature (module + its deps + any Firestore collections/rules/routes), then delete the stub file (for E, also remove its `export * from "./voice-territory-stub"` line in `src/types/index.ts`). Re-run `pnpm build` and re-test the affected voice path.
+
+**Also pulled verbatim from upstream as standalone leaf utils (no stubbing needed):** `src/lib/time/window.ts`, `src/lib/contacts/phone-timezone.ts`, `src/lib/client/tasks.ts` (zero internal dependencies each).

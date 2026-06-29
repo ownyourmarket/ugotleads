@@ -2,6 +2,8 @@ export * from "./firebase";
 export * from "./tenancy";
 export * from "./automations";
 export * from "./broadcasts";
+export * from "./voice-campaigns";
+export * from "./voice-territory-stub";
 export * from "./messages";
 export * from "./website";
 export * from "./partner";
