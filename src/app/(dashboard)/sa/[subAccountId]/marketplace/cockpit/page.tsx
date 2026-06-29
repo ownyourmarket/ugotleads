@@ -151,7 +151,7 @@ export default function MarketplaceCockpitPage() {
             Marketplace Cockpit
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Your sub-account's marketplace activity at a glance.
+            Your sub-account&apos;s marketplace activity at a glance.
           </p>
         </div>
         <div className="flex gap-2">

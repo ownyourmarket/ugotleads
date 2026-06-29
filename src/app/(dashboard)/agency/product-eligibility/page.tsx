@@ -347,7 +347,7 @@ function ManagePanel({ product, partners, eligibilities, uid, agencyId, onClose 
                   {missingCount > 0 && (
                     <p className="mt-1 text-xs text-muted-foreground">
                       {missingCount} active partner{missingCount !== 1 ? "s" : ""} without a row.
-                      Click "Generate missing rows" above.
+                      Click &quot;Generate missing rows&quot; above.
                     </p>
                   )}
                 </div>
@@ -654,7 +654,7 @@ function BulkToolsModal({ products, partners, eligibilities, agencyId, uid, onCl
               </span>
             </div>
             <p className="mb-3 text-xs text-muted-foreground">
-              Approves pending rows where the partner already meets the product's track
+              Approves pending rows where the partner already meets the product&apos;s track
               requirement. Products set to <strong>manual approval</strong> are never
               auto-approved regardless.
             </p>
