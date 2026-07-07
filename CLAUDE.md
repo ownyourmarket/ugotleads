@@ -952,3 +952,38 @@ Known remaining limitations (deferred to a future hardening surface):
 Next hardening surface (when scheduled): per-assistant secrets + HMAC body signature with payload-to-path tenant binding.
 
 **Deploy step:** the three Vapi webhook configs (`/api/webhooks/vapi/{end-of-call,llm,status}/[subAccountId]`) must be updated in the Vapi dashboard to send the secret as the `x-vapi-secret` header instead of the `?s=` query param.
+
+---
+
+## Platform layers — do not cross
+
+- **MyUSA Founder HQ** = internal founder command center (login, dashboards,
+  decision layer, comms hub). Internal only. Never exposed to clients.
+- **uGotLeads** (this repo, app.ugotleads.io) = the client-facing AI CRM
+  platform. Heavily diverged LeadStack fork. Handed to clients as their
+  AI-first business OS.
+- The "Revenue OS" module (Agentic SDR, sub-account provisioning) lives
+  INSIDE uGotLeads. It is not Founder HQ. Refer to it as "the Revenue OS
+  module inside uGotLeads."
+- Multi-tenant boundary: sub-account data isolation is a hard invariant.
+  Any change touching Firestore rules, sub-account provisioning, or
+  territory filtering requires an explicit callout in the change report.
+
+## Vocabulary rules
+
+- uGotLeads is Star's own branded platform. Never "GHL" / "GoHighLevel"
+  in code, comments, docs, or UI copy. GHL = external benchmark only.
+- Distribution terms: licensed operator / territory partner / community
+  advocate. Never "franchise" or "business opportunity."
+
+## Build tiebreaker
+
+Every change must serve one tokenmaxxing bucket within 30–60 days:
+generate revenue / reduce costs / increase efficiency. Design for
+multi-tenant + white-label scale; build only what the bucket justifies now.
+
+## Definition of done (every session)
+
+Report: (1) what changed and why, (2) how to test locally,
+(3) surfaces/stubs touched, (4) Star's manual steps (deploy, push to
+main, Vercel env vars, external dashboards — always his, never yours).
