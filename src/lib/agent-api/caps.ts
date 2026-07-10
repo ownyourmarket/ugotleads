@@ -14,8 +14,9 @@ class CapExceededError extends Error {}
  */
 export async function enforceDailyCap(
   keyId: string,
-  cap: "sends",
+  cap: "sends" | "enrollments",
   limit: number,
+  units = 1,
 ): Promise<NextResponse | null> {
   const db = getAdminDb();
   const day = new Date().toISOString().slice(0, 10);
@@ -25,8 +26,8 @@ export async function enforceDailyCap(
     await db.runTransaction(async (tx) => {
       const snap = await tx.get(ref);
       const current = snap.exists ? ((snap.data()?.[cap] as number) ?? 0) : 0;
-      if (current >= limit) throw new CapExceededError();
-      tx.set(ref, { [cap]: current + 1 }, { merge: true });
+      if (current + units > limit) throw new CapExceededError();
+      tx.set(ref, { [cap]: current + units }, { merge: true });
     });
     return null;
   } catch (err) {
