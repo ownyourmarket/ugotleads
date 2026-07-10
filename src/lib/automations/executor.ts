@@ -33,9 +33,7 @@ interface PlannedStep {
   /** Delay relative to the PREVIOUS step's send (or to trigger if first). */
   delaySeconds: number;
   /** Where the message goes — the contact, or a static recipient (owner notify). */
-  recipient:
-    | { kind: "contact" }
-    | { kind: "static"; address: string };
+  recipient: { kind: "contact" } | { kind: "static"; address: string };
 }
 
 /**
@@ -88,12 +86,17 @@ function planInstantResponse(config: InstantResponseConfig): PlannedStep[] {
 function planLeadNurture(config: LeadNurtureConfig): PlannedStep[] {
   if (!config.steps?.length) return [];
   // Sort by delay so steps execute in chronological order.
-  const sorted = [...config.steps].sort((a, b) => a.delaySeconds - b.delaySeconds);
+  const sorted = [...config.steps].sort(
+    (a, b) => a.delaySeconds - b.delaySeconds
+  );
   return sorted.map((step, i) => ({
     channel: step.channel,
     templateId: step.templateId,
     // Convert absolute-from-trigger delays to relative-from-previous.
-    delaySeconds: i === 0 ? step.delaySeconds : Math.max(0, step.delaySeconds - sorted[i - 1].delaySeconds),
+    delaySeconds:
+      i === 0
+        ? step.delaySeconds
+        : Math.max(0, step.delaySeconds - sorted[i - 1].delaySeconds),
     recipient: { kind: "contact" as const },
   }));
 }
@@ -119,7 +122,7 @@ export async function executeStep(input: ExecuteStepInput): Promise<void> {
   const execSnap = await execRef.get();
   if (!execSnap.exists) {
     console.warn(
-      `[executor] execution ${input.executionId} not found; QStash retry will be ignored`,
+      `[executor] execution ${input.executionId} not found; QStash retry will be ignored`
     );
     return;
   }
@@ -128,14 +131,14 @@ export async function executeStep(input: ExecuteStepInput): Promise<void> {
   // Idempotency: if this step already has a history row, skip.
   if (execution.history.some((h) => h.stepIndex === input.stepIndex)) {
     console.warn(
-      `[executor] execution ${input.executionId} step ${input.stepIndex} already processed — skipping retry`,
+      `[executor] execution ${input.executionId} step ${input.stepIndex} already processed — skipping retry`
     );
     return;
   }
 
   if (execution.status !== "running") {
     console.warn(
-      `[executor] execution ${input.executionId} status=${execution.status}; ignoring step ${input.stepIndex}`,
+      `[executor] execution ${input.executionId} status=${execution.status}; ignoring step ${input.stepIndex}`
     );
     return;
   }
@@ -170,7 +173,10 @@ export async function executeStep(input: ExecuteStepInput): Promise<void> {
     await markFailed(execRef, "manual", "Contact not found");
     return;
   }
-  const contact = { id: contactSnap.id, ...(contactSnap.data() as Omit<Contact, "id">) };
+  const contact = {
+    id: contactSnap.id,
+    ...(contactSnap.data() as Omit<Contact, "id">),
+  };
 
   // Load template, agency, sub-account in parallel for merge-tag context.
   const [templateSnap, subAccountSnap, agencySnap] = await Promise.all([
@@ -237,7 +243,7 @@ export async function executeStep(input: ExecuteStepInput): Promise<void> {
       await markFailed(
         execRef,
         "automation_disabled",
-        "QStash publish failed during send-window deferral",
+        "QStash publish failed during send-window deferral"
       );
       return;
     }
@@ -331,7 +337,7 @@ export async function executeStep(input: ExecuteStepInput): Promise<void> {
     } else {
       if (!smsIsConfigured()) {
         throw new Error(
-          "SMS is not configured (TWILIO_ACCOUNT_SID/_AUTH_TOKEN/_FROM_NUMBER).",
+          "SMS is not configured (TWILIO_ACCOUNT_SID/_AUTH_TOKEN/_FROM_NUMBER)."
         );
       }
       await sendSms({ to: recipientAddress, body });
@@ -341,7 +347,7 @@ export async function executeStep(input: ExecuteStepInput): Promise<void> {
     error = err instanceof Error ? err.message : "Send failed";
     console.error(
       `[executor] execution ${execution.id} step ${input.stepIndex} send failed`,
-      err,
+      err
     );
   }
 
@@ -369,7 +375,7 @@ export async function executeStep(input: ExecuteStepInput): Promise<void> {
     automation,
     historyEntry,
     success,
-    template.name,
+    template.name
   );
 
   await scheduleOrComplete(execRef, execution, steps, input.stepIndex);
@@ -379,7 +385,7 @@ async function scheduleOrComplete(
   execRef: FirebaseFirestore.DocumentReference,
   execution: ExecutionDoc,
   steps: PlannedStep[],
-  justRanIndex: number,
+  justRanIndex: number
 ): Promise<void> {
   const next = steps[justRanIndex + 1];
   if (!next) {
@@ -399,7 +405,7 @@ async function scheduleOrComplete(
 }
 
 async function markCompleted(
-  execRef: FirebaseFirestore.DocumentReference,
+  execRef: FirebaseFirestore.DocumentReference
 ): Promise<void> {
   await execRef.update({
     status: "completed",
@@ -426,13 +432,13 @@ async function markCompleted(
       createdAt: FieldValue.serverTimestamp(),
     })
     .catch((err) =>
-      console.warn("[executor] completion activity write failed", err),
+      console.warn("[executor] completion activity write failed", err)
     );
 }
 
 async function markStopped(
   execRef: FirebaseFirestore.DocumentReference,
-  reason: StoppedReason,
+  reason: StoppedReason
 ): Promise<void> {
   await execRef.update({
     status: "stopped",
@@ -444,7 +450,7 @@ async function markStopped(
 async function markFailed(
   execRef: FirebaseFirestore.DocumentReference,
   reason: StoppedReason,
-  errorMessage: string,
+  errorMessage: string
 ): Promise<void> {
   await execRef.update({
     status: "failed",
@@ -460,7 +466,11 @@ async function recordSkip(
   automation: AutomationDoc,
   stepIndex: number,
   step: PlannedStep,
-  opts: { skippedReason?: "opt_out" | "missing_field"; success?: boolean; error?: string },
+  opts: {
+    skippedReason?: "opt_out" | "missing_field";
+    success?: boolean;
+    error?: string;
+  }
 ): Promise<void> {
   const entry: ExecutionStepHistoryEntry = {
     stepIndex,
@@ -501,7 +511,7 @@ async function writeStepActivity(
   automation: AutomationDoc,
   entry: ExecutionStepHistoryEntry,
   success: boolean,
-  templateName: string,
+  templateName: string
 ): Promise<void> {
   const channel = entry.channel === "email" ? "email" : "SMS";
   const content = success
@@ -524,13 +534,11 @@ async function writeStepActivity(
       },
       createdAt: FieldValue.serverTimestamp(),
     })
-    .catch((err) =>
-      console.warn("[executor] step activity write failed", err),
-    );
+    .catch((err) => console.warn("[executor] step activity write failed", err));
 }
 
 async function loadOwnerSnapshot(
-  agency: AgencyDoc | null,
+  agency: AgencyDoc | null
 ): Promise<{ displayName: string; email: string }> {
   if (!agency) return { displayName: "", email: "" };
   try {
@@ -550,7 +558,7 @@ async function loadOwnerSnapshot(
 
 async function resolveRecipient(
   step: PlannedStep,
-  contact: Contact,
+  contact: Contact
 ): Promise<string> {
   if (step.recipient.kind === "static") {
     return step.recipient.address;
@@ -603,7 +611,7 @@ function computeSendWindowDeferral(window: SendWindow | null): number {
   } catch (err) {
     console.warn(
       `[executor] invalid timezone "${timezone}" — skipping send-window check`,
-      err,
+      err
     );
     return 0;
   }

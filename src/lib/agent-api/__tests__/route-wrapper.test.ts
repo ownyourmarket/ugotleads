@@ -4,7 +4,9 @@ import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
 
 describe("withAgentRoute", () => {
   it("passes through the handler's response", async () => {
-    const h = withAgentRoute(async () => NextResponse.json({ data: 1 }, { status: 201 }));
+    const h = withAgentRoute(async () =>
+      NextResponse.json({ data: 1 }, { status: 201 })
+    );
     const res = await h(new Request("http://t/x"), undefined);
     expect(res.status).toBe(201);
   });

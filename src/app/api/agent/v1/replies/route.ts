@@ -10,7 +10,11 @@ export const GET = withAgentRoute(async (request: Request) => {
   const url = new URL(request.url);
   const subAccountId = url.searchParams.get("subAccountId");
   if (!subAccountId) {
-    return agentError("VALIDATION_FAILED", "subAccountId query param is required.", 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      "subAccountId query param is required.",
+      400
+    );
   }
 
   const access = await requireServiceAuth(request, {
@@ -19,7 +23,10 @@ export const GET = withAgentRoute(async (request: Request) => {
   });
   if (access instanceof NextResponse) return access;
 
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 20, 1), 100);
+  const limit = Math.min(
+    Math.max(Number(url.searchParams.get("limit")) || 20, 1),
+    100
+  );
   let q = getAdminDb()
     .collection("inbound_emails")
     .where("subAccountId", "==", subAccountId);

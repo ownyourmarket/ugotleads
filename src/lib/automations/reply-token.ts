@@ -43,7 +43,10 @@ function getSecret(): string {
 }
 
 function computeHmac12(contactId: string, secret: string): string {
-  return createHmac("sha256", secret).update(contactId).digest("hex").slice(0, HMAC_HEX_LENGTH);
+  return createHmac("sha256", secret)
+    .update(contactId)
+    .digest("hex")
+    .slice(0, HMAC_HEX_LENGTH);
 }
 
 /**

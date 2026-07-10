@@ -15,7 +15,11 @@ export async function fireTagAddedTriggers(input: {
   contactId: string;
   addedTags: string[];
 }): Promise<void> {
-  const unique = [...new Set(input.addedTags.map((t) => t.trim().slice(0, 50)).filter(Boolean))];
+  const unique = [
+    ...new Set(
+      input.addedTags.map((t) => t.trim().slice(0, 50)).filter(Boolean)
+    ),
+  ];
   for (const tag of unique) {
     await fireTriggers({
       agencyId: input.agencyId,

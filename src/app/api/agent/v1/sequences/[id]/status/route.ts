@@ -4,7 +4,10 @@ import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { agentError } from "@/lib/agent-api/errors";
 import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
-import { requireServiceAuth, subAccountAllowed } from "@/lib/auth/require-service-auth";
+import {
+  requireServiceAuth,
+  subAccountAllowed,
+} from "@/lib/auth/require-service-auth";
 import type { AutomationDoc } from "@/types";
 
 export const GET = withAgentRoute<{ params: Promise<{ id: string }> }>(
@@ -16,13 +19,18 @@ export const GET = withAgentRoute<{ params: Promise<{ id: string }> }>(
 
     const db = getAdminDb();
     const autoSnap = await db.doc(`automations/${id}`).get();
-    if (!autoSnap.exists) return agentError("NOT_FOUND", "Sequence not found.", 404);
+    if (!autoSnap.exists)
+      return agentError("NOT_FOUND", "Sequence not found.", 404);
     const automation = autoSnap.data() as AutomationDoc;
     if (!subAccountAllowed(access, automation.subAccountId)) {
       return agentError("NOT_FOUND", "Sequence not found.", 404);
     }
     if (automation.recipeType !== "outbound_sequence") {
-      return agentError("VALIDATION_FAILED", "Automation is not an outbound sequence.", 400);
+      return agentError(
+        "VALIDATION_FAILED",
+        "Automation is not an outbound sequence.",
+        400
+      );
     }
 
     const snap = await db
@@ -31,13 +39,20 @@ export const GET = withAgentRoute<{ params: Promise<{ id: string }> }>(
       .select("status", "stoppedReason")
       .limit(5000)
       .get();
-    const counts: Record<string, number> = { running: 0, completed: 0, stopped: 0, failed: 0 };
+    const counts: Record<string, number> = {
+      running: 0,
+      completed: 0,
+      stopped: 0,
+      failed: 0,
+    };
     const stoppedReasons: Record<string, number> = {};
     for (const d of snap.docs) {
       const s = d.data();
-      counts[(s.status as string) ?? "failed"] = (counts[(s.status as string) ?? "failed"] ?? 0) + 1;
+      counts[(s.status as string) ?? "failed"] =
+        (counts[(s.status as string) ?? "failed"] ?? 0) + 1;
       if (s.stoppedReason) {
-        stoppedReasons[s.stoppedReason as string] = (stoppedReasons[s.stoppedReason as string] ?? 0) + 1;
+        stoppedReasons[s.stoppedReason as string] =
+          (stoppedReasons[s.stoppedReason as string] ?? 0) + 1;
       }
     }
     return NextResponse.json({
@@ -47,5 +62,5 @@ export const GET = withAgentRoute<{ params: Promise<{ id: string }> }>(
         stoppedReasons,
       },
     });
-  },
+  }
 );

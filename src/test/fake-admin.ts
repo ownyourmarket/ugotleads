@@ -11,7 +11,11 @@ type DocData = Record<string, unknown>;
 function cloneData(data: DocData): DocData {
   const out: DocData = {};
   for (const [k, v] of Object.entries(data)) {
-    out[k] = Array.isArray(v) ? [...v] : v && typeof v === "object" && v.constructor === Object ? cloneData(v as DocData) : v;
+    out[k] = Array.isArray(v)
+      ? [...v]
+      : v && typeof v === "object" && v.constructor === Object
+        ? cloneData(v as DocData)
+        : v;
   }
   return out;
 }
@@ -26,7 +30,7 @@ interface FakeSnap {
 export class FakeDocRef {
   constructor(
     private db: FakeDb,
-    public path: string,
+    public path: string
   ) {}
 
   get id(): string {
@@ -47,7 +51,7 @@ export class FakeDocRef {
     const existing = this.db.store.get(this.path);
     this.db.store.set(
       this.path,
-      opts?.merge && existing ? { ...existing, ...data } : { ...data },
+      opts?.merge && existing ? { ...existing, ...data } : { ...data }
     );
     return Promise.resolve();
   }
@@ -65,7 +69,9 @@ export class FakeDocRef {
   /** Mirrors Admin SDK create(): rejects with gRPC code 6 (ALREADY_EXISTS). */
   async create(data: DocData): Promise<void> {
     if (this.db.store.has(this.path)) {
-      throw Object.assign(new Error(`ALREADY_EXISTS: ${this.path}`), { code: 6 });
+      throw Object.assign(new Error(`ALREADY_EXISTS: ${this.path}`), {
+        code: 6,
+      });
     }
     this.db.store.set(this.path, { ...data });
   }
@@ -78,11 +84,16 @@ class FakeQuery {
     private db: FakeDb,
     private collectionPath: string,
     private filters: Filter[] = [],
-    private limitN: number | null = null,
+    private limitN: number | null = null
   ) {}
 
   where(field: string, op: "==" | "array-contains", value: unknown): FakeQuery {
-    return new FakeQuery(this.db, this.collectionPath, [...this.filters, { field, op, value }], this.limitN);
+    return new FakeQuery(
+      this.db,
+      this.collectionPath,
+      [...this.filters, { field, op, value }],
+      this.limitN
+    );
   }
 
   limit(n: number): FakeQuery {
@@ -130,7 +141,8 @@ class FakeQuery {
   }
 
   doc(id?: string): FakeDocRef {
-    const docId = id ?? `fake${(this.db.nextId++).toString(36).padStart(6, "0")}`;
+    const docId =
+      id ?? `fake${(this.db.nextId++).toString(36).padStart(6, "0")}`;
     return new FakeDocRef(this.db, `${this.collectionPath}/${docId}`);
   }
 }
@@ -154,7 +166,7 @@ export class FakeDb {
       get: (refOrQuery: { get(): Promise<any> }) => Promise<any>;
       set: (ref: FakeDocRef, data: DocData, opts?: { merge?: boolean }) => void;
       update: (ref: FakeDocRef, data: DocData) => void;
-    }) => Promise<T>,
+    }) => Promise<T>
   ): Promise<T> {
     return fn({
       get: (refOrQuery) => refOrQuery.get(),

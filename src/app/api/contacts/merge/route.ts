@@ -40,10 +40,14 @@ export async function POST(request: Request) {
     removeIds?: string[];
   } | null;
 
-  if (!body?.keepId || !Array.isArray(body.removeIds) || body.removeIds.length === 0) {
+  if (
+    !body?.keepId ||
+    !Array.isArray(body.removeIds) ||
+    body.removeIds.length === 0
+  ) {
     return NextResponse.json(
       { error: "keepId and removeIds[] are required." },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -51,7 +55,7 @@ export async function POST(request: Request) {
   if (removeIds.length > 20) {
     return NextResponse.json(
       { error: "Max 20 contacts per merge." },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -60,9 +64,16 @@ export async function POST(request: Request) {
   // Read the keep contact to verify scope.
   const keepSnap = await db.doc(`contacts/${keepId}`).get();
   if (!keepSnap.exists)
-    return NextResponse.json({ error: "Keep contact not found." }, { status: 404 });
+    return NextResponse.json(
+      { error: "Keep contact not found." },
+      { status: 404 }
+    );
 
-  const keepData = keepSnap.data() as { agencyId: string; subAccountId: string; tags?: string[] };
+  const keepData = keepSnap.data() as {
+    agencyId: string;
+    subAccountId: string;
+    tags?: string[];
+  };
   const { agencyId, subAccountId } = keepData;
 
   // Auth check.
@@ -76,7 +87,7 @@ export async function POST(request: Request) {
     if (!memberSnap.exists || m?.status !== "active" || m?.role !== "admin") {
       return NextResponse.json(
         { error: "Only sub-account admins can merge contacts." },
-        { status: 403 },
+        { status: 403 }
       );
     }
   }
@@ -92,7 +103,10 @@ export async function POST(request: Request) {
     const removeRef = db.doc(`contacts/${removeId}`);
     const removeSnap = await removeRef.get();
     if (!removeSnap.exists) continue;
-    const removeData = removeSnap.data() as { subAccountId: string; tags?: string[] };
+    const removeData = removeSnap.data() as {
+      subAccountId: string;
+      tags?: string[];
+    };
     if (removeData.subAccountId !== subAccountId) continue;
 
     // Collect tags from the duplicate.

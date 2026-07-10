@@ -4,7 +4,10 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  * v1 ships only "instant_response". v2 will extend this union with
  * "nurture", "stage_trigger", "booking_lifecycle", "stale_revive".
  */
-export type RecipeType = "instant_response" | "lead_nurture" | "outbound_sequence";
+export type RecipeType =
+  | "instant_response"
+  | "lead_nurture"
+  | "outbound_sequence";
 
 export type AutomationTriggerType = "form_submit" | "manual" | "tag_added";
 
@@ -66,7 +69,10 @@ export interface LeadNurtureConfig {
  */
 export type OutboundSequenceConfig = LeadNurtureConfig;
 
-export type RecipeConfig = InstantResponseConfig | LeadNurtureConfig | OutboundSequenceConfig;
+export type RecipeConfig =
+  | InstantResponseConfig
+  | LeadNurtureConfig
+  | OutboundSequenceConfig;
 
 export interface AutomationDoc {
   id: string;

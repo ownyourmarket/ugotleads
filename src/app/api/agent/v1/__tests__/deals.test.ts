@@ -16,33 +16,53 @@ beforeEach(() => {
   resetFakeDb();
   const gen = generateServiceKey();
   fakeDb.doc("agencyServiceKeys/key1").set({
-    agencyId: "ag1", label: "t", keyHash: gen.keyHash, keyPrefix: gen.keyPrefix,
-    allowedSubAccounts: ["subMain"], scopes: ["deals:write"], status: "active",
+    agencyId: "ag1",
+    label: "t",
+    keyHash: gen.keyHash,
+    keyPrefix: gen.keyPrefix,
+    allowedSubAccounts: ["subMain"],
+    scopes: ["deals:write"],
+    status: "active",
   });
   KEY = gen.key;
   fakeDb.doc("contacts/c1").set({
-    name: "Ann", subAccountId: "subMain", agencyId: "ag1", tags: [],
-    emailOptedOut: false, smsOptedOut: false,
+    name: "Ann",
+    subAccountId: "subMain",
+    agencyId: "ag1",
+    tags: [],
+    emailOptedOut: false,
+    smsOptedOut: false,
   });
 });
 
 function post(body: unknown): Request {
   return new Request("http://test/api/agent/v1/deals", {
     method: "POST",
-    headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify(body),
   });
 }
 
 describe("agent deals", () => {
   it("creates a deal with defaults", async () => {
-    const res = await POST(post({ subAccountId: "subMain", contactId: "c1", title: "DFY $997" }));
+    const res = await POST(
+      post({ subAccountId: "subMain", contactId: "c1", title: "DFY $997" })
+    );
     expect(res.status).toBe(201);
     const { id } = (await res.json()).data;
     const deal = (await fakeDb.doc(`deals/${id}`).get()).data()!;
     expect(deal).toMatchObject({
-      title: "DFY $997", value: 0, currency: "USD", contactId: "c1",
-      stageId: "new", priority: "medium", agencyId: "ag1", subAccountId: "subMain",
+      title: "DFY $997",
+      value: 0,
+      currency: "USD",
+      contactId: "c1",
+      stageId: "new",
+      priority: "medium",
+      agencyId: "ag1",
+      subAccountId: "subMain",
       lostReason: null,
     });
     expect(deal.createdByUid).toMatch(/^agent:/);
@@ -52,9 +72,12 @@ describe("agent deals", () => {
     const createRes = await POST(
       new Request("http://test/api/agent/v1/deals", {
         method: "POST",
-        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        headers: {
+          authorization: `Bearer ${KEY}`,
+          "content-type": "application/json",
+        },
         body: '{"subAccountId":"subMain","contactId":"c1","title":"D","value":1e400}',
-      }),
+      })
     );
     expect(createRes.status).toBe(201);
     const { id } = (await createRes.json()).data;
@@ -64,10 +87,13 @@ describe("agent deals", () => {
     const patchRes = await PATCH(
       new Request("http://test/x", {
         method: "PATCH",
-        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        headers: {
+          authorization: `Bearer ${KEY}`,
+          "content-type": "application/json",
+        },
         body: '{"value":1e400}',
       }),
-      { params: Promise.resolve({ id }) },
+      { params: Promise.resolve({ id }) }
     );
     expect(patchRes.status).toBe(200);
     deal = (await fakeDb.doc(`deals/${id}`).get()).data()!;
@@ -75,59 +101,80 @@ describe("agent deals", () => {
   });
 
   it("404s when the contact is missing or in another sub-account", async () => {
-    const res = await POST(post({ subAccountId: "subMain", contactId: "ghost", title: "X" }));
+    const res = await POST(
+      post({ subAccountId: "subMain", contactId: "ghost", title: "X" })
+    );
     expect(res.status).toBe(404);
   });
 
   it("rejects POST with numeric title (hardening: no crash on type mismatch)", async () => {
-    const res = await POST(post({ subAccountId: "subMain", contactId: "c1", title: 42 }));
+    const res = await POST(
+      post({ subAccountId: "subMain", contactId: "c1", title: 42 })
+    );
     expect(res.status).toBe(400);
     const body = await res.json();
     expect(body.error.code).toBe("VALIDATION_FAILED");
   });
 
   it("moves stage, stamps stageChangedAt, writes contact activity", async () => {
-    const createRes = await POST(post({ subAccountId: "subMain", contactId: "c1", title: "D" }));
+    const createRes = await POST(
+      post({ subAccountId: "subMain", contactId: "c1", title: "D" })
+    );
     const { id } = (await createRes.json()).data;
     const res = await PATCH(
       new Request("http://test/x", {
         method: "PATCH",
-        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        headers: {
+          authorization: `Bearer ${KEY}`,
+          "content-type": "application/json",
+        },
         body: JSON.stringify({ stageId: "qualified" }),
       }),
-      { params: Promise.resolve({ id }) },
+      { params: Promise.resolve({ id }) }
     );
     expect((await res.json()).data.stageId).toBe("qualified");
     const deal = (await fakeDb.doc(`deals/${id}`).get()).data()!;
     expect(deal.stageChangedAt).toBeDefined();
     const acts = await fakeDb.collection("contacts/c1/activities").get();
-    expect(acts.docs.some((d) => d.data()?.type === "pipeline_moved")).toBe(true);
+    expect(acts.docs.some((d) => d.data()?.type === "pipeline_moved")).toBe(
+      true
+    );
   });
 
   it("rejects an invalid stageId", async () => {
-    const createRes = await POST(post({ subAccountId: "subMain", contactId: "c1", title: "D" }));
+    const createRes = await POST(
+      post({ subAccountId: "subMain", contactId: "c1", title: "D" })
+    );
     const { id } = (await createRes.json()).data;
     const res = await PATCH(
       new Request("http://test/x", {
         method: "PATCH",
-        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        headers: {
+          authorization: `Bearer ${KEY}`,
+          "content-type": "application/json",
+        },
         body: JSON.stringify({ stageId: "warp" }),
       }),
-      { params: Promise.resolve({ id }) },
+      { params: Promise.resolve({ id }) }
     );
     expect(res.status).toBe(400);
   });
 
   it("ignores a non-string, non-null lostReason (hardening: no raw JSON write)", async () => {
-    const createRes = await POST(post({ subAccountId: "subMain", contactId: "c1", title: "D" }));
+    const createRes = await POST(
+      post({ subAccountId: "subMain", contactId: "c1", title: "D" })
+    );
     const { id } = (await createRes.json()).data;
     const res = await PATCH(
       new Request("http://test/x", {
         method: "PATCH",
-        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        headers: {
+          authorization: `Bearer ${KEY}`,
+          "content-type": "application/json",
+        },
         body: JSON.stringify({ lostReason: 42 }),
       }),
-      { params: Promise.resolve({ id }) },
+      { params: Promise.resolve({ id }) }
     );
     expect(res.status).toBe(200);
     const deal = (await fakeDb.doc(`deals/${id}`).get()).data()!;
@@ -136,32 +183,46 @@ describe("agent deals", () => {
 
   it("404s when patching a deal belonging to another sub-account", async () => {
     fakeDb.doc("deals/dOther").set({
-      title: "Foreign", value: 0, currency: "USD", contactId: "cOther",
-      stageId: "new", priority: "medium", agencyId: "ag1", subAccountId: "subOther",
+      title: "Foreign",
+      value: 0,
+      currency: "USD",
+      contactId: "cOther",
+      stageId: "new",
+      priority: "medium",
+      agencyId: "ag1",
+      subAccountId: "subOther",
       lostReason: null,
     });
     const res = await PATCH(
       new Request("http://test/x", {
         method: "PATCH",
-        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        headers: {
+          authorization: `Bearer ${KEY}`,
+          "content-type": "application/json",
+        },
         body: JSON.stringify({ title: "Hijack" }),
       }),
-      { params: Promise.resolve({ id: "dOther" }) },
+      { params: Promise.resolve({ id: "dOther" }) }
     );
     expect(res.status).toBe(404);
     expect((await res.json()).error.code).toBe("NOT_FOUND");
   });
 
   it("trims a string lostReason", async () => {
-    const createRes = await POST(post({ subAccountId: "subMain", contactId: "c1", title: "D" }));
+    const createRes = await POST(
+      post({ subAccountId: "subMain", contactId: "c1", title: "D" })
+    );
     const { id } = (await createRes.json()).data;
     const res = await PATCH(
       new Request("http://test/x", {
         method: "PATCH",
-        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        headers: {
+          authorization: `Bearer ${KEY}`,
+          "content-type": "application/json",
+        },
         body: JSON.stringify({ stageId: "lost", lostReason: "  too pricey  " }),
       }),
-      { params: Promise.resolve({ id }) },
+      { params: Promise.resolve({ id }) }
     );
     expect(res.status).toBe(200);
     const deal = (await fakeDb.doc(`deals/${id}`).get()).data()!;

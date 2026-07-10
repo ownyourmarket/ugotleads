@@ -18,7 +18,7 @@ const MAX_BODY_LEN = 100_000;
 async function loadAuthorizedTemplate(
   request: Request,
   id: string,
-  scope: "templates:read" | "templates:write",
+  scope: "templates:read" | "templates:write"
 ) {
   const access = await requireServiceAuth(request, { scope });
   if (access instanceof NextResponse) return access;
@@ -33,67 +33,91 @@ async function loadAuthorizedTemplate(
   return { access, ref, template };
 }
 
-export const GET = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
-  request,
-  ctx,
-) => {
-  const { id } = await ctx.params;
-  const loaded = await loadAuthorizedTemplate(request, id, "templates:read");
-  if (loaded instanceof NextResponse) return loaded;
-  const { template } = loaded;
-  return NextResponse.json({
-    data: {
-      id,
-      type: template.type,
-      name: template.name,
-      subject: template.subject ?? null,
-      body: template.body,
-    },
-  });
-});
-
-export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
-  request,
-  ctx,
-) => {
-  const { id } = await ctx.params;
-  const body = (await request.json().catch(() => null)) as {
-    name?: string;
-    subject?: string;
-    body?: string;
-  } | null;
-  if (!body) return agentError("VALIDATION_FAILED", "Invalid JSON body.", 400);
-  if (typeof body.name === "string" && body.name.length > MAX_NAME_LEN) {
-    return agentError("VALIDATION_FAILED", `name must be ${MAX_NAME_LEN} characters or fewer.`, 400);
+export const GET = withAgentRoute<{ params: Promise<{ id: string }> }>(
+  async (request, ctx) => {
+    const { id } = await ctx.params;
+    const loaded = await loadAuthorizedTemplate(request, id, "templates:read");
+    if (loaded instanceof NextResponse) return loaded;
+    const { template } = loaded;
+    return NextResponse.json({
+      data: {
+        id,
+        type: template.type,
+        name: template.name,
+        subject: template.subject ?? null,
+        body: template.body,
+      },
+    });
   }
-  if (typeof body.subject === "string" && body.subject.length > MAX_SUBJECT_LEN) {
-    return agentError("VALIDATION_FAILED", `subject must be ${MAX_SUBJECT_LEN} characters or fewer.`, 400);
-  }
-  if (typeof body.body === "string" && body.body.length > MAX_BODY_LEN) {
-    return agentError("VALIDATION_FAILED", `body must be ${MAX_BODY_LEN} characters or fewer.`, 400);
-  }
+);
 
-  const loaded = await loadAuthorizedTemplate(request, id, "templates:write");
-  if (loaded instanceof NextResponse) return loaded;
-  const { ref, template } = loaded;
-
-  const nextBody = typeof body.body === "string" ? body.body.trim() : (template.body as string);
-  if (template.type === "email") {
-    const err = validateEmailBody(nextBody);
-    if (err) return agentError("VALIDATION_FAILED", err, 400);
-  }
-
-  const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
-  if (typeof body.name === "string" && body.name.trim()) update.name = body.name.trim();
-  if (typeof body.subject === "string" && template.type === "email") {
-    const subject = body.subject.trim();
-    if (!subject) {
-      return agentError("VALIDATION_FAILED", "subject cannot be blank on an email template.", 400);
+export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(
+  async (request, ctx) => {
+    const { id } = await ctx.params;
+    const body = (await request.json().catch(() => null)) as {
+      name?: string;
+      subject?: string;
+      body?: string;
+    } | null;
+    if (!body)
+      return agentError("VALIDATION_FAILED", "Invalid JSON body.", 400);
+    if (typeof body.name === "string" && body.name.length > MAX_NAME_LEN) {
+      return agentError(
+        "VALIDATION_FAILED",
+        `name must be ${MAX_NAME_LEN} characters or fewer.`,
+        400
+      );
     }
-    update.subject = subject;
-  }
-  if (typeof body.body === "string") update.body = nextBody;
+    if (
+      typeof body.subject === "string" &&
+      body.subject.length > MAX_SUBJECT_LEN
+    ) {
+      return agentError(
+        "VALIDATION_FAILED",
+        `subject must be ${MAX_SUBJECT_LEN} characters or fewer.`,
+        400
+      );
+    }
+    if (typeof body.body === "string" && body.body.length > MAX_BODY_LEN) {
+      return agentError(
+        "VALIDATION_FAILED",
+        `body must be ${MAX_BODY_LEN} characters or fewer.`,
+        400
+      );
+    }
 
-  await ref.update(update);
-  return NextResponse.json({ data: { id } });
-});
+    const loaded = await loadAuthorizedTemplate(request, id, "templates:write");
+    if (loaded instanceof NextResponse) return loaded;
+    const { ref, template } = loaded;
+
+    const nextBody =
+      typeof body.body === "string"
+        ? body.body.trim()
+        : (template.body as string);
+    if (template.type === "email") {
+      const err = validateEmailBody(nextBody);
+      if (err) return agentError("VALIDATION_FAILED", err, 400);
+    }
+
+    const update: Record<string, unknown> = {
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (typeof body.name === "string" && body.name.trim())
+      update.name = body.name.trim();
+    if (typeof body.subject === "string" && template.type === "email") {
+      const subject = body.subject.trim();
+      if (!subject) {
+        return agentError(
+          "VALIDATION_FAILED",
+          "subject cannot be blank on an email template.",
+          400
+        );
+      }
+      update.subject = subject;
+    }
+    if (typeof body.body === "string") update.body = nextBody;
+
+    await ref.update(update);
+    return NextResponse.json({ data: { id } });
+  }
+);

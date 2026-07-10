@@ -35,8 +35,12 @@ function extractEmail(v: unknown): string {
     const m = /<([^>]+)>/.exec(v);
     return (m ? m[1] : v).trim().toLowerCase();
   }
-  if (v && typeof v === "object" && typeof (v as { email?: unknown }).email === "string") {
-    return ((v as { email: string }).email).trim().toLowerCase();
+  if (
+    v &&
+    typeof v === "object" &&
+    typeof (v as { email?: unknown }).email === "string"
+  ) {
+    return (v as { email: string }).email.trim().toLowerCase();
   }
   return "";
 }
@@ -79,7 +83,7 @@ interface ContactMatch {
 async function matchContact(
   db: FirebaseFirestore.Firestore,
   toAddresses: string[],
-  fromEmail: string,
+  fromEmail: string
 ): Promise<ContactMatch | null> {
   let tokenCandidate: string | null = null;
   for (const addr of toAddresses) {
@@ -89,7 +93,9 @@ async function matchContact(
       break;
     }
   }
-  const verifiedContactId = tokenCandidate ? verifyReplyToken(tokenCandidate) : null;
+  const verifiedContactId = tokenCandidate
+    ? verifyReplyToken(tokenCandidate)
+    : null;
   if (verifiedContactId) {
     const snap = await db.doc(`contacts/${verifiedContactId}`).get();
     if (snap.exists) {
@@ -137,7 +143,8 @@ export async function POST(request: Request) {
     signature: request.headers.get("svix-signature") ?? "",
     body: rawBody,
   });
-  if (!ok) return NextResponse.json({ error: "bad signature" }, { status: 401 });
+  if (!ok)
+    return NextResponse.json({ error: "bad signature" }, { status: 401 });
 
   // JSON.parse can legitimately return null (raw body "null") or another
   // non-object primitive — guard the shape before touching properties, or
@@ -173,7 +180,9 @@ export async function POST(request: Request) {
     const resendEmailId =
       typeof data.email_id === "string" && data.email_id ? data.email_id : null;
     const messageId =
-      typeof data.message_id === "string" && data.message_id ? data.message_id : null;
+      typeof data.message_id === "string" && data.message_id
+        ? data.message_id
+        : null;
 
     const db = getAdminDb();
     const matched = await matchContact(db, toAddresses, fromEmail);
@@ -213,7 +222,10 @@ export async function POST(request: Request) {
           createdAt: FieldValue.serverTimestamp(),
         })
         .catch((err) => {
-          console.warn("[resend-inbound] email_reply activity write failed", err);
+          console.warn(
+            "[resend-inbound] email_reply activity write failed",
+            err
+          );
         });
 
       // Stop-on-reply: a reply means the outbound sequence did its job.
@@ -226,7 +238,9 @@ export async function POST(request: Request) {
         .limit(50)
         .get();
       for (const ex of running.docs) {
-        const autoSnap = await db.doc(`automations/${ex.data().automationId as string}`).get();
+        const autoSnap = await db
+          .doc(`automations/${ex.data().automationId as string}`)
+          .get();
         const auto = autoSnap.data();
         if (auto?.recipeType !== "outbound_sequence") continue;
         await ex.ref.update({
@@ -253,8 +267,13 @@ export async function POST(request: Request) {
       // Human-inbox forward — best-effort, never fails ingestion.
       if (emailIsConfigured() && matched.subAccountId) {
         try {
-          const subSnap = await db.doc(`subAccounts/${matched.subAccountId}`).get();
-          const replyToEmail = subSnap.data()?.replyToEmail as string | null | undefined;
+          const subSnap = await db
+            .doc(`subAccounts/${matched.subAccountId}`)
+            .get();
+          const replyToEmail = subSnap.data()?.replyToEmail as
+            | string
+            | null
+            | undefined;
           if (replyToEmail) {
             await sendEmail({
               to: replyToEmail,

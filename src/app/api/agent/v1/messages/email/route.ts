@@ -20,7 +20,11 @@ const MAX_BODY_LEN = 100_000;
 
 export const POST = withAgentRoute(async (request: Request) => {
   if (!emailIsConfigured()) {
-    return agentError("SEND_FAILED", "Email is not configured on this deployment.", 503);
+    return agentError(
+      "SEND_FAILED",
+      "Email is not configured on this deployment.",
+      503
+    );
   }
 
   const body = (await request.json().catch(() => null)) as {
@@ -28,17 +32,31 @@ export const POST = withAgentRoute(async (request: Request) => {
     subject?: string;
     body?: string;
   } | null;
-  const contactId = typeof body?.contactId === "string" ? body.contactId.trim() : undefined;
-  const subject = typeof body?.subject === "string" ? body.subject.trim() : undefined;
+  const contactId =
+    typeof body?.contactId === "string" ? body.contactId.trim() : undefined;
+  const subject =
+    typeof body?.subject === "string" ? body.subject.trim() : undefined;
   const text = typeof body?.body === "string" ? body.body.trim() : undefined;
   if (!contactId || !subject || !text) {
-    return agentError("VALIDATION_FAILED", "contactId, subject, and body are required.", 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      "contactId, subject, and body are required.",
+      400
+    );
   }
   if (subject.length > MAX_SUBJECT_LEN) {
-    return agentError("VALIDATION_FAILED", `subject must be ${MAX_SUBJECT_LEN} characters or fewer.`, 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      `subject must be ${MAX_SUBJECT_LEN} characters or fewer.`,
+      400
+    );
   }
   if (text.length > MAX_BODY_LEN) {
-    return agentError("VALIDATION_FAILED", `body must be ${MAX_BODY_LEN} characters or fewer.`, 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      `body must be ${MAX_BODY_LEN} characters or fewer.`,
+      400
+    );
   }
 
   const access = await requireServiceAuth(request, { scope: "sends:execute" });
@@ -46,17 +64,26 @@ export const POST = withAgentRoute(async (request: Request) => {
 
   const db = getAdminDb();
   const contactSnap = await db.doc(`contacts/${contactId}`).get();
-  if (!contactSnap.exists) return agentError("NOT_FOUND", "Contact not found.", 404);
+  if (!contactSnap.exists)
+    return agentError("NOT_FOUND", "Contact not found.", 404);
   const contact = contactSnap.data() as Record<string, unknown>;
   if (!subAccountAllowed(access, contact.subAccountId as string)) {
     // Doc-ID-resolved foreign tenant: 404, not 403 — don't reveal existence.
     return agentError("NOT_FOUND", "Contact not found.", 404);
   }
   if (!contact.email) {
-    return agentError("VALIDATION_FAILED", "This contact has no email address.", 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      "This contact has no email address.",
+      400
+    );
   }
   if (contact.emailOptedOut === true) {
-    return agentError("CONTACT_OPTED_OUT", "Contact has opted out of email.", 409);
+    return agentError(
+      "CONTACT_OPTED_OUT",
+      "Contact has opted out of email.",
+      409
+    );
   }
 
   return withIdempotency(
@@ -68,7 +95,8 @@ export const POST = withAgentRoute(async (request: Request) => {
         .doc(`subAccounts/${contact.subAccountId as string}`)
         .get();
       const replyTo =
-        (subSnap.data()?.replyToEmail as string | null | undefined) ?? undefined;
+        (subSnap.data()?.replyToEmail as string | null | undefined) ??
+        undefined;
 
       let messageId: string;
       try {
@@ -80,8 +108,12 @@ export const POST = withAgentRoute(async (request: Request) => {
         });
         messageId = result.id;
       } catch (err) {
-        const message = err instanceof Error ? err.message : "Failed to send email";
-        return { status: 502, body: { error: { code: "SEND_FAILED", message } } };
+        const message =
+          err instanceof Error ? err.message : "Failed to send email";
+        return {
+          status: 502,
+          body: { error: { code: "SEND_FAILED", message } },
+        };
       }
 
       try {
@@ -103,6 +135,6 @@ export const POST = withAgentRoute(async (request: Request) => {
       }
       return { status: 200, body: { data: { id: messageId } } };
     },
-    { preflight: () => enforceDailyCap(access.keyId, "sends", DAILY_SEND_CAP) },
+    { preflight: () => enforceDailyCap(access.keyId, "sends", DAILY_SEND_CAP) }
   );
 });

@@ -16,7 +16,7 @@ export async function enforceDailyCap(
   keyId: string,
   cap: "sends" | "enrollments",
   limit: number,
-  units = 1,
+  units = 1
 ): Promise<NextResponse | null> {
   const db = getAdminDb();
   const day = new Date().toISOString().slice(0, 10);
@@ -35,13 +35,16 @@ export async function enforceDailyCap(
       const now = new Date();
       const midnight = new Date(now);
       midnight.setUTCHours(24, 0, 0, 0);
-      const retryAfter = Math.max(1, Math.ceil((midnight.getTime() - now.getTime()) / 1000));
+      const retryAfter = Math.max(
+        1,
+        Math.ceil((midnight.getTime() - now.getTime()) / 1000)
+      );
       return agentError(
         "CAP_EXCEEDED",
         `Daily ${cap} cap of ${limit} reached for this key.`,
         429,
         { limit },
-        { "Retry-After": String(retryAfter) },
+        { "Retry-After": String(retryAfter) }
       );
     }
     throw err;

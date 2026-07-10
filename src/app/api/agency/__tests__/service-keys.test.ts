@@ -9,8 +9,20 @@ vi.mock("@/lib/firebase/admin", async () => {
       getUser: async (uid: string) => {
         if (uid === "rejecting1") throw new Error("user not found");
         if (uid === "owner1")
-          return { customClaims: { status: "active", agencyId: "ag1", agencyRole: "owner" } };
-        return { customClaims: { status: "active", agencyId: "ag1", agencyRole: "staff" } };
+          return {
+            customClaims: {
+              status: "active",
+              agencyId: "ag1",
+              agencyRole: "owner",
+            },
+          };
+        return {
+          customClaims: {
+            status: "active",
+            agencyId: "ag1",
+            agencyRole: "staff",
+          },
+        };
       },
     }),
   };
@@ -31,7 +43,9 @@ describe("service key management", () => {
   beforeEach(() => {
     resetFakeDb();
     fakeDb.doc("subAccounts/subMain").set({ agencyId: "ag1", name: "Main" });
-    fakeDb.doc("subAccounts/subForeign").set({ agencyId: "agOther", name: "X" });
+    fakeDb
+      .doc("subAccounts/subForeign")
+      .set({ agencyId: "agOther", name: "X" });
   });
 
   it("mints a key for the agency owner and returns plaintext once", async () => {
@@ -40,7 +54,7 @@ describe("service key management", () => {
         label: "suit-bridge",
         allowedSubAccounts: ["subMain"],
         scopes: ["contacts:write"],
-      }),
+      })
     );
     expect(res.status).toBe(201);
     const body = await res.json();
@@ -54,7 +68,11 @@ describe("service key management", () => {
     const req = new Request("http://test/api/agency/service-keys", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ label: "x", allowedSubAccounts: ["subMain"], scopes: ["contacts:write"] }),
+      body: JSON.stringify({
+        label: "x",
+        allowedSubAccounts: ["subMain"],
+        scopes: ["contacts:write"],
+      }),
     });
     const res = await POST(req);
     expect(res.status).toBe(401);
@@ -62,35 +80,55 @@ describe("service key management", () => {
 
   it("401s when getUser rejects for the given uid", async () => {
     const res = await POST(
-      mintReq("rejecting1", { label: "x", allowedSubAccounts: ["subMain"], scopes: ["contacts:write"] }),
+      mintReq("rejecting1", {
+        label: "x",
+        allowedSubAccounts: ["subMain"],
+        scopes: ["contacts:write"],
+      })
     );
     expect(res.status).toBe(401);
   });
 
   it("rejects non-owners with 403", async () => {
     const res = await POST(
-      mintReq("staff1", { label: "x", allowedSubAccounts: ["subMain"], scopes: ["contacts:write"] }),
+      mintReq("staff1", {
+        label: "x",
+        allowedSubAccounts: ["subMain"],
+        scopes: ["contacts:write"],
+      })
     );
     expect(res.status).toBe(403);
   });
 
   it("rejects sub-accounts belonging to another agency", async () => {
     const res = await POST(
-      mintReq("owner1", { label: "x", allowedSubAccounts: ["subForeign"], scopes: ["contacts:write"] }),
+      mintReq("owner1", {
+        label: "x",
+        allowedSubAccounts: ["subForeign"],
+        scopes: ["contacts:write"],
+      })
     );
     expect(res.status).toBe(400);
   });
 
   it("lists keys without hashes and revokes", async () => {
     const mint = await POST(
-      mintReq("owner1", { label: "a", allowedSubAccounts: ["subMain"], scopes: ["contacts:read"] }),
+      mintReq("owner1", {
+        label: "a",
+        allowedSubAccounts: ["subMain"],
+        scopes: ["contacts:read"],
+      })
     );
     const { id } = (await mint.json()).data;
     const list = await GET(mintReq("owner1", {}));
     const listBody = await list.json();
     expect(listBody.data[0].keyHash).toBeUndefined();
-    const del = await DELETE(mintReq("owner1", {}), { params: Promise.resolve({ id }) });
+    const del = await DELETE(mintReq("owner1", {}), {
+      params: Promise.resolve({ id }),
+    });
     expect((await del.json()).data.status).toBe("revoked");
-    expect((await fakeDb.doc(`agencyServiceKeys/${id}`).get()).data()?.status).toBe("revoked");
+    expect(
+      (await fakeDb.doc(`agencyServiceKeys/${id}`).get()).data()?.status
+    ).toBe("revoked");
   });
 });

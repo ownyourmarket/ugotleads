@@ -60,7 +60,11 @@ describe("FakeDb", () => {
     fakeDb.doc("k/u").set({ n: 1 });
     await fakeDb.runTransaction(async (tx) => {
       const s = await tx.get(fakeDb.doc("k/u"));
-      tx.set(fakeDb.doc("k/u"), { n: (s.data()?.n as number) + 1 }, { merge: true });
+      tx.set(
+        fakeDb.doc("k/u"),
+        { n: (s.data()?.n as number) + 1 },
+        { merge: true }
+      );
     });
     expect((await fakeDb.doc("k/u").get()).data()?.n).toBe(2);
   });
@@ -68,7 +72,9 @@ describe("FakeDb", () => {
   it("create() writes a new doc and throws code 6 on existing", async () => {
     await fakeDb.doc("execs/e1").create({ n: 1 });
     expect((await fakeDb.doc("execs/e1").get()).data()).toEqual({ n: 1 });
-    await expect(fakeDb.doc("execs/e1").create({ n: 2 })).rejects.toMatchObject({ code: 6 });
+    await expect(fakeDb.doc("execs/e1").create({ n: 2 })).rejects.toMatchObject(
+      { code: 6 }
+    );
     expect((await fakeDb.doc("execs/e1").get()).data()).toEqual({ n: 1 });
   });
 });

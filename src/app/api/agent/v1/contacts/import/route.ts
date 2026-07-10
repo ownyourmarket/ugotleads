@@ -22,11 +22,23 @@ export const POST = withAgentRoute(async (request: Request) => {
     contacts?: AgentContactInput[];
   } | null;
 
-  if (!body || typeof body.subAccountId !== "string" || !Array.isArray(body.contacts)) {
-    return agentError("VALIDATION_FAILED", "subAccountId and contacts[] are required.", 400);
+  if (
+    !body ||
+    typeof body.subAccountId !== "string" ||
+    !Array.isArray(body.contacts)
+  ) {
+    return agentError(
+      "VALIDATION_FAILED",
+      "subAccountId and contacts[] are required.",
+      400
+    );
   }
   if (body.contacts.length === 0 || body.contacts.length > MAX_ROWS) {
-    return agentError("VALIDATION_FAILED", `contacts[] must contain 1-${MAX_ROWS} rows.`, 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      `contacts[] must contain 1-${MAX_ROWS} rows.`,
+      400
+    );
   }
 
   const access = await requireServiceAuth(request, {
@@ -58,7 +70,8 @@ export const POST = withAgentRoute(async (request: Request) => {
         continue;
       }
 
-      const email = typeof row.email === "string" ? row.email.trim().toLowerCase() : "";
+      const email =
+        typeof row.email === "string" ? row.email.trim().toLowerCase() : "";
       const phone = typeof row.phone === "string" ? row.phone.trim() : "";
 
       if (!email && !phone) {
@@ -80,7 +93,7 @@ export const POST = withAgentRoute(async (request: Request) => {
         }
       }
       const rowTags = (Array.isArray(row.tags) ? row.tags : []).filter(
-        (t): t is string => typeof t === "string" && !!t.trim(),
+        (t): t is string => typeof t === "string" && !!t.trim()
       );
 
       if (effectiveEmail) {
@@ -92,10 +105,11 @@ export const POST = withAgentRoute(async (request: Request) => {
         const ref = db.collection("contacts").doc();
         const result = await db.runTransaction(async (tx) => {
           const dup = await tx.get(
-            db.collection("contacts")
+            db
+              .collection("contacts")
               .where("subAccountId", "==", access.subAccountId)
               .where("email", "==", effectiveEmail)
-              .limit(1),
+              .limit(1)
           );
           if (!dup.empty) return { duplicate: true as const };
           tx.set(ref, buildContactDoc(access, row));
@@ -120,7 +134,9 @@ export const POST = withAgentRoute(async (request: Request) => {
         }
       } else {
         // Phone-only rows: direct add without transaction
-        const ref = await db.collection("contacts").add(buildContactDoc(access, row));
+        const ref = await db
+          .collection("contacts")
+          .add(buildContactDoc(access, row));
         if (rowTags.length) {
           try {
             await fireTagAddedTriggers({

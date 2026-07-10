@@ -15,8 +15,13 @@ beforeEach(() => {
   resetFakeDb();
   const gen = generateServiceKey();
   fakeDb.doc("agencyServiceKeys/key1").set({
-    agencyId: "ag1", label: "t", keyHash: gen.keyHash, keyPrefix: gen.keyPrefix,
-    allowedSubAccounts: ["subMain"], scopes: ["sequences:write", "sequences:enroll", "reports:read"], status: "active",
+    agencyId: "ag1",
+    label: "t",
+    keyHash: gen.keyHash,
+    keyPrefix: gen.keyPrefix,
+    allowedSubAccounts: ["subMain"],
+    scopes: ["sequences:write", "sequences:enroll", "reports:read"],
+    status: "active",
   });
   KEY = gen.key;
 
@@ -49,17 +54,27 @@ beforeEach(() => {
 function post(body: unknown): Request {
   return new Request("http://test/api/agent/v1/sequences", {
     method: "POST",
-    headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify(body),
   });
 }
 
 describe("agent sequences", () => {
   it("creates a tag-triggered outbound sequence", async () => {
-    const res = await POST(post({
-      subAccountId: "subMain", name: "Box1 follow-ups", tag: "box1",
-      steps: [{ templateId: "t1", delaySeconds: 0 }, { templateId: "t1", delaySeconds: 345600 }],
-    }));
+    const res = await POST(
+      post({
+        subAccountId: "subMain",
+        name: "Box1 follow-ups",
+        tag: "box1",
+        steps: [
+          { templateId: "t1", delaySeconds: 0 },
+          { templateId: "t1", delaySeconds: 345600 },
+        ],
+      })
+    );
     expect(res.status).toBe(201);
     const { id } = (await res.json()).data;
     const doc = (await fakeDb.doc(`automations/${id}`).get()).data()!;
@@ -67,7 +82,8 @@ describe("agent sequences", () => {
       recipeType: "outbound_sequence",
       enabled: true,
       trigger: { type: "tag_added", formId: null, tag: "box1" },
-      agencyId: "ag1", subAccountId: "subMain",
+      agencyId: "ag1",
+      subAccountId: "subMain",
     });
     expect((doc.config as { steps: unknown[] }).steps).toHaveLength(2);
     expect(doc.createdByUid).toMatch(/^agent:/);
@@ -76,36 +92,64 @@ describe("agent sequences", () => {
   });
 
   it("rejects sms templates and missing templates", async () => {
-    const sms = await POST(post({ subAccountId: "subMain", name: "X", steps: [{ templateId: "t-sms", delaySeconds: 0 }] }));
+    const sms = await POST(
+      post({
+        subAccountId: "subMain",
+        name: "X",
+        steps: [{ templateId: "t-sms", delaySeconds: 0 }],
+      })
+    );
     expect(sms.status).toBe(400);
-    const missing = await POST(post({ subAccountId: "subMain", name: "X", steps: [{ templateId: "ghost", delaySeconds: 0 }] }));
+    const missing = await POST(
+      post({
+        subAccountId: "subMain",
+        name: "X",
+        steps: [{ templateId: "ghost", delaySeconds: 0 }],
+      })
+    );
     expect(missing.status).toBe(400);
   });
 
   it("rejects a template belonging to another sub-account (cross-tenant)", async () => {
-    const res = await POST(post({ subAccountId: "subMain", name: "X", steps: [{ templateId: "tForeign", delaySeconds: 0 }] }));
+    const res = await POST(
+      post({
+        subAccountId: "subMain",
+        name: "X",
+        steps: [{ templateId: "tForeign", delaySeconds: 0 }],
+      })
+    );
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
   });
 
   it("truncates a >50-char tag to 50 chars in the stored trigger", async () => {
     const longTag = "x".repeat(60);
-    const res = await POST(post({
-      subAccountId: "subMain", name: "Long tag", tag: longTag,
-      steps: [{ templateId: "t1", delaySeconds: 0 }],
-    }));
+    const res = await POST(
+      post({
+        subAccountId: "subMain",
+        name: "Long tag",
+        tag: longTag,
+        steps: [{ templateId: "t1", delaySeconds: 0 }],
+      })
+    );
     expect(res.status).toBe(201);
     const { id } = (await res.json()).data;
     const doc = (await fakeDb.doc(`automations/${id}`).get()).data()!;
-    expect((doc.trigger as { type: string; tag: string }).type).toBe("tag_added");
+    expect((doc.trigger as { type: string; tag: string }).type).toBe(
+      "tag_added"
+    );
     expect((doc.trigger as { tag: string }).tag).toBe("x".repeat(50));
   });
 
   it("treats an all-whitespace tag as no tag (manual trigger)", async () => {
-    const res = await POST(post({
-      subAccountId: "subMain", name: "Whitespace tag", tag: "   ",
-      steps: [{ templateId: "t1", delaySeconds: 0 }],
-    }));
+    const res = await POST(
+      post({
+        subAccountId: "subMain",
+        name: "Whitespace tag",
+        tag: "   ",
+        steps: [{ templateId: "t1", delaySeconds: 0 }],
+      })
+    );
     expect(res.status).toBe(201);
     const { id } = (await res.json()).data;
     const doc = (await fakeDb.doc(`automations/${id}`).get()).data()!;
@@ -113,9 +157,26 @@ describe("agent sequences", () => {
   });
 
   it("lists only outbound sequences for the sub-account", async () => {
-    await POST(post({ subAccountId: "subMain", name: "A", steps: [{ templateId: "t1", delaySeconds: 0 }] }));
-    fakeDb.doc("automations/nurture1").set({ subAccountId: "subMain", recipeType: "lead_nurture", name: "N", enabled: true });
-    const res = await GET(new Request("http://t/api/agent/v1/sequences?subAccountId=subMain", { headers: { authorization: `Bearer ${KEY}` } }));
+    await POST(
+      post({
+        subAccountId: "subMain",
+        name: "A",
+        steps: [{ templateId: "t1", delaySeconds: 0 }],
+      })
+    );
+    fakeDb
+      .doc("automations/nurture1")
+      .set({
+        subAccountId: "subMain",
+        recipeType: "lead_nurture",
+        name: "N",
+        enabled: true,
+      });
+    const res = await GET(
+      new Request("http://t/api/agent/v1/sequences?subAccountId=subMain", {
+        headers: { authorization: `Bearer ${KEY}` },
+      })
+    );
     const body = await res.json();
     expect(body.data).toHaveLength(1);
     expect(body.data[0]).toMatchObject({ name: "A", stepCount: 1 });

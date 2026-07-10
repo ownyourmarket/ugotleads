@@ -16,11 +16,19 @@ export const GET = withAgentRoute(async (request: Request) => {
   const url = new URL(request.url);
   const subAccountId = url.searchParams.get("subAccountId");
   if (!subAccountId) {
-    return agentError("VALIDATION_FAILED", "subAccountId query param is required.", 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      "subAccountId query param is required.",
+      400
+    );
   }
   const type = url.searchParams.get("type");
   if (type !== null && type !== "email" && type !== "sms") {
-    return agentError("VALIDATION_FAILED", 'type must be "email" or "sms".', 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      'type must be "email" or "sms".',
+      400
+    );
   }
   const access = await requireServiceAuth(request, {
     scope: "templates:read",
@@ -36,7 +44,13 @@ export const GET = withAgentRoute(async (request: Request) => {
   const snap = await q.limit(100).get();
   const data = snap.docs.map((d) => {
     const t = d.data();
-    return { id: d.id, type: t.type, name: t.name, subject: t.subject ?? null, body: t.body };
+    return {
+      id: d.id,
+      type: t.type,
+      name: t.name,
+      subject: t.subject ?? null,
+      body: t.body,
+    };
   });
   return NextResponse.json({ data });
 });
@@ -51,7 +65,8 @@ export const POST = withAgentRoute(async (request: Request) => {
   } | null;
 
   const name = typeof body?.name === "string" ? body.name.trim() : undefined;
-  const templateBody = typeof body?.body === "string" ? body.body.trim() : undefined;
+  const templateBody =
+    typeof body?.body === "string" ? body.body.trim() : undefined;
   if (
     !body ||
     typeof body.subAccountId !== "string" ||
@@ -62,22 +77,38 @@ export const POST = withAgentRoute(async (request: Request) => {
     return agentError(
       "VALIDATION_FAILED",
       'subAccountId, type ("email"|"sms"), name, and body are required.',
-      400,
+      400
     );
   }
   if (name.length > MAX_NAME_LEN) {
-    return agentError("VALIDATION_FAILED", `name must be ${MAX_NAME_LEN} characters or fewer.`, 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      `name must be ${MAX_NAME_LEN} characters or fewer.`,
+      400
+    );
   }
   if (templateBody.length > MAX_BODY_LEN) {
-    return agentError("VALIDATION_FAILED", `body must be ${MAX_BODY_LEN} characters or fewer.`, 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      `body must be ${MAX_BODY_LEN} characters or fewer.`,
+      400
+    );
   }
   const subject = typeof body.subject === "string" ? body.subject.trim() : null;
   if (subject && subject.length > MAX_SUBJECT_LEN) {
-    return agentError("VALIDATION_FAILED", `subject must be ${MAX_SUBJECT_LEN} characters or fewer.`, 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      `subject must be ${MAX_SUBJECT_LEN} characters or fewer.`,
+      400
+    );
   }
   if (body.type === "email") {
     if (!subject) {
-      return agentError("VALIDATION_FAILED", "subject is required for email templates.", 400);
+      return agentError(
+        "VALIDATION_FAILED",
+        "subject is required for email templates.",
+        400
+      );
     }
     const err = validateEmailBody(templateBody);
     if (err) return agentError("VALIDATION_FAILED", err, 400);
@@ -89,16 +120,18 @@ export const POST = withAgentRoute(async (request: Request) => {
   });
   if (access instanceof NextResponse) return access;
 
-  const ref = await getAdminDb().collection("message_templates").add({
-    agencyId: access.agencyId,
-    subAccountId: access.subAccountId,
-    type: body.type,
-    name,
-    subject: body.type === "email" ? subject : null,
-    body: templateBody,
-    createdByUid: `agent:${access.keyPrefix}`,
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
-  });
+  const ref = await getAdminDb()
+    .collection("message_templates")
+    .add({
+      agencyId: access.agencyId,
+      subAccountId: access.subAccountId,
+      type: body.type,
+      name,
+      subject: body.type === "email" ? subject : null,
+      body: templateBody,
+      createdByUid: `agent:${access.keyPrefix}`,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
   return NextResponse.json({ data: { id: ref.id } }, { status: 201 });
 });

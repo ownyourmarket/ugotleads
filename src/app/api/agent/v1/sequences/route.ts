@@ -13,9 +13,16 @@ export const GET = withAgentRoute(async (request: Request) => {
   const url = new URL(request.url);
   const subAccountId = url.searchParams.get("subAccountId");
   if (!subAccountId) {
-    return agentError("VALIDATION_FAILED", "subAccountId query param is required.", 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      "subAccountId query param is required.",
+      400
+    );
   }
-  const access = await requireServiceAuth(request, { scope: "sequences:write", subAccountId });
+  const access = await requireServiceAuth(request, {
+    scope: "sequences:write",
+    subAccountId,
+  });
   if (access instanceof NextResponse) return access;
 
   const snap = await getAdminDb()
@@ -46,19 +53,45 @@ export const POST = withAgentRoute(async (request: Request) => {
     steps?: { templateId?: string; delaySeconds?: number }[];
   } | null;
 
-  const name = typeof body?.name === "string" ? body.name.trim().slice(0, 200) : "";
-  if (!body || typeof body.subAccountId !== "string" || !body.subAccountId || !name) {
-    return agentError("VALIDATION_FAILED", "subAccountId and name are required.", 400);
+  const name =
+    typeof body?.name === "string" ? body.name.trim().slice(0, 200) : "";
+  if (
+    !body ||
+    typeof body.subAccountId !== "string" ||
+    !body.subAccountId ||
+    !name
+  ) {
+    return agentError(
+      "VALIDATION_FAILED",
+      "subAccountId and name are required.",
+      400
+    );
   }
-  if (!Array.isArray(body.steps) || body.steps.length === 0 || body.steps.length > MAX_STEPS) {
-    return agentError("VALIDATION_FAILED", `steps[] must contain 1-${MAX_STEPS} entries.`, 400);
+  if (
+    !Array.isArray(body.steps) ||
+    body.steps.length === 0 ||
+    body.steps.length > MAX_STEPS
+  ) {
+    return agentError(
+      "VALIDATION_FAILED",
+      `steps[] must contain 1-${MAX_STEPS} entries.`,
+      400
+    );
   }
   for (const s of body.steps) {
     if (
-      !s || typeof s.templateId !== "string" || !s.templateId ||
-      typeof s.delaySeconds !== "number" || !Number.isFinite(s.delaySeconds) || s.delaySeconds < 0
+      !s ||
+      typeof s.templateId !== "string" ||
+      !s.templateId ||
+      typeof s.delaySeconds !== "number" ||
+      !Number.isFinite(s.delaySeconds) ||
+      s.delaySeconds < 0
     ) {
-      return agentError("VALIDATION_FAILED", "Each step needs templateId and delaySeconds >= 0.", 400);
+      return agentError(
+        "VALIDATION_FAILED",
+        "Each step needs templateId and delaySeconds >= 0.",
+        400
+      );
     }
   }
   const tag = typeof body.tag === "string" ? body.tag.trim().slice(0, 50) : "";
@@ -75,10 +108,18 @@ export const POST = withAgentRoute(async (request: Request) => {
     const t = await db.doc(`message_templates/${s.templateId}`).get();
     const td = t.data();
     if (!t.exists || td?.subAccountId !== access.subAccountId) {
-      return agentError("VALIDATION_FAILED", `Template ${s.templateId} not found in this sub-account.`, 400);
+      return agentError(
+        "VALIDATION_FAILED",
+        `Template ${s.templateId} not found in this sub-account.`,
+        400
+      );
     }
     if (td?.type !== "email") {
-      return agentError("VALIDATION_FAILED", `Template ${s.templateId} is not an email template (sequences are email-only in v1).`, 400);
+      return agentError(
+        "VALIDATION_FAILED",
+        `Template ${s.templateId} is not an email template (sequences are email-only in v1).`,
+        400
+      );
     }
   }
 

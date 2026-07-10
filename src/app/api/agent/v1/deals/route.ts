@@ -22,8 +22,17 @@ export const POST = withAgentRoute(async (request: Request) => {
 
   // Hardening: safely extract title only if it's a string
   const title = typeof body?.title === "string" ? body.title.trim() : undefined;
-  if (!body || typeof body.subAccountId !== "string" || typeof body.contactId !== "string" || !title) {
-    return agentError("VALIDATION_FAILED", "subAccountId, contactId, and title are required.", 400);
+  if (
+    !body ||
+    typeof body.subAccountId !== "string" ||
+    typeof body.contactId !== "string" ||
+    !title
+  ) {
+    return agentError(
+      "VALIDATION_FAILED",
+      "subAccountId, contactId, and title are required.",
+      400
+    );
   }
   const stageId = body.stageId ?? "new";
   if (!PIPELINE_STAGES.some((s) => s.id === stageId)) {
@@ -42,17 +51,27 @@ export const POST = withAgentRoute(async (request: Request) => {
 
   const db = getAdminDb();
   const contactSnap = await db.doc(`contacts/${body.contactId}`).get();
-  if (!contactSnap.exists || contactSnap.data()?.subAccountId !== body.subAccountId) {
-    return agentError("NOT_FOUND", "Contact not found in this sub-account.", 404);
+  if (
+    !contactSnap.exists ||
+    contactSnap.data()?.subAccountId !== body.subAccountId
+  ) {
+    return agentError(
+      "NOT_FOUND",
+      "Contact not found in this sub-account.",
+      404
+    );
   }
 
   const contactId = body.contactId;
   const value =
-    typeof body.value === "number" && Number.isFinite(body.value) && body.value >= 0
+    typeof body.value === "number" &&
+    Number.isFinite(body.value) &&
+    body.value >= 0
       ? body.value
       : 0;
   // Hardening: safely extract currency only if it's a string
-  const currency = typeof body.currency === "string" ? body.currency.trim() || "USD" : "USD";
+  const currency =
+    typeof body.currency === "string" ? body.currency.trim() || "USD" : "USD";
 
   return withIdempotency(request, access.keyId, "deals:create", async () => {
     const ref = await db.collection("deals").add({

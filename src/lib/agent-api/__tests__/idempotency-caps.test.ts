@@ -22,7 +22,10 @@ describe("withIdempotency", () => {
 
   it("runs the handler every time without a key", async () => {
     let calls = 0;
-    const handler = async () => ({ status: 201, body: { data: { n: ++calls } } });
+    const handler = async () => ({
+      status: 201,
+      body: { data: { n: ++calls } },
+    });
     await withIdempotency(req(), "key1", "test", handler);
     const res = await withIdempotency(req(), "key1", "test", handler);
     expect(calls).toBe(2);
@@ -31,18 +34,24 @@ describe("withIdempotency", () => {
 
   it("replays the stored response for a repeated key", async () => {
     let calls = 0;
-    const handler = async () => ({ status: 201, body: { data: { n: ++calls } } });
+    const handler = async () => ({
+      status: 201,
+      body: { data: { n: ++calls } },
+    });
     const first = await withIdempotency(req("abc"), "key1", "test", handler);
     const second = await withIdempotency(req("abc"), "key1", "test", handler);
     expect(calls).toBe(1);
     expect(second.status).toBe(201);
-    expect((await second.json())).toEqual(await first.json());
+    expect(await second.json()).toEqual(await first.json());
     expect(second.headers.get("x-idempotent-replay")).toBe("true");
   });
 
   it("scopes idempotency per service key", async () => {
     let calls = 0;
-    const handler = async () => ({ status: 200, body: { data: { n: ++calls } } });
+    const handler = async () => ({
+      status: 200,
+      body: { data: { n: ++calls } },
+    });
     await withIdempotency(req("abc"), "key1", "test", handler);
     await withIdempotency(req("abc"), "key2", "test", handler);
     expect(calls).toBe(2);
@@ -50,7 +59,10 @@ describe("withIdempotency", () => {
 
   it("scopes idempotency per endpoint", async () => {
     let calls = 0;
-    const handler = async () => ({ status: 200, body: { data: { n: ++calls } } });
+    const handler = async () => ({
+      status: 200,
+      body: { data: { n: ++calls } },
+    });
     await withIdempotency(req("abc"), "key1", "contacts:create", handler);
     await withIdempotency(req("abc"), "key1", "deals:create", handler);
     expect(calls).toBe(2);
@@ -58,10 +70,21 @@ describe("withIdempotency", () => {
 
   it("a preflight returning a response short-circuits the handler and stores nothing", async () => {
     let calls = 0;
-    const handler = async () => ({ status: 200, body: { data: { n: ++calls } } });
-    const preflight = vi.fn(async () => NextResponse.json({ error: { code: "CAP_EXCEEDED" } }, { status: 429 }));
+    const handler = async () => ({
+      status: 200,
+      body: { data: { n: ++calls } },
+    });
+    const preflight = vi.fn(async () =>
+      NextResponse.json({ error: { code: "CAP_EXCEEDED" } }, { status: 429 })
+    );
 
-    const res = await withIdempotency(req("fresh-key"), "key1", "test", handler, { preflight });
+    const res = await withIdempotency(
+      req("fresh-key"),
+      "key1",
+      "test",
+      handler,
+      { preflight }
+    );
     expect(res.status).toBe(429);
     expect(calls).toBe(0);
     expect(preflight).toHaveBeenCalledTimes(1);
@@ -73,13 +96,24 @@ describe("withIdempotency", () => {
 
   it("preflight is not called on a replay hit", async () => {
     let calls = 0;
-    const handler = async () => ({ status: 200, body: { data: { n: ++calls } } });
+    const handler = async () => ({
+      status: 200,
+      body: { data: { n: ++calls } },
+    });
     const preflight = vi.fn(async () => null);
 
-    await withIdempotency(req("replay-key"), "key1", "test", handler, { preflight });
+    await withIdempotency(req("replay-key"), "key1", "test", handler, {
+      preflight,
+    });
     expect(preflight).toHaveBeenCalledTimes(1);
 
-    const res = await withIdempotency(req("replay-key"), "key1", "test", handler, { preflight });
+    const res = await withIdempotency(
+      req("replay-key"),
+      "key1",
+      "test",
+      handler,
+      { preflight }
+    );
     expect(res.headers.get("x-idempotent-replay")).toBe("true");
     expect(calls).toBe(1);
     // Preflight only ran once — on the fresh call, not the replay.

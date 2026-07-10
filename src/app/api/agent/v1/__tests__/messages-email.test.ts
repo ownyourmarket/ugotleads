@@ -24,18 +24,35 @@ beforeEach(() => {
   sendEmailMock.mockClear();
   const gen = generateServiceKey();
   fakeDb.doc("agencyServiceKeys/key1").set({
-    agencyId: "ag1", label: "t", keyHash: gen.keyHash, keyPrefix: gen.keyPrefix,
-    allowedSubAccounts: ["subMain"], scopes: ["sends:execute"], status: "active",
+    agencyId: "ag1",
+    label: "t",
+    keyHash: gen.keyHash,
+    keyPrefix: gen.keyPrefix,
+    allowedSubAccounts: ["subMain"],
+    scopes: ["sends:execute"],
+    status: "active",
   });
   KEY = gen.key;
-  fakeDb.doc("subAccounts/subMain").set({ agencyId: "ag1", replyToEmail: "star@myusa.com" });
+  fakeDb
+    .doc("subAccounts/subMain")
+    .set({ agencyId: "ag1", replyToEmail: "star@myusa.com" });
   fakeDb.doc("contacts/c1").set({
-    name: "Ann", email: "ann@ex.com", subAccountId: "subMain", agencyId: "ag1",
-    tags: [], emailOptedOut: false, smsOptedOut: false,
+    name: "Ann",
+    email: "ann@ex.com",
+    subAccountId: "subMain",
+    agencyId: "ag1",
+    tags: [],
+    emailOptedOut: false,
+    smsOptedOut: false,
   });
   fakeDb.doc("contacts/cOpted").set({
-    name: "Out", email: "out@ex.com", subAccountId: "subMain", agencyId: "ag1",
-    tags: [], emailOptedOut: true, smsOptedOut: false,
+    name: "Out",
+    email: "out@ex.com",
+    subAccountId: "subMain",
+    agencyId: "ag1",
+    tags: [],
+    emailOptedOut: true,
+    smsOptedOut: false,
   });
 });
 
@@ -53,20 +70,27 @@ function post(body: unknown, idemKey?: string): Request {
 
 describe("agent one-off email", () => {
   it("sends with the sub-account replyTo and logs an agent activity", async () => {
-    const res = await POST(post({ contactId: "c1", subject: "Hello", body: "Hi Ann" }));
+    const res = await POST(
+      post({ contactId: "c1", subject: "Hello", body: "Hi Ann" })
+    );
     expect(res.status).toBe(200);
     expect((await res.json()).data.id).toBe("resend-msg-1");
     expect(sendEmailMock).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "ann@ex.com", replyTo: "star@myusa.com" }),
+      expect.objectContaining({ to: "ann@ex.com", replyTo: "star@myusa.com" })
     );
     const acts = await fakeDb.collection("contacts/c1/activities").get();
     expect(acts.docs[0].data()).toMatchObject({ type: "email_sent" });
     expect(acts.docs[0].data()?.createdBy).toMatch(/^agent:/);
-    expect(recordSend).toHaveBeenCalledWith(expect.stringMatching(/^agent:ugl_/), "email");
+    expect(recordSend).toHaveBeenCalledWith(
+      expect.stringMatching(/^agent:ugl_/),
+      "email"
+    );
   });
 
   it("409s CONTACT_OPTED_OUT for opted-out contacts and does not send", async () => {
-    const res = await POST(post({ contactId: "cOpted", subject: "S", body: "B" }));
+    const res = await POST(
+      post({ contactId: "cOpted", subject: "S", body: "B" })
+    );
     expect(res.status).toBe(409);
     expect((await res.json()).error.code).toBe("CONTACT_OPTED_OUT");
     expect(sendEmailMock).not.toHaveBeenCalled();
@@ -74,7 +98,9 @@ describe("agent one-off email", () => {
 
   it("replays idempotent sends without re-sending", async () => {
     await POST(post({ contactId: "c1", subject: "S", body: "B" }, "send-1"));
-    const res = await POST(post({ contactId: "c1", subject: "S", body: "B" }, "send-1"));
+    const res = await POST(
+      post({ contactId: "c1", subject: "S", body: "B" }, "send-1")
+    );
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
     expect(res.headers.get("x-idempotent-replay")).toBe("true");
   });
@@ -89,14 +115,18 @@ describe("agent one-off email", () => {
   });
 
   it("replays a cached send even after the cap is later reached (replay runs before the cap check)", async () => {
-    const first = await POST(post({ contactId: "c1", subject: "S", body: "B" }, "s1"));
+    const first = await POST(
+      post({ contactId: "c1", subject: "S", body: "B" }, "s1")
+    );
     expect(first.status).toBe(200);
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
 
     const day = new Date().toISOString().slice(0, 10);
     fakeDb.doc(`agencyServiceKeys/key1/usage/${day}`).set({ sends: 100 });
 
-    const replay = await POST(post({ contactId: "c1", subject: "S", body: "B" }, "s1"));
+    const replay = await POST(
+      post({ contactId: "c1", subject: "S", body: "B" }, "s1")
+    );
     expect(replay.status).toBe(200);
     expect(replay.headers.get("x-idempotent-replay")).toBe("true");
     expect(sendEmailMock).toHaveBeenCalledTimes(1);
@@ -109,7 +139,9 @@ describe("agent one-off email", () => {
     const before = await fakeDb.collection("agentIdempotency").get();
     const beforeCount = before.size;
 
-    const res = await POST(post({ contactId: "c1", subject: "S", body: "B" }, "s2"));
+    const res = await POST(
+      post({ contactId: "c1", subject: "S", body: "B" }, "s2")
+    );
     expect(res.status).toBe(429);
     expect(sendEmailMock).not.toHaveBeenCalled();
 
@@ -119,17 +151,26 @@ describe("agent one-off email", () => {
 
   it("404s when sending to a contact belonging to another sub-account", async () => {
     fakeDb.doc("contacts/cOther").set({
-      name: "Foreign", email: "foreign@ex.com", subAccountId: "subOther", agencyId: "ag1",
-      tags: [], emailOptedOut: false, smsOptedOut: false,
+      name: "Foreign",
+      email: "foreign@ex.com",
+      subAccountId: "subOther",
+      agencyId: "ag1",
+      tags: [],
+      emailOptedOut: false,
+      smsOptedOut: false,
     });
-    const res = await POST(post({ contactId: "cOther", subject: "S", body: "B" }));
+    const res = await POST(
+      post({ contactId: "cOther", subject: "S", body: "B" })
+    );
     expect(res.status).toBe(404);
     expect((await res.json()).error.code).toBe("NOT_FOUND");
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
   it("400s when the subject exceeds 300 characters", async () => {
-    const res = await POST(post({ contactId: "c1", subject: "x".repeat(301), body: "B" }));
+    const res = await POST(
+      post({ contactId: "c1", subject: "x".repeat(301), body: "B" })
+    );
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
     expect(sendEmailMock).not.toHaveBeenCalled();

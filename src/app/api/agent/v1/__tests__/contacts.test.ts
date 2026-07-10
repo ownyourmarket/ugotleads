@@ -33,7 +33,10 @@ function seedKey() {
 function post(body: unknown): Request {
   return new Request("http://test/api/agent/v1/contacts", {
     method: "POST",
-    headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify(body),
   });
 }
@@ -53,7 +56,12 @@ describe("agent contacts", () => {
 
   it("creates a contact with agent-stamped defaults", async () => {
     const res = await POST(
-      post({ subAccountId: "subMain", name: "Ann", email: "Ann@Ex.com", tags: ["box1"] }),
+      post({
+        subAccountId: "subMain",
+        name: "Ann",
+        email: "Ann@Ex.com",
+        tags: ["box1"],
+      })
     );
     expect(res.status).toBe(201);
     const { id } = (await res.json()).data;
@@ -72,20 +80,26 @@ describe("agent contacts", () => {
   });
 
   it("requires email or phone", async () => {
-    const res = await POST(post({ subAccountId: "subMain", name: "NoContact" }));
+    const res = await POST(
+      post({ subAccountId: "subMain", name: "NoContact" })
+    );
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
   });
 
   it("409s on duplicate email within the sub-account", async () => {
     await POST(post({ subAccountId: "subMain", email: "dup@ex.com" }));
-    const res = await POST(post({ subAccountId: "subMain", email: "dup@ex.com" }));
+    const res = await POST(
+      post({ subAccountId: "subMain", email: "dup@ex.com" })
+    );
     expect(res.status).toBe(409);
     expect((await res.json()).error.details.existingId).toBeDefined();
   });
 
   it("searches by tag within the allowed sub-account", async () => {
-    await POST(post({ subAccountId: "subMain", email: "a@ex.com", tags: ["box1"] }));
+    await POST(
+      post({ subAccountId: "subMain", email: "a@ex.com", tags: ["box1"] })
+    );
     await POST(post({ subAccountId: "subMain", email: "b@ex.com", tags: [] }));
     const res = await GET(get("subAccountId=subMain&tag=box1"));
     const body = await res.json();
@@ -99,13 +113,17 @@ describe("agent contacts", () => {
   });
 
   it("400s when tags contains non-string values", async () => {
-    const res = await POST(post({ subAccountId: "subMain", email: "t@ex.com", tags: [123] }));
+    const res = await POST(
+      post({ subAccountId: "subMain", email: "t@ex.com", tags: [123] })
+    );
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
   });
 
   it("403s when creating in a sub-account outside the allowlist", async () => {
-    const res = await POST(post({ subAccountId: "subOther", email: "x@ex.com" }));
+    const res = await POST(
+      post({ subAccountId: "subOther", email: "x@ex.com" })
+    );
     expect(res.status).toBe(403);
   });
 
@@ -117,16 +135,29 @@ describe("agent contacts", () => {
 
   it("400s on an unknown pipelineStage", async () => {
     const res = await POST(
-      post({ subAccountId: "subMain", email: "stage@ex.com", pipelineStage: "galaxy" }),
+      post({
+        subAccountId: "subMain",
+        email: "stage@ex.com",
+        pipelineStage: "galaxy",
+      })
     );
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
   });
 
   it("fires tag_added triggers for tags on create", async () => {
-    await POST(post({ subAccountId: "subMain", email: "t@ex.com", tags: ["box1", "warm"] }));
+    await POST(
+      post({
+        subAccountId: "subMain",
+        email: "t@ex.com",
+        tags: ["box1", "warm"],
+      })
+    );
     expect(fireTagsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ subAccountId: "subMain", addedTags: ["box1", "warm"] }),
+      expect.objectContaining({
+        subAccountId: "subMain",
+        addedTags: ["box1", "warm"],
+      })
     );
   });
 });

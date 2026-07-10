@@ -37,12 +37,10 @@ export async function fireTriggers(input: FireTriggersInput): Promise<void> {
     // before kicking off any executions; if true, log and bail. Doesn't
     // throw because callers (form submit, etc.) shouldn't fail their
     // primary action just because automations are paused.
-    const subSnap = await db
-      .doc(`subAccounts/${input.subAccountId}`)
-      .get();
+    const subSnap = await db.doc(`subAccounts/${input.subAccountId}`).get();
     if (subSnap.data()?.automationsPaused === true) {
       console.warn(
-        `[fireTriggers] sub-account ${input.subAccountId} has automationsPaused=true — skipping all triggers`,
+        `[fireTriggers] sub-account ${input.subAccountId} has automationsPaused=true — skipping all triggers`
       );
       return;
     }
@@ -69,7 +67,10 @@ export async function fireTriggers(input: FireTriggersInput): Promise<void> {
         }
       }
       if (automation.trigger.type === "tag_added") {
-        if (!automation.trigger.tag || automation.trigger.tag !== input.context.tag) {
+        if (
+          !automation.trigger.tag ||
+          automation.trigger.tag !== input.context.tag
+        ) {
           continue;
         }
       }
@@ -138,9 +139,12 @@ async function startExecution(input: StartExecutionInput): Promise<void> {
 
   if (!qstashIsConfigured()) {
     console.warn(
-      "[fireTriggers] QStash not configured — execution created but no callback scheduled. Configure QSTASH_TOKEN + signing keys to enable sending.",
+      "[fireTriggers] QStash not configured — execution created but no callback scheduled. Configure QSTASH_TOKEN + signing keys to enable sending."
     );
-    await ref.update({ status: "failed", stoppedReason: "automation_disabled" });
+    await ref.update({
+      status: "failed",
+      stoppedReason: "automation_disabled",
+    });
     return;
   }
 
@@ -151,7 +155,10 @@ async function startExecution(input: StartExecutionInput): Promise<void> {
   });
 
   if (!result) {
-    await ref.update({ status: "failed", stoppedReason: "automation_disabled" });
+    await ref.update({
+      status: "failed",
+      stoppedReason: "automation_disabled",
+    });
     return;
   }
 
@@ -184,7 +191,7 @@ function computeFirstStepDelay(automation: AutomationDoc): number | null {
   switch (automation.recipeType) {
     case "instant_response":
       return firstInstantResponseDelay(
-        automation.config as InstantResponseConfig,
+        automation.config as InstantResponseConfig
       );
     case "lead_nurture":
     case "outbound_sequence": {
@@ -198,7 +205,7 @@ function computeFirstStepDelay(automation: AutomationDoc): number | null {
 }
 
 function firstInstantResponseDelay(
-  config: InstantResponseConfig,
+  config: InstantResponseConfig
 ): number | null {
   const candidates: number[] = [];
   if (config.leadSms) candidates.push(Math.max(0, config.leadSms.delaySeconds));
@@ -209,7 +216,11 @@ function firstInstantResponseDelay(
   return Math.min(...candidates);
 }
 
-export type EnrollOutcome = "enrolled" | "already_enrolled" | "no_steps" | "failed";
+export type EnrollOutcome =
+  | "enrolled"
+  | "already_enrolled"
+  | "no_steps"
+  | "failed";
 
 /**
  * Idempotent-forever enrollment for outbound sequences. Deterministic
@@ -219,7 +230,9 @@ export type EnrollOutcome = "enrolled" | "already_enrolled" | "no_steps" | "fail
  * anti-double-email guarantee and what makes tag catch-up sync safe to
  * re-run.
  */
-export async function enrollContact(input: StartExecutionInput): Promise<EnrollOutcome> {
+export async function enrollContact(
+  input: StartExecutionInput
+): Promise<EnrollOutcome> {
   const db = getAdminDb();
   const { agencyId, subAccountId, automation, contactId } = input;
 
@@ -253,7 +266,9 @@ export async function enrollContact(input: StartExecutionInput): Promise<EnrollO
   }
 
   if (!qstashIsConfigured()) {
-    console.warn("[enrollContact] QStash not configured — enrollment created but not scheduled.");
+    console.warn(
+      "[enrollContact] QStash not configured — enrollment created but not scheduled."
+    );
     // Failure before anything was scheduled: delete the enrollment record so
     // the pair is retryable. "Idempotent forever" guards against double
     // SENDS — a failed enrollment never scheduled anything, so removing it

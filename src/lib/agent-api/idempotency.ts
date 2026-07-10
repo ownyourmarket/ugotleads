@@ -23,7 +23,7 @@ export async function withIdempotency(
   keyId: string,
   scope: string,
   handler: () => Promise<AgentHandlerResult>,
-  opts?: { preflight?: () => Promise<NextResponse | null> },
+  opts?: { preflight?: () => Promise<NextResponse | null> }
 ): Promise<NextResponse> {
   const idemKey = request.headers.get("idempotency-key");
   if (!idemKey) {
@@ -41,7 +41,11 @@ export async function withIdempotency(
 
   const snap = await ref.get();
   if (snap.exists) {
-    const saved = snap.data() as { status: number; body: unknown; expiresAtMs: number };
+    const saved = snap.data() as {
+      status: number;
+      body: unknown;
+      expiresAtMs: number;
+    };
     if (saved.expiresAtMs > Date.now()) {
       return NextResponse.json(saved.body, {
         status: saved.status,

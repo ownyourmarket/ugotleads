@@ -5,7 +5,10 @@ import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { agentError } from "@/lib/agent-api/errors";
 import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
-import { requireServiceAuth, subAccountAllowed } from "@/lib/auth/require-service-auth";
+import {
+  requireServiceAuth,
+  subAccountAllowed,
+} from "@/lib/auth/require-service-auth";
 import type { AutomationDoc } from "@/types";
 
 const MAX_BATCH = 200;
@@ -23,21 +26,32 @@ export const POST = withAgentRoute<{ params: Promise<{ id: string }> }>(
       body.contactIds.length > MAX_BATCH ||
       body.contactIds.some((c) => typeof c !== "string" || !c)
     ) {
-      return agentError("VALIDATION_FAILED", `contactIds must contain 1-${MAX_BATCH} non-empty strings.`, 400);
+      return agentError(
+        "VALIDATION_FAILED",
+        `contactIds must contain 1-${MAX_BATCH} non-empty strings.`,
+        400
+      );
     }
 
-    const access = await requireServiceAuth(request, { scope: "sequences:enroll" });
+    const access = await requireServiceAuth(request, {
+      scope: "sequences:enroll",
+    });
     if (access instanceof NextResponse) return access;
 
     const db = getAdminDb();
     const autoSnap = await db.doc(`automations/${id}`).get();
-    if (!autoSnap.exists) return agentError("NOT_FOUND", "Sequence not found.", 404);
+    if (!autoSnap.exists)
+      return agentError("NOT_FOUND", "Sequence not found.", 404);
     const automation = autoSnap.data() as AutomationDoc;
     if (!subAccountAllowed(access, automation.subAccountId)) {
       return agentError("NOT_FOUND", "Sequence not found.", 404);
     }
     if (automation.recipeType !== "outbound_sequence") {
-      return agentError("VALIDATION_FAILED", "Automation is not an outbound sequence.", 400);
+      return agentError(
+        "VALIDATION_FAILED",
+        "Automation is not an outbound sequence.",
+        400
+      );
     }
 
     let stopped = 0;
@@ -57,5 +71,5 @@ export const POST = withAgentRoute<{ params: Promise<{ id: string }> }>(
       stopped++;
     }
     return NextResponse.json({ data: { stopped, notRunning } });
-  },
+  }
 );

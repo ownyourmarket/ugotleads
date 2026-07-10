@@ -24,7 +24,10 @@ function sign(id: string, ts: string, body: string): string {
     .digest("base64");
 }
 
-function signedRequest(eventBody: unknown, opts?: { badSig?: boolean }): Request {
+function signedRequest(
+  eventBody: unknown,
+  opts?: { badSig?: boolean }
+): Request {
   const body = JSON.stringify(eventBody);
   const id = `msg_${randomUUID()}`;
   const ts = String(Math.floor(Date.now() / 1000));
@@ -50,7 +53,9 @@ beforeEach(() => {
   process.env.RESEND_INBOUND_WEBHOOK_SECRET = `whsec_${secretB64}`;
   process.env.AUTOMATIONS_TOKEN_SECRET = "test-secret-please-ignore-0123456789";
 
-  fakeDb.doc("subAccounts/subMain").set({ agencyId: "ag1", replyToEmail: "star@myusa.com" });
+  fakeDb
+    .doc("subAccounts/subMain")
+    .set({ agencyId: "ag1", replyToEmail: "star@myusa.com" });
   fakeDb.doc("contacts/c1").set({
     email: "prospect@ex.com",
     subAccountId: "subMain",
@@ -58,8 +63,12 @@ beforeEach(() => {
     name: "Pat",
     tags: [],
   });
-  fakeDb.doc("automations/seq1").set({ recipeType: "outbound_sequence", name: "Box1" });
-  fakeDb.doc("automations/nurt1").set({ recipeType: "lead_nurture", name: "Nurture" });
+  fakeDb
+    .doc("automations/seq1")
+    .set({ recipeType: "outbound_sequence", name: "Box1" });
+  fakeDb
+    .doc("automations/nurt1")
+    .set({ recipeType: "lead_nurture", name: "Nurture" });
   fakeDb.doc("automation_executions/seq1_c1").set({
     automationId: "seq1",
     contactId: "c1",
@@ -81,12 +90,14 @@ beforeEach(() => {
 describe("POST /api/webhooks/resend-inbound", () => {
   it("401s on a bad signature and 503s when the secret is unset", async () => {
     const bad = await POST(
-      signedRequest({ type: "email.received", data: {} }, { badSig: true }),
+      signedRequest({ type: "email.received", data: {} }, { badSig: true })
     );
     expect(bad.status).toBe(401);
 
     delete process.env.RESEND_INBOUND_WEBHOOK_SECRET;
-    const unset = await POST(signedRequest({ type: "email.received", data: {} }));
+    const unset = await POST(
+      signedRequest({ type: "email.received", data: {} })
+    );
     expect(unset.status).toBe(503);
   });
 
@@ -102,7 +113,7 @@ describe("POST /api/webhooks/resend-inbound", () => {
           subject: "Re: Quick question",
           text: "Sounds interesting, call me",
         },
-      }),
+      })
     );
     expect(res.status).toBe(200);
     expect((await res.json()).matched).toBe(true);
@@ -116,17 +127,17 @@ describe("POST /api/webhooks/resend-inbound", () => {
     });
 
     expect(
-      (await fakeDb.doc("automation_executions/seq1_c1").get()).data(),
+      (await fakeDb.doc("automation_executions/seq1_c1").get()).data()
     ).toMatchObject({ status: "stopped", stoppedReason: "replied" });
     expect(
-      (await fakeDb.doc("automation_executions/nurtX").get()).data()?.status,
+      (await fakeDb.doc("automation_executions/nurtX").get()).data()?.status
     ).toBe("running");
 
     const acts = await fakeDb.collection("contacts/c1/activities").get();
     expect(acts.docs.some((d) => d.data()?.type === "email_reply")).toBe(true);
 
     expect(sendEmailMock).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "star@myusa.com" }),
+      expect.objectContaining({ to: "star@myusa.com" })
     );
   });
 
@@ -141,12 +152,15 @@ describe("POST /api/webhooks/resend-inbound", () => {
           subject: "Following up",
           text: "hi there",
         },
-      }),
+      })
     );
     expect(matchedRes.status).toBe(200);
     expect((await matchedRes.json()).matched).toBe(true);
     const matchedDoc = (await fakeDb.doc("inbound_emails/re_A1").get()).data();
-    expect(matchedDoc).toMatchObject({ contactId: "c1", matchedBy: "email_lookup" });
+    expect(matchedDoc).toMatchObject({
+      contactId: "c1",
+      matchedBy: "email_lookup",
+    });
 
     const unmatchedRes = await POST(
       signedRequest({
@@ -158,11 +172,13 @@ describe("POST /api/webhooks/resend-inbound", () => {
           subject: "spam?",
           text: "hey there",
         },
-      }),
+      })
     );
     expect(unmatchedRes.status).toBe(200);
     expect((await unmatchedRes.json()).matched).toBe(false);
-    const unmatchedDoc = (await fakeDb.doc("inbound_emails/re_B1").get()).data();
+    const unmatchedDoc = (
+      await fakeDb.doc("inbound_emails/re_B1").get()
+    ).data();
     expect(unmatchedDoc).toMatchObject({
       contactId: null,
       matchedBy: null,
@@ -186,7 +202,7 @@ describe("POST /api/webhooks/resend-inbound", () => {
           subject: "spoofed?",
           text: "hi",
         },
-      }),
+      })
     );
     expect(res.status).toBe(200);
     expect((await res.json()).matched).toBe(false);
@@ -196,7 +212,7 @@ describe("POST /api/webhooks/resend-inbound", () => {
 
   it("ignores non-received event types", async () => {
     const res = await POST(
-      signedRequest({ type: "email.bounced", data: { from: "x@y.com" } }),
+      signedRequest({ type: "email.bounced", data: { from: "x@y.com" } })
     );
     expect(res.status).toBe(200);
     expect(await res.json()).toMatchObject({ ok: true, ignored: true });
@@ -220,8 +236,12 @@ describe("POST /api/webhooks/resend-inbound", () => {
     const res = await POST(
       signedRequest({
         type: "email.received",
-        data: { from: { email: "prospect@ex.com" }, to: "reply+c1@hey.ugotleads.io", subject: null },
-      }),
+        data: {
+          from: { email: "prospect@ex.com" },
+          to: "reply+c1@hey.ugotleads.io",
+          subject: null,
+        },
+      })
     );
     expect(res.status).toBe(200);
   });

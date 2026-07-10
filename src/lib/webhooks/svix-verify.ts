@@ -43,7 +43,10 @@ export function verifySvixSignature(input: {
     } catch {
       continue;
     }
-    if (candidate.length === expected.length && timingSafeEqual(candidate, expected)) {
+    if (
+      candidate.length === expected.length &&
+      timingSafeEqual(candidate, expected)
+    ) {
       return true;
     }
   }

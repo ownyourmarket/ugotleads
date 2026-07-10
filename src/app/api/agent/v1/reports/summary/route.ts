@@ -12,7 +12,11 @@ export const GET = withAgentRoute(async (request: Request) => {
   const url = new URL(request.url);
   const subAccountId = url.searchParams.get("subAccountId");
   if (!subAccountId) {
-    return agentError("VALIDATION_FAILED", "subAccountId query param is required.", 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      "subAccountId query param is required.",
+      400
+    );
   }
   const access = await requireServiceAuth(request, {
     scope: "reports:read",
@@ -51,7 +55,10 @@ export const GET = withAgentRoute(async (request: Request) => {
     const deal = d.data();
     const stage = (deal.stageId as string) ?? "none";
     dealsByStage[stage] = (dealsByStage[stage] ?? 0) + 1;
-    const value = typeof deal.value === "number" && Number.isFinite(deal.value) ? deal.value : 0;
+    const value =
+      typeof deal.value === "number" && Number.isFinite(deal.value)
+        ? deal.value
+        : 0;
     valueByStage[stage] = (valueByStage[stage] ?? 0) + value;
   }
 

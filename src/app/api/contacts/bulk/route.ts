@@ -47,10 +47,15 @@ export async function POST(request: Request) {
     tag?: string;
   } | null;
 
-  if (!body || !body.action || !Array.isArray(body.contactIds) || body.contactIds.length === 0) {
+  if (
+    !body ||
+    !body.action ||
+    !Array.isArray(body.contactIds) ||
+    body.contactIds.length === 0
+  ) {
     return NextResponse.json(
       { error: "action and contactIds[] are required." },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -58,7 +63,7 @@ export async function POST(request: Request) {
   if (contactIds.length > 200) {
     return NextResponse.json(
       { error: "Max 200 contacts per bulk action." },
-      { status: 400 },
+      { status: 400 }
     );
   }
 
@@ -85,7 +90,7 @@ export async function POST(request: Request) {
     if (!memberSnap.exists || m?.status !== "active" || m?.role !== "admin") {
       return NextResponse.json(
         { error: "Only sub-account admins can perform bulk actions." },
-        { status: 403 },
+        { status: 403 }
       );
     }
   }
@@ -113,7 +118,12 @@ export async function POST(request: Request) {
 
     for (const id of contactIds) {
       try {
-        await fireTagAddedTriggers({ agencyId, subAccountId, contactId: id, addedTags: [trimmed] });
+        await fireTagAddedTriggers({
+          agencyId,
+          subAccountId,
+          contactId: id,
+          addedTags: [trimmed],
+        });
       } catch (err) {
         console.warn("[contacts/bulk] tag triggers failed", err);
       }

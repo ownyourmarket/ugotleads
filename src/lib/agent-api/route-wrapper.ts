@@ -9,7 +9,7 @@ import { agentError } from "@/lib/agent-api/errors";
  * agentError(...) themselves; anything thrown lands here.
  */
 export function withAgentRoute<Ctx = unknown>(
-  handler: (request: Request, ctx: Ctx) => Promise<NextResponse>,
+  handler: (request: Request, ctx: Ctx) => Promise<NextResponse>
 ): (request: Request, ctx?: Ctx) => Promise<NextResponse> {
   // ctx is optional here (rather than mirroring the handler's required Ctx)
   // so routes with no dynamic segments — where Ctx defaults to `unknown` —

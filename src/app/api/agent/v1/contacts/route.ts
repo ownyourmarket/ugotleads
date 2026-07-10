@@ -25,7 +25,11 @@ export const POST = withAgentRoute(async (request: Request) => {
     body.tags !== undefined &&
     (!Array.isArray(body.tags) || body.tags.some((t) => typeof t !== "string"))
   ) {
-    return agentError("VALIDATION_FAILED", "tags must be an array of strings.", 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      "tags must be an array of strings.",
+      400
+    );
   }
   if (
     typeof body.pipelineStage === "string" &&
@@ -35,7 +39,7 @@ export const POST = withAgentRoute(async (request: Request) => {
     return agentError(
       "VALIDATION_FAILED",
       `Unknown pipelineStage. Valid: ${PIPELINE_STAGES.map((s) => s.id).join(", ")}.`,
-      400,
+      400
     );
   }
 
@@ -45,10 +49,15 @@ export const POST = withAgentRoute(async (request: Request) => {
   });
   if (access instanceof NextResponse) return access;
 
-  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const email =
+    typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
   const phone = typeof body.phone === "string" ? body.phone.trim() : "";
   if (!email && !phone) {
-    return agentError("VALIDATION_FAILED", "A valid email or a phone number is required.", 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      "A valid email or a phone number is required.",
+      400
+    );
   }
   if (email && !isValidEmail(email)) {
     return agentError("VALIDATION_FAILED", "Email format is invalid.", 400);
@@ -59,10 +68,11 @@ export const POST = withAgentRoute(async (request: Request) => {
     const created = await db.runTransaction(async (tx) => {
       if (email) {
         const dup = await tx.get(
-          db.collection("contacts")
+          db
+            .collection("contacts")
             .where("subAccountId", "==", access.subAccountId)
             .where("email", "==", email)
-            .limit(1),
+            .limit(1)
         );
         if (!dup.empty) return { duplicateId: dup.docs[0].id as string };
       }
@@ -76,7 +86,8 @@ export const POST = withAgentRoute(async (request: Request) => {
         body: {
           error: {
             code: "VALIDATION_FAILED",
-            message: "A contact with this email already exists in the sub-account.",
+            message:
+              "A contact with this email already exists in the sub-account.",
             details: { existingId: created.duplicateId },
           },
         },
@@ -84,7 +95,7 @@ export const POST = withAgentRoute(async (request: Request) => {
     }
 
     const createdTags = (Array.isArray(body.tags) ? body.tags : []).filter(
-      (t): t is string => typeof t === "string" && !!t.trim(),
+      (t): t is string => typeof t === "string" && !!t.trim()
     );
     if (createdTags.length) {
       try {
@@ -107,7 +118,11 @@ export const GET = withAgentRoute(async (request: Request) => {
   const url = new URL(request.url);
   const subAccountId = url.searchParams.get("subAccountId");
   if (!subAccountId) {
-    return agentError("VALIDATION_FAILED", "subAccountId query param is required.", 400);
+    return agentError(
+      "VALIDATION_FAILED",
+      "subAccountId query param is required.",
+      400
+    );
   }
 
   const access = await requireServiceAuth(request, {
@@ -116,7 +131,10 @@ export const GET = withAgentRoute(async (request: Request) => {
   });
   if (access instanceof NextResponse) return access;
 
-  const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 20, 1), 100);
+  const limit = Math.min(
+    Math.max(Number(url.searchParams.get("limit")) || 20, 1),
+    100
+  );
   let q = getAdminDb()
     .collection("contacts")
     .where("subAccountId", "==", subAccountId);

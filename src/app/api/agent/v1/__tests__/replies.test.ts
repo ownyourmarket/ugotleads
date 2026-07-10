@@ -115,7 +115,10 @@ function get(qs: string): Request {
 function patch(id: string, body: unknown): Request {
   return new Request(`http://test/api/agent/v1/replies/${id}`, {
     method: "PATCH",
-    headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify(body),
   });
 }
@@ -137,7 +140,16 @@ describe("agent replies", () => {
     // Verify field allow-list
     const reply = body.data[0];
     expect(Object.keys(reply).sort()).toEqual(
-      ["contactId", "fromEmail", "handled", "id", "matchedBy", "receivedAt", "subject", "text"].sort(),
+      [
+        "contactId",
+        "fromEmail",
+        "handled",
+        "id",
+        "matchedBy",
+        "receivedAt",
+        "subject",
+        "text",
+      ].sort()
     );
   });
 

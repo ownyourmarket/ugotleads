@@ -12,7 +12,7 @@ import {
 async function loadAuthorizedReply(
   request: Request,
   id: string,
-  scope: "replies:read" | "replies:write",
+  scope: "replies:read" | "replies:write"
 ) {
   const access = await requireServiceAuth(request, { scope });
   if (access instanceof NextResponse) return access;
@@ -28,24 +28,24 @@ async function loadAuthorizedReply(
   return { access, ref, reply };
 }
 
-export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
-  request,
-  ctx,
-) => {
-  const { id } = await ctx.params;
-  const body = (await request.json().catch(() => null)) as {
-    handled?: unknown;
-  } | null;
-  if (!body) return agentError("VALIDATION_FAILED", "Invalid JSON body.", 400);
+export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(
+  async (request, ctx) => {
+    const { id } = await ctx.params;
+    const body = (await request.json().catch(() => null)) as {
+      handled?: unknown;
+    } | null;
+    if (!body)
+      return agentError("VALIDATION_FAILED", "Invalid JSON body.", 400);
 
-  if (typeof body.handled !== "boolean") {
-    return agentError("VALIDATION_FAILED", "handled must be a boolean.", 400);
+    if (typeof body.handled !== "boolean") {
+      return agentError("VALIDATION_FAILED", "handled must be a boolean.", 400);
+    }
+
+    const loaded = await loadAuthorizedReply(request, id, "replies:write");
+    if (loaded instanceof NextResponse) return loaded;
+    const { ref } = loaded;
+
+    await ref.update({ handled: body.handled });
+    return NextResponse.json({ data: { id, handled: body.handled } });
   }
-
-  const loaded = await loadAuthorizedReply(request, id, "replies:write");
-  if (loaded instanceof NextResponse) return loaded;
-  const { ref } = loaded;
-
-  await ref.update({ handled: body.handled });
-  return NextResponse.json({ data: { id, handled: body.handled } });
-});
+);

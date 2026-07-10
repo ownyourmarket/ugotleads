@@ -20,27 +20,51 @@ beforeEach(() => {
   resetFakeDb();
   const gen = generateServiceKey();
   fakeDb.doc("agencyServiceKeys/key1").set({
-    agencyId: "ag1", label: "t", keyHash: gen.keyHash, keyPrefix: gen.keyPrefix,
-    allowedSubAccounts: ["subMain"], scopes: ["contacts:read", "contacts:write"], status: "active",
+    agencyId: "ag1",
+    label: "t",
+    keyHash: gen.keyHash,
+    keyPrefix: gen.keyPrefix,
+    allowedSubAccounts: ["subMain"],
+    scopes: ["contacts:read", "contacts:write"],
+    status: "active",
   });
   KEY = gen.key;
   fireTagsMock.mockClear();
   fakeDb.doc("contacts/c1").set({
-    name: "Ann", email: "a@ex.com", phone: "", company: "", tags: ["box1"],
-    pipelineStage: "new", agencyId: "ag1", subAccountId: "subMain",
-    emailOptedOut: false, smsOptedOut: false,
+    name: "Ann",
+    email: "a@ex.com",
+    phone: "",
+    company: "",
+    tags: ["box1"],
+    pipelineStage: "new",
+    agencyId: "ag1",
+    subAccountId: "subMain",
+    emailOptedOut: false,
+    smsOptedOut: false,
   });
   fakeDb.doc("contacts/cForeign").set({
-    name: "X", email: "x@ex.com", tags: [], pipelineStage: "new",
-    agencyId: "ag1", subAccountId: "subOther", emailOptedOut: false, smsOptedOut: false,
+    name: "X",
+    email: "x@ex.com",
+    tags: [],
+    pipelineStage: "new",
+    agencyId: "ag1",
+    subAccountId: "subOther",
+    emailOptedOut: false,
+    smsOptedOut: false,
   });
 });
 
-function patch(id: string, body: unknown): [Request, { params: Promise<{ id: string }> }] {
+function patch(
+  id: string,
+  body: unknown
+): [Request, { params: Promise<{ id: string }> }] {
   return [
     new Request(`http://test/api/agent/v1/contacts/${id}`, {
       method: "PATCH",
-      headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+      headers: {
+        authorization: `Bearer ${KEY}`,
+        "content-type": "application/json",
+      },
       body: JSON.stringify(body),
     }),
     { params: Promise.resolve({ id }) },
@@ -50,8 +74,10 @@ function patch(id: string, body: unknown): [Request, { params: Promise<{ id: str
 describe("agent contact detail", () => {
   it("gets a contact in an allowed sub-account", async () => {
     const res = await GET(
-      new Request("http://test/x", { headers: { authorization: `Bearer ${KEY}` } }),
-      { params: Promise.resolve({ id: "c1" }) },
+      new Request("http://test/x", {
+        headers: { authorization: `Bearer ${KEY}` },
+      }),
+      { params: Promise.resolve({ id: "c1" }) }
     );
     expect(res.status).toBe(200);
     expect((await res.json()).data.name).toBe("Ann");
@@ -59,20 +85,26 @@ describe("agent contact detail", () => {
 
   it("404s for a contact outside the allowlist (indistinguishable from missing)", async () => {
     const foreign = await GET(
-      new Request("http://test/x", { headers: { authorization: `Bearer ${KEY}` } }),
-      { params: Promise.resolve({ id: "cForeign" }) },
+      new Request("http://test/x", {
+        headers: { authorization: `Bearer ${KEY}` },
+      }),
+      { params: Promise.resolve({ id: "cForeign" }) }
     );
     expect(foreign.status).toBe(404);
     expect((await foreign.json()).error.code).toBe("NOT_FOUND");
     const missing = await GET(
-      new Request("http://test/x", { headers: { authorization: `Bearer ${KEY}` } }),
-      { params: Promise.resolve({ id: "nope" }) },
+      new Request("http://test/x", {
+        headers: { authorization: `Bearer ${KEY}` },
+      }),
+      { params: Promise.resolve({ id: "nope" }) }
     );
     expect(missing.status).toBe(404);
   });
 
   it("adds and removes tags in one call", async () => {
-    const res = await PATCH(...patch("c1", { addTags: ["box1", "warm"], removeTags: ["box1"] }));
+    const res = await PATCH(
+      ...patch("c1", { addTags: ["box1", "warm"], removeTags: ["box1"] })
+    );
     expect(res.status).toBe(200);
     expect((await res.json()).data.tags).toEqual(["warm"]);
   });
@@ -109,17 +141,26 @@ describe("agent contact detail", () => {
     const res = await PATCH(...patch("c1", { name: 42 }));
     expect(res.status).toBe(200);
     const after = await GET(
-      new Request("http://test/x", { headers: { authorization: `Bearer ${KEY}` } }),
-      { params: Promise.resolve({ id: "c1" }) },
+      new Request("http://test/x", {
+        headers: { authorization: `Bearer ${KEY}` },
+      }),
+      { params: Promise.resolve({ id: "c1" }) }
     );
     expect((await after.json()).data.name).toBe("Ann");
   });
 
   it("409s when patching email to one already used by another contact in the sub-account", async () => {
     fakeDb.doc("contacts/c2").set({
-      name: "Bea", email: "taken@ex.com", phone: "", company: "", tags: [],
-      pipelineStage: "new", agencyId: "ag1", subAccountId: "subMain",
-      emailOptedOut: false, smsOptedOut: false,
+      name: "Bea",
+      email: "taken@ex.com",
+      phone: "",
+      company: "",
+      tags: [],
+      pipelineStage: "new",
+      agencyId: "ag1",
+      subAccountId: "subMain",
+      emailOptedOut: false,
+      smsOptedOut: false,
     });
     const res = await PATCH(...patch("c1", { email: "taken@ex.com" }));
     expect(res.status).toBe(409);
@@ -141,7 +182,7 @@ describe("agent contact detail", () => {
     // c1 already has ["box1"]
     await PATCH(...patch("c1", { addTags: ["box1", "warm"] }));
     expect(fireTagsMock).toHaveBeenCalledWith(
-      expect.objectContaining({ contactId: "c1", addedTags: ["warm"] }),
+      expect.objectContaining({ contactId: "c1", addedTags: ["warm"] })
     );
   });
 });

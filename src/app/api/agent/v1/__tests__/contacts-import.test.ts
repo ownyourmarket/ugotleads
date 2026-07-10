@@ -15,8 +15,13 @@ beforeEach(() => {
   resetFakeDb();
   const gen = generateServiceKey();
   fakeDb.doc("agencyServiceKeys/key1").set({
-    agencyId: "ag1", label: "t", keyHash: gen.keyHash, keyPrefix: gen.keyPrefix,
-    allowedSubAccounts: ["subMain"], scopes: ["contacts:write"], status: "active",
+    agencyId: "ag1",
+    label: "t",
+    keyHash: gen.keyHash,
+    keyPrefix: gen.keyPrefix,
+    allowedSubAccounts: ["subMain"],
+    scopes: ["contacts:write"],
+    status: "active",
   });
   KEY = gen.key;
 });
@@ -24,14 +29,19 @@ beforeEach(() => {
 function post(body: unknown): Request {
   return new Request("http://test/api/agent/v1/contacts/import", {
     method: "POST",
-    headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+    },
     body: JSON.stringify(body),
   });
 }
 
 describe("agent contacts import", () => {
   it("creates valid rows, skips invalid + duplicate rows with reasons", async () => {
-    fakeDb.doc("contacts/existing").set({ subAccountId: "subMain", email: "dup@ex.com", tags: [] });
+    fakeDb
+      .doc("contacts/existing")
+      .set({ subAccountId: "subMain", email: "dup@ex.com", tags: [] });
     const res = await POST(
       post({
         subAccountId: "subMain",
@@ -42,7 +52,7 @@ describe("agent contacts import", () => {
           { name: "Dup", email: "dup@ex.com" },
           { name: "Empty" },
         ],
-      }),
+      })
     );
     expect(res.status).toBe(201);
     const { created, skipped } = (await res.json()).data;
@@ -55,7 +65,9 @@ describe("agent contacts import", () => {
   });
 
   it("rejects more than 200 rows", async () => {
-    const rows = Array.from({ length: 201 }, (_, i) => ({ phone: `+1404555${i}` }));
+    const rows = Array.from({ length: 201 }, (_, i) => ({
+      phone: `+1404555${i}`,
+    }));
     const res = await POST(post({ subAccountId: "subMain", contacts: rows }));
     expect(res.status).toBe(400);
   });
@@ -65,7 +77,7 @@ describe("agent contacts import", () => {
       post({
         subAccountId: "subMain",
         contacts: [null, { name: "Good", phone: "+14045550199" }],
-      }),
+      })
     );
     expect(res.status).toBe(201);
     const { created, skipped } = (await res.json()).data;
@@ -78,7 +90,7 @@ describe("agent contacts import", () => {
       post({
         subAccountId: "subMain",
         contacts: [{ email: 42, phone: "+14045550101" }],
-      }),
+      })
     );
     expect(res.status).toBe(201);
     const { created, skipped } = (await res.json()).data;
@@ -92,8 +104,10 @@ describe("agent contacts import", () => {
     const res = await POST(
       post({
         subAccountId: "subMain",
-        contacts: [{ name: "Bad Stage", phone: "+14045550102", pipelineStage: "galaxy" }],
-      }),
+        contacts: [
+          { name: "Bad Stage", phone: "+14045550102", pipelineStage: "galaxy" },
+        ],
+      })
     );
     expect(res.status).toBe(201);
     const { created, skipped } = (await res.json()).data;
@@ -106,7 +120,7 @@ describe("agent contacts import", () => {
       post({
         subAccountId: "subMain",
         contacts: [{ email: 42 }],
-      }),
+      })
     );
     expect(res.status).toBe(201);
     const { created, skipped } = (await res.json()).data;

@@ -64,7 +64,7 @@ const PUBLIC_PATH_PATTERNS: RegExp[] = [
 function isPublicPath(pathname: string): boolean {
   if (
     PUBLIC_PATHS.some(
-      (path) => pathname === path || pathname.startsWith(`${path}/`),
+      (path) => pathname === path || pathname.startsWith(`${path}/`)
     )
   ) {
     return true;
@@ -102,7 +102,7 @@ export default function middleware(request: NextRequest) {
       clientEmail: process.env.FIREBASE_ADMIN_CLIENT_EMAIL ?? "",
       privateKey: (process.env.FIREBASE_ADMIN_PRIVATE_KEY ?? "").replace(
         /\\n/g,
-        "\n",
+        "\n"
       ),
     },
     handleValidToken: async ({ decodedToken }, headers) => {
