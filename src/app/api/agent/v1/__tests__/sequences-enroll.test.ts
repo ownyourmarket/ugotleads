@@ -115,6 +115,25 @@ describe("agent sequence enroll/unenroll/status", () => {
     });
   });
 
+  it("refuses a tag audience over 200 with a loud 400 instead of silently capping", async () => {
+    for (let i = 0; i < 201; i++) {
+      fakeDb.doc(`contacts/big${i}`).set({
+        subAccountId: "subMain",
+        tags: ["big"],
+      });
+    }
+    const res = await ENROLL(
+      post({ tag: "big", confirm: { expectedCount: 201, summary: "big batch" } }),
+      ctx
+    );
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error.code).toBe("VALIDATION_FAILED");
+    expect(json.error.message).toBe(
+      "Tag audience exceeds 200 contacts — enroll in batches via contactIds[], or split the tag."
+    );
+  });
+
   it("enrolls by tag and reports skips for unknown ids", async () => {
     const byTag = await ENROLL(
       post({ tag: "box1", confirm: { expectedCount: 2, summary: "tag sync" } }),

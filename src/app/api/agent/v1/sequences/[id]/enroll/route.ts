@@ -87,8 +87,16 @@ export const POST = withAgentRoute<{ params: Promise<{ id: string }> }>(
         .collection("contacts")
         .where("subAccountId", "==", automation.subAccountId)
         .where("tags", "array-contains", tag)
-        .limit(MAX_BATCH)
+        .limit(MAX_BATCH + 1)
         .get();
+      if (matches.size === MAX_BATCH + 1) {
+        return agentError(
+          "VALIDATION_FAILED",
+          "Tag audience exceeds 200 contacts — enroll in batches via contactIds[], or split the tag.",
+          400,
+          { limit: MAX_BATCH }
+        );
+      }
       audience = matches.docs.map((d) => d.id);
     }
 

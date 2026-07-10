@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeDb, resetFakeDb } from "@/test/fake-admin";
-import type { AutomationDoc } from "@/types";
 
 vi.mock("@/lib/firebase/admin", async () => {
   const { fakeDb } = await import("@/test/fake-admin");

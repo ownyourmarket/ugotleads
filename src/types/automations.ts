@@ -1,8 +1,9 @@
 import type { Timestamp, FieldValue } from "firebase/firestore";
 
 /**
- * v1 ships only "instant_response". v2 will extend this union with
- * "nurture", "stage_trigger", "booking_lifecycle", "stale_revive".
+ * Three recipes ship: "instant_response" (immediate reply to a new lead),
+ * "lead_nurture" (form-triggered drip), and "outbound_sequence" (manual or
+ * tag-enrolled cold outreach that stops on reply).
  */
 export type RecipeType =
   | "instant_response"

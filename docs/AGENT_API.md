@@ -112,14 +112,15 @@ Mutating endpoints that create records (`POST /contacts`, `POST
   transaction wrapping it). Acceptable for a single orchestrator caller; not
   safe for a fleet of concurrent callers sharing one key.
 
-**Warning:** an `Idempotency-Key` is scoped per service key, but *not* per
-endpoint — the storage key is `{keyId}_{sha256(idempotencyKey)}`, with no
-route or path segment mixed in. Reusing the same `Idempotency-Key` value
-across two different endpoints (or even two different logical actions on
-the same endpoint) will replay the *wrong* cached response on the second
-call instead of running it. Always generate a fresh, unique key per logical
-action (a UUID per operation is the simplest safe pattern) — never reuse
-one key as a general "this agent run" identifier across multiple calls.
+Keys are scoped per service key **and** per endpoint — the storage key is
+`{keyId}_{sha256(scope + "\n" + idempotencyKey)}`, where `scope` is the
+route's own identifier (e.g. `"sequences:enroll"`), so the same
+`Idempotency-Key` value reused on two different endpoints resolves to two
+different storage keys and will not cross-replay. Still generate a fresh,
+unique key per logical action (a UUID per operation is the simplest safe
+pattern) — reusing one key as a general "this agent run" identifier across
+multiple calls on the *same* endpoint will still replay the first call's
+response on the second.
 
 ## Endpoints
 
@@ -362,7 +363,15 @@ providing both or neither is `400 VALIDATION_FAILED`. `confirm.expectedCount`
 (number, required) must equal the resolved audience size:
 - `contactIds` path: `contactIds.length`.
 - `tag` path: the live count of contacts in `subAccountId` with that tag
-  (`array-contains`), capped at 200.
+  (`array-contains`). If that count exceeds 200, the call fails loudly
+  *before* touching any contact — `400 VALIDATION_FAILED`,
+  `"Tag audience exceeds 200 contacts — enroll in batches via
+  contactIds[], or split the tag."` (`details: { limit: 200 }`). This is
+  deliberate: silently enrolling only the first 200 matches would leave
+  the rest of the tagged audience permanently un-enrollable later (see
+  the idempotent-forever note above), so an oversized tag audience must be
+  split into `contactIds[]` batches or a narrower tag rather than resolved
+  automatically.
 
 If `confirm` is missing or `expectedCount` doesn't match, the call is
 refused *before touching any contact* with:
@@ -467,10 +476,10 @@ Response, observed in the Task 13 smoke:
 ```
 `matchedBy` is `"reply_token"` when the signed `reply+<token>@domain`
 address matched, or `"email_lookup"` when it fell back to a unique
-from-email match (or when no token was present at all). **See the
-case-sensitivity bug noted under Sequences/Replies deviations below —
-`matchedBy: "reply_token"` should be expected far more rarely than the
-design intends until that's fixed.**
+from-email match (or when no token was present at all). Token capture is
+case-preserving, so `"reply_token"` is the expected match for any reply
+sent to the signed address, including mixed-case Firestore contact IDs;
+`"email_lookup"` remains the fallback for tokenless replies.
 
 ### `PATCH /api/agent/v1/replies/{id}`
 **Scope:** `replies:write`
@@ -525,25 +534,14 @@ inbound event is always stored as an `inbound_emails` doc (`id` = Resend's
 overwrites in place and resets `handled` to `false` — a documented,
 deliberate dedupe tradeoff, not a bug).
 
-**Known gap:** the reply-token address format is
-`reply+<contactId>.<12-hex-char HMAC>@domain`
-(`buildReplyToken`/`resolveSequenceReplyTo`, `src/lib/automations/reply-token.ts`,
-`sequence-reply-to.ts`) — built by the *executor* when it sends a sequence
-step, using `AUTOMATIONS_TOKEN_SECRET`. The webhook rebuilds the same HMAC
-to verify it. **Live testing in Task 13 found the webhook's address
-extraction lowercases the entire `to` address (`extractEmail()`'s
-`.toLowerCase()`) before regex-matching the token, which corrupts the
-contact-ID portion of the token for any ID containing uppercase letters —
-i.e. nearly every Firestore auto-generated document ID.** Reproduced live
-against production Firestore: contact id `kHJ4OuW2tiYKyNKcgsHD` signs to
-HMAC12 `86b111932501`; the webhook's lowercased read of the same id
-(`khj4ouw2tiykynkcgshd`) computes `a66f947991d4` instead, so verification
-fails and the request silently falls through to the from-email fallback.
-**Effectively, `matchedBy: "reply_token"` will not occur in production for
-almost any real contact until this is fixed** — flagged as a follow-up
-task (see `.superpowers/sdd/task-13-report.md` for the full repro and fix
-suggestion); not fixed here per this task's docs-and-verification-only
-scope.
+The reply-token address format is `reply+<contactId>.<12-hex-char
+HMAC>@domain` (`buildReplyToken`/`resolveSequenceReplyTo`,
+`src/lib/automations/reply-token.ts`, `sequence-reply-to.ts`) — built by
+the *executor* when it sends a sequence step, using
+`AUTOMATIONS_TOKEN_SECRET`. The webhook rebuilds the same HMAC to verify
+it. Token capture is case-preserving end to end, so this matches correctly
+for mixed-case Firestore document IDs; the from-email lookup remains the
+fallback for tokenless replies.
 
 ### `POST /api/agent/v1/messages/email`
 **Scope:** `sends:execute`

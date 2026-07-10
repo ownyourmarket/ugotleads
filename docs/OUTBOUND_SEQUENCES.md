@@ -108,21 +108,49 @@ is the #1 cause of "it worked locally but not in prod."** Do this step
 
 ## 4. Kill switches
 
+Read this before you flip anything — both of the sequence-level switches
+below are **terminal**, not a pause button. Know that going in.
+
 From least to most drastic:
 
 - **Unenroll specific contacts.** `POST /sequences/{id}/unenroll` with
   `contactIds[]` — stops just those, `stoppedReason: "manual"`.
 - **Disable the sequence.** Toggle `enabled: false` on the automation (via
   the dashboard's automations page, or a direct PATCH if/when that route
-  exists) — stops new enrollments; contacts already running keep going
-  until their steps finish or they reply.
+  exists). This does **not** let in-flight contacts finish. The executor
+  checks `enabled` on every step it processes, so a disabled automation
+  permanently stops every currently-running execution the next time it
+  would have sent — it does not defer or resume when you re-enable.
 - **Sub-account-wide pause.** `automationsPaused: true` on the sub-account
   doc — the operator panic button. `fireTriggers` checks this before doing
   anything, so it blocks *all* new trigger-based enrollments (any recipe
-  type), not just this sequence. Doesn't touch executions already running.
+  type), not just this sequence. But it is **also terminal for executions
+  already running**, not a soft pause: the executor stops any in-flight
+  step the same way `enabled: false` does. There is no state where
+  execution is "paused" and will pick back up later.
 - **Unsubscribe links.** Always present (`{{unsubscribeLink}}` is a
   required merge tag in every email template) — a contact can always opt
   themselves out regardless of what any of the above are set to.
+
+**The part that catches people out:** enrollment is idempotent-forever —
+`enrollContact` creates the execution doc with `tx.create()` keyed on
+`${sequenceId}_${contactId}`, so a contact can never be enrolled in the
+same sequence twice, ever. Once `enabled: false` or
+`automationsPaused: true` has stopped a contact's execution, that contact
+is **permanently done with that sequence** — re-enabling the automation or
+un-pausing the sub-account will not, and cannot, re-enroll them. There is
+no "resume where it left off."
+
+**How to actually pause outbound volume temporarily**, then, without
+burning your enrolled audience:
+- Prefer the **send-window** — sends outside the configured window defer
+  to the next open window rather than stopping anything. This is the only
+  built-in mechanism that behaves like a real pause.
+- If you do need to stop sends right now, accept that `enabled: false` /
+  `automationsPaused: true` ends the current enrollments for good. Plan to
+  re-launch as a **new sequence** (new automation doc, new
+  `${sequenceId}_${contactId}` keys) against a fresh audience when you're
+  ready to resume — don't expect the old one to pick back up.
 
 ## 5. What still needs Phase 3
 
@@ -138,20 +166,11 @@ script — exactly like the Task 13 smoke did. Practically:
 - Everything after that is `curl` against `docs/AGENT_API.md`'s Sequences
   and Replies sections.
 
-## Known issue: reply-token matching is case-sensitive-broken today
+## Reply-token matching
 
-Flagged during Task 13's live smoke, not fixed as part of this task
-(docs/verification scope only) — tracked for a follow-up fix:
-
-The signed `reply+<contactId>.<hmac>@hey.ugotleads.io` reply-to address is
-supposed to be the primary way a reply gets matched back to a contact. In
-production, it will almost never match, because the webhook lowercases the
-whole `to` address (including the contact-ID portion of the token) before
-checking its signature, and Firestore document IDs are mixed-case. The
-practical effect: replies still get matched and sequences still stop — but
-via the weaker from-email fallback (works only when a contact's email is
-unique in the sub-account), not the intended signed-token path. See the
-"Known gap" writeup in `docs/AGENT_API.md`'s webhook section for the exact
-repro. This does not require any action from you beyond knowing that
-`matchedBy` will read `"email_lookup"` far more often than `"reply_token"`
-until it's fixed.
+Token capture is case-preserving, so the signed
+`reply+<contactId>.<hmac>@hey.ugotleads.io` reply-to address matches
+correctly for mixed-case Firestore contact IDs — `matchedBy: "reply_token"`
+is the expected outcome for any reply sent to that address. The from-email
+lookup (`matchedBy: "email_lookup"`) remains the fallback for tokenless
+replies or a `to` address that doesn't parse as a token.
