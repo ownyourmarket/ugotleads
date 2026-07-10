@@ -178,6 +178,18 @@ describe("POST /api/webhooks/resend-inbound", () => {
     expect(all.size).toBe(0);
   });
 
+  it("ignores a signed literal-null body without throwing", async () => {
+    // JSON.parse("null") succeeds and returns null — the event-shape guard
+    // must catch it before any property access (the brief's own skeleton
+    // would have thrown on `event.type` outside the try/catch → 500).
+    // signedRequest signs JSON.stringify(null) === "null" exactly.
+    const res = await POST(signedRequest(null));
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, ignored: true });
+    const all = await fakeDb.collection("inbound_emails").get();
+    expect(all.size).toBe(0);
+  });
+
   it("never throws on malformed data shapes", async () => {
     const res = await POST(
       signedRequest({

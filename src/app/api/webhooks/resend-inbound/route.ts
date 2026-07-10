@@ -133,13 +133,23 @@ export async function POST(request: Request) {
   });
   if (!ok) return NextResponse.json({ error: "bad signature" }, { status: 401 });
 
-  let event: { type?: string; data?: Record<string, unknown> };
+  // JSON.parse can legitimately return null (raw body "null") or another
+  // non-object primitive — guard the shape before touching properties, or
+  // `event.type` throws OUTSIDE the try/catch below → uncaught 500,
+  // violating the never-throw/always-200 contract.
+  let event: { type?: string; data?: Record<string, unknown> } | null;
   try {
     event = JSON.parse(rawBody);
   } catch {
     return NextResponse.json({ ok: true, ignored: true });
   }
-  if (event.type !== "email.received" || !event.data) {
+  if (
+    !event ||
+    typeof event !== "object" ||
+    event.type !== "email.received" ||
+    !event.data ||
+    typeof event.data !== "object"
+  ) {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
