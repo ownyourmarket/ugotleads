@@ -49,7 +49,12 @@ export async function PATCH(
   }
   if (typeof body.value === "number" && body.value >= 0) update.value = body.value;
   if (body.priority !== undefined) update.priority = body.priority;
-  if (body.lostReason !== undefined) update.lostReason = body.lostReason;
+  // Hardening: null clears the reason; only strings (trimmed) are stored; other types ignored
+  if (body.lostReason === null) {
+    update.lostReason = null;
+  } else if (typeof body.lostReason === "string") {
+    update.lostReason = body.lostReason.trim();
+  }
 
   const stageChanged = body.stageId !== undefined && body.stageId !== deal.stageId;
   if (stageChanged) {

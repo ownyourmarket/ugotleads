@@ -91,4 +91,36 @@ describe("agent deals", () => {
     );
     expect(res.status).toBe(400);
   });
+
+  it("ignores a non-string, non-null lostReason (hardening: no raw JSON write)", async () => {
+    const createRes = await POST(post({ subAccountId: "subMain", contactId: "c1", title: "D" }));
+    const { id } = (await createRes.json()).data;
+    const res = await PATCH(
+      new Request("http://test/x", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        body: JSON.stringify({ lostReason: 42 }),
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(res.status).toBe(200);
+    const deal = (await fakeDb.doc(`deals/${id}`).get()).data()!;
+    expect(deal.lostReason).toBe(null);
+  });
+
+  it("trims a string lostReason", async () => {
+    const createRes = await POST(post({ subAccountId: "subMain", contactId: "c1", title: "D" }));
+    const { id } = (await createRes.json()).data;
+    const res = await PATCH(
+      new Request("http://test/x", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        body: JSON.stringify({ stageId: "lost", lostReason: "  too pricey  " }),
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(res.status).toBe(200);
+    const deal = (await fakeDb.doc(`deals/${id}`).get()).data()!;
+    expect(deal.lostReason).toBe("too pricey");
+  });
 });
