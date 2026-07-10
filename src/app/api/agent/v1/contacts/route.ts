@@ -1,0 +1,106 @@
+import "server-only";
+
+import { NextResponse } from "next/server";
+import { getAdminDb } from "@/lib/firebase/admin";
+import { agentError } from "@/lib/agent-api/errors";
+import { withIdempotency } from "@/lib/agent-api/idempotency";
+import {
+  buildContactDoc,
+  isValidEmail,
+  type AgentContactInput,
+} from "@/lib/agent-api/contact-defaults";
+import { requireServiceAuth } from "@/lib/auth/require-service-auth";
+
+export async function POST(request: Request) {
+  const body = (await request.json().catch(() => null)) as
+    | (AgentContactInput & { subAccountId?: string })
+    | null;
+  if (!body || typeof body.subAccountId !== "string" || !body.subAccountId) {
+    return agentError("VALIDATION_FAILED", "subAccountId is required.", 400);
+  }
+
+  const access = await requireServiceAuth(request, {
+    scope: "contacts:write",
+    subAccountId: body.subAccountId,
+  });
+  if (access instanceof NextResponse) return access;
+
+  const email = body.email?.trim().toLowerCase() ?? "";
+  const phone = body.phone?.trim() ?? "";
+  if (!email && !phone) {
+    return agentError("VALIDATION_FAILED", "A valid email or a phone number is required.", 400);
+  }
+  if (email && !isValidEmail(email)) {
+    return agentError("VALIDATION_FAILED", "Email format is invalid.", 400);
+  }
+
+  return withIdempotency(request, access.keyId, async () => {
+    const db = getAdminDb();
+    if (email) {
+      const dup = await db
+        .collection("contacts")
+        .where("subAccountId", "==", access.subAccountId)
+        .where("email", "==", email)
+        .limit(1)
+        .get();
+      if (!dup.empty) {
+        return {
+          status: 409,
+          body: {
+            error: {
+              code: "VALIDATION_FAILED",
+              message: "A contact with this email already exists in the sub-account.",
+              details: { existingId: dup.docs[0].id },
+            },
+          },
+        };
+      }
+    }
+    const ref = await db.collection("contacts").add(buildContactDoc(access, body));
+    return { status: 201, body: { data: { id: ref.id } } };
+  });
+}
+
+export async function GET(request: Request) {
+  const url = new URL(request.url);
+  const subAccountId = url.searchParams.get("subAccountId");
+  if (!subAccountId) {
+    return agentError("VALIDATION_FAILED", "subAccountId query param is required.", 400);
+  }
+
+  const access = await requireServiceAuth(request, {
+    scope: "contacts:read",
+    subAccountId,
+  });
+  if (access instanceof NextResponse) return access;
+
+  const limit = Math.min(Math.max(Number(url.searchParams.get("limit")) || 20, 1), 100);
+  let q = getAdminDb()
+    .collection("contacts")
+    .where("subAccountId", "==", subAccountId);
+  const email = url.searchParams.get("email");
+  const phone = url.searchParams.get("phone");
+  const tag = url.searchParams.get("tag");
+  const pipelineStage = url.searchParams.get("pipelineStage");
+  if (email) q = q.where("email", "==", email.trim().toLowerCase());
+  if (phone) q = q.where("phone", "==", phone.trim());
+  if (tag) q = q.where("tags", "array-contains", tag);
+  if (pipelineStage) q = q.where("pipelineStage", "==", pipelineStage);
+
+  const snap = await q.limit(limit).get();
+  const data = snap.docs.map((d) => {
+    const c = d.data();
+    return {
+      id: d.id,
+      name: c.name,
+      email: c.email,
+      phone: c.phone,
+      company: c.company,
+      tags: c.tags,
+      pipelineStage: c.pipelineStage,
+      emailOptedOut: c.emailOptedOut,
+      smsOptedOut: c.smsOptedOut,
+    };
+  });
+  return NextResponse.json({ data });
+}
