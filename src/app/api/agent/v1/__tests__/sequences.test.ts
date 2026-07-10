@@ -36,6 +36,14 @@ beforeEach(() => {
     name: "SMS1",
     body: "sms text",
   });
+  fakeDb.doc("message_templates/tForeign").set({
+    subAccountId: "subOther",
+    agencyId: "ag1",
+    type: "email",
+    name: "F",
+    subject: "S",
+    body: "b {{unsubscribeLink}}",
+  });
 });
 
 function post(body: unknown): Request {
@@ -72,6 +80,36 @@ describe("agent sequences", () => {
     expect(sms.status).toBe(400);
     const missing = await POST(post({ subAccountId: "subMain", name: "X", steps: [{ templateId: "ghost", delaySeconds: 0 }] }));
     expect(missing.status).toBe(400);
+  });
+
+  it("rejects a template belonging to another sub-account (cross-tenant)", async () => {
+    const res = await POST(post({ subAccountId: "subMain", name: "X", steps: [{ templateId: "tForeign", delaySeconds: 0 }] }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
+  });
+
+  it("truncates a >50-char tag to 50 chars in the stored trigger", async () => {
+    const longTag = "x".repeat(60);
+    const res = await POST(post({
+      subAccountId: "subMain", name: "Long tag", tag: longTag,
+      steps: [{ templateId: "t1", delaySeconds: 0 }],
+    }));
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()).data;
+    const doc = (await fakeDb.doc(`automations/${id}`).get()).data()!;
+    expect((doc.trigger as { type: string; tag: string }).type).toBe("tag_added");
+    expect((doc.trigger as { tag: string }).tag).toBe("x".repeat(50));
+  });
+
+  it("treats an all-whitespace tag as no tag (manual trigger)", async () => {
+    const res = await POST(post({
+      subAccountId: "subMain", name: "Whitespace tag", tag: "   ",
+      steps: [{ templateId: "t1", delaySeconds: 0 }],
+    }));
+    expect(res.status).toBe(201);
+    const { id } = (await res.json()).data;
+    const doc = (await fakeDb.doc(`automations/${id}`).get()).data()!;
+    expect(doc.trigger).toEqual({ type: "manual", formId: null, tag: null });
   });
 
   it("lists only outbound sequences for the sub-account", async () => {
