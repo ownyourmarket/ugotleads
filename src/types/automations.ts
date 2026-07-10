@@ -4,9 +4,9 @@ import type { Timestamp, FieldValue } from "firebase/firestore";
  * v1 ships only "instant_response". v2 will extend this union with
  * "nurture", "stage_trigger", "booking_lifecycle", "stale_revive".
  */
-export type RecipeType = "instant_response" | "lead_nurture";
+export type RecipeType = "instant_response" | "lead_nurture" | "outbound_sequence";
 
-export type AutomationTriggerType = "form_submit";
+export type AutomationTriggerType = "form_submit" | "manual" | "tag_added";
 
 export type AutomationStatus = "running" | "completed" | "stopped" | "failed";
 
@@ -14,12 +14,15 @@ export type StoppedReason =
   | "automation_disabled"
   | "manual"
   | "opt_out"
-  | "booking";
+  | "booking"
+  | "replied";
 
 export interface AutomationTrigger {
   type: AutomationTriggerType;
   /** Required when type === "form_submit". */
   formId: string | null;
+  /** Required when type === "tag_added" — the tag that enrolls a contact. */
+  tag?: string | null;
 }
 
 /**
@@ -54,7 +57,16 @@ export interface LeadNurtureConfig {
   steps: LeadNurtureStep[];
 }
 
-export type RecipeConfig = InstantResponseConfig | LeadNurtureConfig;
+/**
+ * Recipe 3 — Outbound Sequence. Same step shape as lead nurture (delays are
+ * absolute from ENROLLMENT), but enrollment is manual/tag-based (cold lists)
+ * instead of form-triggered, enrollment is once-per-contact-ever, and a
+ * reply from the contact stops the sequence (stoppedReason "replied").
+ * Email-only in v1 (SMS pending A2P).
+ */
+export type OutboundSequenceConfig = LeadNurtureConfig;
+
+export type RecipeConfig = InstantResponseConfig | LeadNurtureConfig | OutboundSequenceConfig;
 
 export interface AutomationDoc {
   id: string;

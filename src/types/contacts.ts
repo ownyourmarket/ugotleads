@@ -109,6 +109,7 @@ export type ActivityType =
   | "automation_failed"
   | "email_opened"
   | "link_clicked"
+  | "email_reply"
   | "ai_reply_sent"
   | "ai_escalated"
   | "ai_skipped";

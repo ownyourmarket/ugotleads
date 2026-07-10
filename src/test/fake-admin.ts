@@ -61,6 +61,14 @@ export class FakeDocRef {
   async delete(): Promise<void> {
     this.db.store.delete(this.path);
   }
+
+  /** Mirrors Admin SDK create(): rejects with gRPC code 6 (ALREADY_EXISTS). */
+  async create(data: DocData): Promise<void> {
+    if (this.db.store.has(this.path)) {
+      throw Object.assign(new Error(`ALREADY_EXISTS: ${this.path}`), { code: 6 });
+    }
+    this.db.store.set(this.path, { ...data });
+  }
 }
 
 type Filter = { field: string; op: "==" | "array-contains"; value: unknown };
