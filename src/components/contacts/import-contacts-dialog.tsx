@@ -88,11 +88,13 @@ export function ImportContactsDialog({
     [mapping],
   );
   const hasEmailColumn = Object.values(mapping).includes("email");
+  const hasPhoneColumn = Object.values(mapping).includes("phone");
+  const hasReachableColumn = hasEmailColumn || hasPhoneColumn;
 
   async function runImport() {
     if (!user || !agencyId) return;
-    if (!hasEmailColumn) {
-      toast.error("Map at least one column to Email before importing.");
+    if (!hasReachableColumn) {
+      toast.error("Map at least one column to Email or Phone before importing.");
       return;
     }
     setImporting(true);
@@ -129,12 +131,17 @@ export function ImportContactsDialog({
             data[field] = value;
           }
         }
-        if (!data.email || !isValidEmail(data.email)) {
+        const hasValidEmail = Boolean(data.email) && isValidEmail(data.email);
+        if (!hasValidEmail && !data.phone) {
           skipped++;
           if (errors.length < 5) {
-            errors.push(`Row ${idx + 2}: missing or invalid email`);
+            errors.push(`Row ${idx + 2}: needs a valid email or a phone number`);
           }
           continue;
+        }
+        // Phone-only row with a malformed email — keep the row, drop the bad email.
+        if (data.email && !hasValidEmail) {
+          data.email = "";
         }
         try {
           await createContact({ agencyId, subAccountId }, user.uid, data);
@@ -216,7 +223,7 @@ export function ImportContactsDialog({
               </div>
               <p className="text-sm font-medium">Choose a CSV file</p>
               <p className="text-xs text-muted-foreground">
-                First row should be headers. Email column is required.
+                First row should be headers. Each row needs an email or a phone number.
                 Recognised columns: <code>name, email, phone, company, source, tags</code>.
               </p>
               <input
@@ -292,11 +299,11 @@ export function ImportContactsDialog({
                     </tbody>
                   </table>
                 </div>
-                {!hasEmailColumn && (
+                {!hasReachableColumn && (
                   <p className="flex items-center gap-1.5 text-xs text-amber-600 dark:text-amber-400">
                     <AlertCircle className="h-3.5 w-3.5" />
-                    Map at least one column to Email — rows without emails get
-                    skipped.
+                    Map at least one column to Email or Phone — rows with
+                    neither get skipped.
                   </p>
                 )}
               </div>
@@ -327,7 +334,7 @@ export function ImportContactsDialog({
                 </Button>
                 <Button
                   onClick={runImport}
-                  disabled={importing || !hasEmailColumn}
+                  disabled={importing || !hasReachableColumn}
                 >
                   {importing
                     ? "Importing…"
