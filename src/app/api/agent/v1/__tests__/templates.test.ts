@@ -87,4 +87,39 @@ describe("agent templates", () => {
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
   });
+
+  it("rejects PATCH blanking the subject on an email template", async () => {
+    const createRes = await POST(
+      post({ subAccountId: "subMain", type: "email", name: "E", subject: "S", body: VALID_EMAIL_BODY }),
+    );
+    const { id } = (await createRes.json()).data;
+    const res = await PATCH(
+      new Request("http://test/x", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        body: JSON.stringify({ subject: "" }),
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
+  });
+
+  it("ignores subject on PATCH of an sms template", async () => {
+    const createRes = await POST(
+      post({ subAccountId: "subMain", type: "sms", name: "S", body: "short text" }),
+    );
+    const { id } = (await createRes.json()).data;
+    const res = await PATCH(
+      new Request("http://test/x", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        body: JSON.stringify({ subject: "x" }),
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(res.status).toBe(200);
+    const doc = (await fakeDb.doc(`message_templates/${id}`).get()).data()!;
+    expect(doc.subject).toBeNull();
+  });
 });

@@ -69,13 +69,15 @@ export async function PATCH(
   }
 
   const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
-  if (body.name !== undefined && typeof body.name === "string" && body.name.trim()) {
-    update.name = body.name.trim();
+  if (typeof body.name === "string" && body.name.trim()) update.name = body.name.trim();
+  if (typeof body.subject === "string" && template.type === "email") {
+    const subject = body.subject.trim();
+    if (!subject) {
+      return agentError("VALIDATION_FAILED", "subject cannot be blank on an email template.", 400);
+    }
+    update.subject = subject;
   }
-  if (body.subject !== undefined && typeof body.subject === "string") {
-    update.subject = body.subject.trim();
-  }
-  if (body.body !== undefined) update.body = nextBody;
+  if (typeof body.body === "string") update.body = nextBody;
 
   await ref.update(update);
   return NextResponse.json({ data: { id } });
