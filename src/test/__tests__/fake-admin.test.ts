@@ -38,6 +38,24 @@ describe("FakeDb", () => {
     expect(snap.data()?.title).toBe("T");
   });
 
+  it("collection queries exclude subcollection docs", async () => {
+    fakeDb.doc("contacts/c1").set({ name: "Ann" });
+    fakeDb.doc("contacts/c1/activities/a1").set({ type: "call" });
+    const snap = await fakeDb.collection("contacts").get();
+    expect(snap.size).toBe(1);
+    expect(snap.docs[0].id).toBe("c1");
+  });
+
+  it("mutating a snapshot's data does not corrupt the store", async () => {
+    fakeDb.doc("contacts/c1").set({ tags: ["a"] });
+    const snap = await fakeDb.doc("contacts/c1").get();
+    (snap.data()?.tags as string[]).push("b");
+    expect((await fakeDb.doc("contacts/c1").get()).data()?.tags).toEqual(["a"]);
+    const qsnap = await fakeDb.collection("contacts").get();
+    (qsnap.docs[0].data()?.tags as string[]).push("c");
+    expect((await fakeDb.doc("contacts/c1").get()).data()?.tags).toEqual(["a"]);
+  });
+
   it("runTransaction exposes get/set/update", async () => {
     fakeDb.doc("k/u").set({ n: 1 });
     await fakeDb.runTransaction(async (tx) => {

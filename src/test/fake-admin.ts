@@ -6,6 +6,16 @@
  */
 type DocData = Record<string, unknown>;
 
+// Deep clone for snapshot reads: arrays copied, plain objects recursed;
+// class instances (e.g. FieldValue sentinels) pass through by reference.
+function cloneData(data: DocData): DocData {
+  const out: DocData = {};
+  for (const [k, v] of Object.entries(data)) {
+    out[k] = Array.isArray(v) ? [...v] : v && typeof v === "object" && v.constructor === Object ? cloneData(v as DocData) : v;
+  }
+  return out;
+}
+
 interface FakeSnap {
   id: string;
   exists: boolean;
@@ -29,7 +39,7 @@ export class FakeDocRef {
       id: this.id,
       exists: data !== undefined,
       ref: this,
-      data: () => (data ? { ...data } : undefined),
+      data: () => (data ? cloneData(data) : undefined),
     };
   }
 
@@ -88,7 +98,7 @@ class FakeQuery {
       });
       if (!matches) continue;
       const ref = new FakeDocRef(this.db, path);
-      docs.push({ id: ref.id, exists: true, ref, data: () => ({ ...data }) });
+      docs.push({ id: ref.id, exists: true, ref, data: () => cloneData(data) });
     }
     if (this.limitN !== null) docs = docs.slice(0, this.limitN);
     return { empty: docs.length === 0, size: docs.length, docs };
