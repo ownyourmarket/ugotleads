@@ -16,8 +16,8 @@ interface FireTriggersInput {
   subAccountId: string;
   triggerType: AutomationTriggerType;
   contactId: string;
-  /** Trigger-specific context, e.g. formId on form_submit. */
-  context: { formId?: string };
+  /** Trigger-specific context, e.g. formId on form_submit, tag on tag_added. */
+  context: { formId?: string; tag?: string };
 }
 
 /**
@@ -67,6 +67,22 @@ export async function fireTriggers(input: FireTriggersInput): Promise<void> {
         ) {
           continue;
         }
+      }
+      if (automation.trigger.type === "tag_added") {
+        if (!automation.trigger.tag || automation.trigger.tag !== input.context.tag) {
+          continue;
+        }
+      }
+
+      if (automation.recipeType === "outbound_sequence") {
+        // Once-per-contact-ever enrollment (deterministic execution id).
+        await enrollContact({
+          agencyId: input.agencyId,
+          subAccountId: input.subAccountId,
+          automation,
+          contactId: input.contactId,
+        });
+        continue;
       }
 
       await startExecution({

@@ -100,7 +100,17 @@ class FakeQuery {
       if (!path.startsWith(prefix)) continue;
       if (path.slice(prefix.length).includes("/")) continue; // exclude subcollections
       const matches = this.filters.every((f) => {
-        const v = data[f.field];
+        // Support nested fields like "trigger.type"
+        const keys = f.field.split(".");
+        let v = data as unknown;
+        for (const key of keys) {
+          if (v && typeof v === "object") {
+            v = (v as Record<string, unknown>)[key];
+          } else {
+            v = undefined;
+            break;
+          }
+        }
         if (f.op === "==") return v === f.value;
         return Array.isArray(v) && v.includes(f.value);
       });
