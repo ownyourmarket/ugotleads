@@ -7,13 +7,14 @@ vi.mock("@/lib/firebase/admin", async () => {
   return { getAdminDb: () => fakeDb, getAdminAuth: () => ({}) };
 });
 
-const sendEmailMock = vi.fn(async () => ({ id: "resend-msg-1" }));
+const sendEmailMock = vi.fn(async (_args: unknown) => ({ id: "resend-msg-1" }));
 vi.mock("@/lib/comms/resend", () => ({
   emailIsConfigured: () => true,
   sendEmail: async (args: unknown) => sendEmailMock(args),
 }));
 vi.mock("@/lib/comms/usage", () => ({ recordSend: vi.fn(async () => {}) }));
 
+import { recordSend } from "@/lib/comms/usage";
 import { POST } from "@/app/api/agent/v1/messages/email/route";
 
 let KEY: string;
@@ -61,6 +62,7 @@ describe("agent one-off email", () => {
     const acts = await fakeDb.collection("contacts/c1/activities").get();
     expect(acts.docs[0].data()).toMatchObject({ type: "email_sent" });
     expect(acts.docs[0].data()?.createdBy).toMatch(/^agent:/);
+    expect(recordSend).toHaveBeenCalledWith(expect.stringMatching(/^agent:ugl_/), "email");
   });
 
   it("409s CONTACT_OPTED_OUT for opted-out contacts and does not send", async () => {
