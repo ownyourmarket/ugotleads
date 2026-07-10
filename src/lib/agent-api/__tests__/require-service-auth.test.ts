@@ -40,7 +40,14 @@ describe("requireServiceAuth", () => {
   beforeEach(resetFakeDb);
 
   it("rejects missing/malformed/unknown keys with INVALID_KEY 401", async () => {
-    for (const req of [reqWithKey(), reqWithKey("ugl_" + "0".repeat(40))]) {
+    const reqs = [
+      reqWithKey(), // no Authorization header
+      reqWithKey("ugl_" + "0".repeat(40)), // well-formed but unknown key
+      reqWithKey("wrong_prefix_" + "0".repeat(40)), // wrong prefix
+      reqWithKey("ugl_" + "A".repeat(40)), // uppercase hex — malformed
+      reqWithKey("ugl_" + "0".repeat(39)), // too short
+    ];
+    for (const req of reqs) {
       const res = await requireServiceAuth(req, { scope: "contacts:write" });
       expect(res).toBeInstanceOf(NextResponse);
       expect((res as NextResponse).status).toBe(401);
@@ -53,6 +60,7 @@ describe("requireServiceAuth", () => {
     const gen = seedKey({ status: "revoked" });
     const res = await requireServiceAuth(reqWithKey(gen.key), { scope: "contacts:write" });
     expect((res as NextResponse).status).toBe(401);
+    expect((await (res as NextResponse).json()).error.code).toBe("INVALID_KEY");
   });
 
   it("rejects missing scope with 403 SCOPE_MISSING", async () => {
@@ -70,6 +78,27 @@ describe("requireServiceAuth", () => {
     });
     expect((res as NextResponse).status).toBe(403);
     expect((await (res as NextResponse).json()).error.code).toBe("SUB_ACCOUNT_FORBIDDEN");
+  });
+
+  it("rejects an empty-string subAccountId with 403 SUB_ACCOUNT_FORBIDDEN", async () => {
+    const gen = seedKey();
+    const res = await requireServiceAuth(reqWithKey(gen.key), {
+      scope: "contacts:write",
+      subAccountId: "",
+    });
+    expect(res).toBeInstanceOf(NextResponse);
+    expect((res as NextResponse).status).toBe(403);
+    expect((await (res as NextResponse).json()).error.code).toBe("SUB_ACCOUNT_FORBIDDEN");
+  });
+
+  it("succeeds without subAccountId and resolves subAccountId to null", async () => {
+    const gen = seedKey();
+    const access = await requireServiceAuth(reqWithKey(gen.key), {
+      scope: "contacts:write",
+    });
+    expect(access).not.toBeInstanceOf(NextResponse);
+    const a = access as Exclude<typeof access, NextResponse>;
+    expect(a.subAccountId).toBeNull();
   });
 
   it("returns AgentAccess on success and subAccountAllowed works", async () => {

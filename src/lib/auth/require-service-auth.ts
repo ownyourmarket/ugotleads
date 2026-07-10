@@ -55,7 +55,7 @@ export async function requireServiceAuth(
   if (!key.scopes.includes(opts.scope)) {
     return agentError("SCOPE_MISSING", `Key lacks required scope "${opts.scope}".`, 403);
   }
-  if (opts.subAccountId && !key.allowedSubAccounts.includes(opts.subAccountId)) {
+  if (opts.subAccountId !== undefined && !key.allowedSubAccounts.includes(opts.subAccountId)) {
     return agentError("SUB_ACCOUNT_FORBIDDEN", "Key cannot access this sub-account.", 403);
   }
 
@@ -70,7 +70,7 @@ export async function requireServiceAuth(
     agencyId: key.agencyId,
     scopes: key.scopes,
     allowedSubAccounts: key.allowedSubAccounts,
-    subAccountId: opts.subAccountId ?? null,
+    subAccountId: opts.subAccountId !== undefined ? opts.subAccountId : null,
   };
 }
 
