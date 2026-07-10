@@ -22,6 +22,10 @@ const PUBLIC_PATHS = [
   "/api/cron/gitpage-heartbeat",
   "/api/landing/metrics",
   "/api/webhooks/twilio",
+  // Resend inbound email webhook — signature-verified inside the route
+  // (Task 8 svix verify), not session auth. Needs its own entry (no
+  // sub-path) since it has no trailing segments to prefix-match on.
+  "/api/webhooks/resend-inbound",
   "/api/webhooks/stripe",
   // Web Chat widget — public from-the-browser API. Security:
   //  - Origin header validated against per-sub-account allowedDomains
