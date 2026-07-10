@@ -2,7 +2,8 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
-import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
+import { readAgencyOwner } from "@/lib/auth/read-agency-owner";
+import { getAdminDb } from "@/lib/firebase/admin";
 import { generateServiceKey } from "@/lib/agent-api/keys";
 import type { ServiceScope } from "@/types/service-keys";
 
@@ -12,30 +13,8 @@ const VALID_SCOPES: ServiceScope[] = [
   "sequences:enroll", "replies:read", "replies:write",
 ];
 
-interface OwnerCaller {
-  uid: string;
-  agencyId: string;
-}
-
-/** Local owner check, following the pattern in api/contacts/bulk/route.ts. */
-async function readOwner(request: Request): Promise<OwnerCaller | NextResponse> {
-  const uid = request.headers.get("x-user-uid");
-  if (!uid) return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  const record = await getAdminAuth().getUser(uid).catch(() => null);
-  const claims = (record?.customClaims ?? {}) as {
-    status?: string;
-    agencyId?: string | null;
-    agencyRole?: string | null;
-  };
-  if (claims.status !== "active")
-    return NextResponse.json({ error: "Account inactive" }, { status: 403 });
-  if (claims.agencyRole !== "owner" || !claims.agencyId)
-    return NextResponse.json({ error: "Agency owner only" }, { status: 403 });
-  return { uid, agencyId: claims.agencyId };
-}
-
 export async function POST(request: Request) {
-  const owner = await readOwner(request);
+  const owner = await readAgencyOwner(request);
   if (owner instanceof NextResponse) return owner;
 
   const body = (await request.json().catch(() => null)) as {
@@ -44,7 +23,7 @@ export async function POST(request: Request) {
     scopes?: string[];
   } | null;
 
-  const label = body?.label?.trim();
+  const label = body?.label?.trim().slice(0, 100);
   const allowedSubAccounts = body?.allowedSubAccounts;
   const scopes = body?.scopes;
   if (
@@ -93,7 +72,7 @@ export async function POST(request: Request) {
 }
 
 export async function GET(request: Request) {
-  const owner = await readOwner(request);
+  const owner = await readAgencyOwner(request);
   if (owner instanceof NextResponse) return owner;
 
   const snap = await getAdminDb()
