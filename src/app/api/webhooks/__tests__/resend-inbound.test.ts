@@ -56,7 +56,11 @@ beforeEach(() => {
   fakeDb
     .doc("subAccounts/subMain")
     .set({ agencyId: "ag1", replyToEmail: "star@myusa.com" });
-  fakeDb.doc("contacts/c1").set({
+  // Mixed-case contact ID on purpose — Firestore auto-IDs are mixed-case,
+  // and the reply-token HMAC is computed over the exact ID. A matcher that
+  // lowercases the to-address before token capture corrupts the HMAC input
+  // and can never verify (Task 13 live-smoke regression).
+  fakeDb.doc("contacts/C1aB2xY").set({
     email: "prospect@ex.com",
     subAccountId: "subMain",
     agencyId: "ag1",
@@ -71,7 +75,7 @@ beforeEach(() => {
     .set({ recipeType: "lead_nurture", name: "Nurture" });
   fakeDb.doc("automation_executions/seq1_c1").set({
     automationId: "seq1",
-    contactId: "c1",
+    contactId: "C1aB2xY",
     status: "running",
     subAccountId: "subMain",
     agencyId: "ag1",
@@ -79,7 +83,7 @@ beforeEach(() => {
   });
   fakeDb.doc("automation_executions/nurtX").set({
     automationId: "nurt1",
-    contactId: "c1",
+    contactId: "C1aB2xY",
     status: "running",
     subAccountId: "subMain",
     agencyId: "ag1",
@@ -101,8 +105,8 @@ describe("POST /api/webhooks/resend-inbound", () => {
     expect(unset.status).toBe(503);
   });
 
-  it("ingests a reply matched by plus-token, stops only the outbound sequence, forwards a copy", async () => {
-    const token = buildReplyToken("c1")!;
+  it("ingests a reply matched by plus-token (mixed-case contact ID), stops only the outbound sequence, forwards a copy", async () => {
+    const token = buildReplyToken("C1aB2xY")!;
     const res = await POST(
       signedRequest({
         type: "email.received",
@@ -120,7 +124,7 @@ describe("POST /api/webhooks/resend-inbound", () => {
 
     const inbound = (await fakeDb.doc("inbound_emails/re_123").get()).data()!;
     expect(inbound).toMatchObject({
-      contactId: "c1",
+      contactId: "C1aB2xY",
       matchedBy: "reply_token",
       handled: false,
       subAccountId: "subMain",
@@ -133,12 +137,38 @@ describe("POST /api/webhooks/resend-inbound", () => {
       (await fakeDb.doc("automation_executions/nurtX").get()).data()?.status
     ).toBe("running");
 
-    const acts = await fakeDb.collection("contacts/c1/activities").get();
+    const acts = await fakeDb.collection("contacts/C1aB2xY/activities").get();
     expect(acts.docs.some((d) => d.data()?.type === "email_reply")).toBe(true);
 
     expect(sendEmailMock).toHaveBeenCalledWith(
       expect.objectContaining({ to: "star@myusa.com" })
     );
+  });
+
+  it("does NOT token-match a pre-lowercased token address (corrupted HMAC input)", async () => {
+    // Simulates the old corruption: the token was built for the real
+    // mixed-case ID, then the address was lowercased in transit/matching.
+    // The lowercased contactId no longer HMACs to the embedded signature,
+    // so verifyReplyToken must reject it. The from-email here still maps
+    // to the contact, so the reply matches via fallback — proving the
+    // token path specifically did not fire.
+    const token = buildReplyToken("C1aB2xY")!;
+    const res = await POST(
+      signedRequest({
+        type: "email.received",
+        data: {
+          email_id: "re_lowered",
+          from: "prospect@ex.com",
+          to: [`reply+${token.toLowerCase()}@hey.ugotleads.io`],
+          subject: "Re: hi",
+          text: "hello",
+        },
+      })
+    );
+    expect(res.status).toBe(200);
+    const doc = (await fakeDb.doc("inbound_emails/re_lowered").get()).data();
+    expect(doc?.matchedBy).not.toBe("reply_token");
+    expect(doc).toMatchObject({ contactId: "C1aB2xY", matchedBy: "email_lookup" });
   });
 
   it("falls back to unique from-email lookup and stores unmatched replies", async () => {
@@ -158,7 +188,7 @@ describe("POST /api/webhooks/resend-inbound", () => {
     expect((await matchedRes.json()).matched).toBe(true);
     const matchedDoc = (await fakeDb.doc("inbound_emails/re_A1").get()).data();
     expect(matchedDoc).toMatchObject({
-      contactId: "c1",
+      contactId: "C1aB2xY",
       matchedBy: "email_lookup",
     });
 

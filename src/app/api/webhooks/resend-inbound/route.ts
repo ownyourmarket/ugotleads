@@ -51,6 +51,28 @@ function extractAddresses(v: unknown): string[] {
   return one ? [one] : [];
 }
 
+/** Like extractAddresses but preserves case — reply tokens embed
+ * case-sensitive contact IDs; lowercasing corrupts the HMAC input. */
+function extractRawAddresses(v: unknown): string[] {
+  const one = (x: unknown): string => {
+    if (typeof x === "string") {
+      const m = /<([^>]+)>/.exec(x);
+      return (m ? m[1] : x).trim();
+    }
+    if (
+      x &&
+      typeof x === "object" &&
+      typeof (x as { email?: unknown }).email === "string"
+    ) {
+      return (x as { email: string }).email.trim();
+    }
+    return "";
+  };
+  if (Array.isArray(v)) return v.map(one).filter(Boolean);
+  const single = one(v);
+  return single ? [single] : [];
+}
+
 /** Best-effort string form of the raw `data.from` value, for audit storage. */
 function rawFromString(v: unknown): string {
   if (typeof v === "string") return v;
@@ -79,15 +101,23 @@ interface ContactMatch {
  * token present" — it falls through to the from-email fallback exactly
  * like an unmatched address, never treated as an error. No legacy plain
  * contact-ID format is accepted (feature is unreleased).
+ *
+ * Token capture runs against RAW (case-preserved) to-addresses: Firestore
+ * contact IDs are mixed-case and the HMAC is computed over the exact ID —
+ * scanning the lowercased addresses corrupted the token and made
+ * verification inert for real contacts (Task 13 smoke finding). The
+ * lowercased addresses are still what gets stored and used for the
+ * from-email fallback.
  */
 async function matchContact(
   db: FirebaseFirestore.Firestore,
-  toAddresses: string[],
+  rawToAddresses: string[],
   fromEmail: string
 ): Promise<ContactMatch | null> {
   let tokenCandidate: string | null = null;
-  for (const addr of toAddresses) {
-    const m = /^reply\+([A-Za-z0-9]+\.[a-f0-9]{12})@/i.exec(addr);
+  for (const addr of rawToAddresses) {
+    // No /i flag — the contact-ID and hex-hmac portions are case-sensitive.
+    const m = /^reply\+([A-Za-z0-9]+\.[a-f0-9]{12})@/.exec(addr);
     if (m) {
       tokenCandidate = m[1];
       break;
@@ -174,6 +204,9 @@ export async function POST(request: Request) {
     const fromEmail = extractEmail(data.from);
     const fromRaw = rawFromString(data.from);
     const toAddresses = extractAddresses(data.to);
+    // Case-preserved copy for token capture only — the stored `to` field
+    // and from-email fallback keep using the lowercased addresses.
+    const rawToAddresses = extractRawAddresses(data.to);
     const subject = typeof data.subject === "string" ? data.subject : "";
     const text = typeof data.text === "string" ? data.text : "";
     const html = typeof data.html === "string" ? data.html : null;
@@ -185,7 +218,7 @@ export async function POST(request: Request) {
         : null;
 
     const db = getAdminDb();
-    const matched = await matchContact(db, toAddresses, fromEmail);
+    const matched = await matchContact(db, rawToAddresses, fromEmail);
 
     const inboundData: Omit<InboundEmailDoc, "id"> = {
       agencyId: matched?.agencyId ?? null,
