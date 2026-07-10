@@ -21,10 +21,14 @@ import { GET as STATUS } from "@/app/api/agent/v1/sequences/[id]/status/route";
 let KEY: string;
 const ctx = { params: Promise.resolve({ id: "seq1" }) };
 
-function post(body: unknown): Request {
+function post(body: unknown, idemKey?: string): Request {
   return new Request("http://test/api/agent/v1/sequences/seq1/enroll", {
     method: "POST",
-    headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+    headers: {
+      authorization: `Bearer ${KEY}`,
+      "content-type": "application/json",
+      ...(idemKey ? { "idempotency-key": idemKey } : {}),
+    },
     body: JSON.stringify(body),
   });
 }
@@ -101,5 +105,34 @@ describe("agent sequence enroll/unenroll/status", () => {
     fakeDb.doc(`agencyServiceKeys/key1/usage/${day}`).set({ enrollments: 499 });
     const res = await ENROLL(post({ contactIds: ["c1", "c2"], confirm: { expectedCount: 2, summary: "s" } }), ctx);
     expect(res.status).toBe(429);
+  });
+
+  it("replays a cached enroll even after the cap is later reached (replay never re-consumes quota)", async () => {
+    const first = await ENROLL(post({ contactIds: ["c1"], confirm: { expectedCount: 1, summary: "s" } }, "e1"), ctx);
+    expect(first.status).toBe(201);
+
+    const day = new Date().toISOString().slice(0, 10);
+    fakeDb.doc(`agencyServiceKeys/key1/usage/${day}`).set({ enrollments: 500 });
+    const execsBefore = (await fakeDb.collection("automation_executions").get()).size;
+
+    const replay = await ENROLL(post({ contactIds: ["c1"], confirm: { expectedCount: 1, summary: "s" } }, "e1"), ctx);
+    expect(replay.status).toBe(201);
+    expect(replay.headers.get("x-idempotent-replay")).toBe("true");
+    const execsAfter = (await fakeDb.collection("automation_executions").get()).size;
+    expect(execsAfter).toBe(execsBefore);
+  });
+
+  it("does not cache a fresh enroll blocked by the cap", async () => {
+    const day = new Date().toISOString().slice(0, 10);
+    fakeDb.doc(`agencyServiceKeys/key1/usage/${day}`).set({ enrollments: 500 });
+
+    const beforeCount = (await fakeDb.collection("agentIdempotency").get()).size;
+
+    const res = await ENROLL(post({ contactIds: ["c2"], confirm: { expectedCount: 1, summary: "s" } }, "e2"), ctx);
+    expect(res.status).toBe(429);
+
+    const afterCount = (await fakeDb.collection("agentIdempotency").get()).size;
+    expect(afterCount).toBe(beforeCount);
+    expect((await fakeDb.doc("automation_executions/seq1_c2").get()).exists).toBe(false);
   });
 });

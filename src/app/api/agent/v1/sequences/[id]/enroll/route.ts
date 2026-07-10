@@ -80,30 +80,36 @@ export const POST = withAgentRoute<{ params: Promise<{ id: string }> }>(
       return NextResponse.json({ data: { enrolled: 0, alreadyEnrolled: 0, skipped: [] } }, { status: 201 });
     }
 
-    const capped = await enforceDailyCap(access.keyId, "enrollments", DAILY_ENROLL_CAP, audience.length);
-    if (capped) return capped;
-
-    return withIdempotency(request, access.keyId, "sequences:enroll", async () => {
-      let enrolled = 0;
-      let alreadyEnrolled = 0;
-      const skipped: { contactId: string; reason: string }[] = [];
-      for (const contactId of audience) {
-        const contactSnap = await db.doc(`contacts/${contactId}`).get();
-        if (!contactSnap.exists || contactSnap.data()?.subAccountId !== automation.subAccountId) {
-          skipped.push({ contactId, reason: "not_found" });
-          continue;
+    // Cap check runs as an idempotency preflight: a replay hit skips it
+    // (retries never re-consume quota), and a capped 429 is never cached
+    // (stays retryable once capacity frees up).
+    return withIdempotency(
+      request,
+      access.keyId,
+      "sequences:enroll",
+      async () => {
+        let enrolled = 0;
+        let alreadyEnrolled = 0;
+        const skipped: { contactId: string; reason: string }[] = [];
+        for (const contactId of audience) {
+          const contactSnap = await db.doc(`contacts/${contactId}`).get();
+          if (!contactSnap.exists || contactSnap.data()?.subAccountId !== automation.subAccountId) {
+            skipped.push({ contactId, reason: "not_found" });
+            continue;
+          }
+          const outcome = await enrollContact({
+            agencyId: automation.agencyId,
+            subAccountId: automation.subAccountId,
+            automation: { ...automation, id },
+            contactId,
+          });
+          if (outcome === "enrolled") enrolled++;
+          else if (outcome === "already_enrolled") alreadyEnrolled++;
+          else skipped.push({ contactId, reason: outcome });
         }
-        const outcome = await enrollContact({
-          agencyId: automation.agencyId,
-          subAccountId: automation.subAccountId,
-          automation: { ...automation, id },
-          contactId,
-        });
-        if (outcome === "enrolled") enrolled++;
-        else if (outcome === "already_enrolled") alreadyEnrolled++;
-        else skipped.push({ contactId, reason: outcome });
-      }
-      return { status: 201, body: { data: { enrolled, alreadyEnrolled, skipped } } };
-    });
+        return { status: 201, body: { data: { enrolled, alreadyEnrolled, skipped } } };
+      },
+      { preflight: () => enforceDailyCap(access.keyId, "enrollments", DAILY_ENROLL_CAP, audience.length) },
+    );
   },
 );
