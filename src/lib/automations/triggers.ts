@@ -238,7 +238,13 @@ export async function enrollContact(input: StartExecutionInput): Promise<EnrollO
 
   if (!qstashIsConfigured()) {
     console.warn("[enrollContact] QStash not configured — enrollment created but not scheduled.");
-    await ref.update({ status: "failed", stoppedReason: "automation_disabled" });
+    // Failure before anything was scheduled: delete the enrollment record so
+    // the pair is retryable. "Idempotent forever" guards against double
+    // SENDS — a failed enrollment never scheduled anything, so removing it
+    // cannot violate that. (A phantom QStash message that somehow published
+    // despite the error would land on a missing doc and be ignored by the
+    // executor's not-found guard.)
+    await ref.delete();
     return "failed";
   }
 
@@ -248,7 +254,13 @@ export async function enrollContact(input: StartExecutionInput): Promise<EnrollO
     delaySeconds: firstStepDelay,
   });
   if (!result) {
-    await ref.update({ status: "failed", stoppedReason: "automation_disabled" });
+    // Failure before anything was scheduled: delete the enrollment record so
+    // the pair is retryable. "Idempotent forever" guards against double
+    // SENDS — a failed enrollment never scheduled anything, so removing it
+    // cannot violate that. (A phantom QStash message that somehow published
+    // despite the error would land on a missing doc and be ignored by the
+    // executor's not-found guard.)
+    await ref.delete();
     return "failed";
   }
   await ref.update({ qstashMessageId: result.messageId });

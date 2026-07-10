@@ -80,4 +80,13 @@ describe("outbound_sequence engine", () => {
     const a = seqAutomation({ config: { steps: [] } } as Partial<AutomationDoc>);
     expect(await enrollContact({ agencyId: "ag1", subAccountId: "subMain", automation: a, contactId: "c1" })).toBe("no_steps");
   });
+
+  it("failed enrollment (QStash publish fails) is retryable after recovery", async () => {
+    publishStepMock.mockResolvedValueOnce(null as never);
+    const input = { agencyId: "ag1", subAccountId: "subMain", automation: seqAutomation(), contactId: "c9" };
+    expect(await enrollContact(input)).toBe("failed");
+    expect((await fakeDb.doc("automation_executions/auto1_c9").get()).exists).toBe(false);
+    expect(await enrollContact(input)).toBe("enrolled");
+    expect((await fakeDb.doc("automation_executions/auto1_c9").get()).data()?.status).toBe("running");
+  });
 });
