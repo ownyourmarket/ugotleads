@@ -1,10 +1,13 @@
 # Agent API v1 Reference
 
-Phase 1 reference for the machine-to-machine "agent bridge" API. This is the
-input contract for the Phase 3 MCP server — every endpoint below is grounded
-in the actual route source under `src/app/api/agent/v1/`, not the original
-spec (some scopes and one route were adjusted during implementation; see
-Notes).
+Reference for the machine-to-machine "agent bridge" API — Phase 1
+(contacts/deals/templates/sends/reports) plus Phase 2 (outbound sequences,
+replies, the inbound-reply webhook). This is the input contract for the
+Phase 3 MCP server — every endpoint below is grounded in the actual route
+source under `src/app/api/agent/v1/` (and `src/app/api/webhooks/` for the
+one webhook), not the original spec (some scopes and routes were adjusted
+during implementation; see Notes). Phase 2 additions are dated in-line
+where the observed responses come from the Task 13 live smoke.
 
 ## Base URL
 
@@ -73,7 +76,7 @@ Source: `src/lib/agent-api/errors.ts`
 | `VALIDATION_FAILED` | 400 / 409 | Bad input, or (on contact create) a duplicate email in the sub-account |
 | `NOT_FOUND` | 404 | Resource doesn't exist, or doesn't belong to the caller's sub-account |
 | `CONTACT_OPTED_OUT` | 409 | Target contact has `emailOptedOut: true` |
-| `CONFIRM_MISMATCH` | — | Reserved; not currently emitted by any Phase 1 route |
+| `CONFIRM_MISMATCH` | 409 | `POST /sequences/{id}/enroll` — `confirm.expectedCount` was missing or didn't equal the resolved audience size (see Sequences below) |
 | `SEND_FAILED` | 502 / 503 | Email provider not configured, or the send itself failed |
 | `INTERNAL_ERROR` | 500 | Unhandled server-side failure (currently only `reports/summary`'s catch block) |
 
@@ -82,6 +85,9 @@ Source: `src/lib/agent-api/errors.ts`
 | Cap | Limit | Enforced in |
 |---|---|---|
 | Sends per key per UTC day | 100 | `POST /messages/email` via `enforceDailyCap` (`src/lib/agent-api/caps.ts`) |
+| Enrollments per key per UTC day | 500 | `POST /sequences/{id}/enroll` via `enforceDailyCap(cap: "enrollments")` — counted as a preflight against the *resolved audience size*, not per-call |
+| Contacts/tag matches per enroll call | 200 (`MAX_BATCH`) | `POST /sequences/{id}/enroll`, `POST /sequences/{id}/unenroll` |
+| Steps per sequence | 10 (`MAX_STEPS`) | `POST /sequences` |
 | Rows per import call | 200 | `POST /contacts/import` |
 | Search page size | 100 (default 20, `limit` query param clamped to 1-100) | `GET /contacts` |
 
@@ -293,6 +299,252 @@ Response:
 { "data": { "id": "..." } }
 ```
 
+### `POST /api/agent/v1/sequences`
+**Scope:** `sequences:write`
+
+Create an outbound sequence — a `recipeType: "outbound_sequence"` automation.
+Body: `subAccountId`, `name` (required); `steps[]` (1-10 entries, each
+`{ templateId, delaySeconds }`, `delaySeconds >= 0`); `tag` (optional — if
+set, the sequence auto-enrolls any contact that gets this tag via
+`tag_added`, in addition to manual/`enroll` calls); `enabled` (default
+`true`). Every `templateId` must exist, belong to `subAccountId`, and be
+`type: "email"` — sequences are email-only in v1 (SMS is excluded pending
+A2P registration), or `400 VALIDATION_FAILED`.
+
+Request:
+```json
+{
+  "subAccountId": "DDEParISNUlxoMiimi2X",
+  "name": "Cold outreach — box1",
+  "tag": "box1",
+  "enabled": true,
+  "steps": [
+    { "templateId": "tMKRva4xWmLOz0yqEvFq", "delaySeconds": 0 },
+    { "templateId": "tMKRva4xWmLOz0yqEvFq", "delaySeconds": 345600 }
+  ]
+}
+```
+
+Response `201`:
+```json
+{ "data": { "id": "kMPnzWtTlFlAgWnJSzqX" } }
+```
+
+### `GET /api/agent/v1/sequences`
+**Scope:** `sequences:write`
+
+Query params: `subAccountId` (required). Lists up to 100 outbound-sequence
+automations in the sub-account.
+
+Response:
+```json
+{
+  "data": [
+    {
+      "id": "kMPnzWtTlFlAgWnJSzqX",
+      "name": "Cold outreach — box1",
+      "enabled": true,
+      "trigger": { "type": "tag_added", "formId": null, "tag": "box1" },
+      "stepCount": 2
+    }
+  ]
+}
+```
+
+### `POST /api/agent/v1/sequences/{id}/enroll`
+**Scope:** `sequences:enroll`
+
+This is the hard batch-approval gate (spec §5): the caller must resolve the
+audience and prove it knew the count *before* the enroll actually runs.
+
+Body: exactly one of `contactIds` (string[], 1-200) or `tag` (string) —
+providing both or neither is `400 VALIDATION_FAILED`. `confirm.expectedCount`
+(number, required) must equal the resolved audience size:
+- `contactIds` path: `contactIds.length`.
+- `tag` path: the live count of contacts in `subAccountId` with that tag
+  (`array-contains`), capped at 200.
+
+If `confirm` is missing or `expectedCount` doesn't match, the call is
+refused *before touching any contact* with:
+
+```json
+{
+  "error": {
+    "code": "CONFIRM_MISMATCH",
+    "message": "confirm.expectedCount must equal the resolved audience size — re-check the batch with the operator before enrolling.",
+    "details": { "expectedCount": null, "actualCount": 1 }
+  }
+}
+```
+`HTTP 409`. Observed live in the Task 13 smoke, verbatim above.
+
+On a matching `confirm`, each resolved contact is enrolled via
+`enrollContact` — deterministic execution id `${sequenceId}_${contactId}`,
+created with `tx.create()` so a contact can never be enrolled in the same
+sequence twice, ever (not while running, not after it completes, not after
+it stops/replies). This is what makes tag-based auto-enrollment (below) and
+manual re-enrollment both safe to call repeatedly.
+
+Request:
+```json
+{ "tag": "box1", "confirm": { "expectedCount": 42, "summary": "cold outreach batch, approved by Star" } }
+```
+
+Response `201`, observed in the Task 13 smoke (re-enrolling an
+already-enrolled contact):
+```json
+{ "data": { "enrolled": 0, "alreadyEnrolled": 1, "skipped": [] } }
+```
+`skipped[]` entries carry `{ contactId, reason }` — `reason` is
+`"not_found"` (contact doesn't exist or belongs to another sub-account),
+`"no_steps"` (sequence has no enabled steps), or `"failed"` (enrollment
+attempted but the schedule call failed — see `qstashIsConfigured` note under
+Environment variables below).
+
+**Idempotency-Key** is supported (`withIdempotency`, per-call replay window
+24h) and doubles as a cap preflight: a cached replay never re-consumes the
+daily enrollment cap; a fresh `429 CAP_EXCEEDED` is never cached, so it
+stays retryable once capacity frees up.
+
+### `POST /api/agent/v1/sequences/{id}/unenroll`
+**Scope:** `sequences:enroll`
+
+Body: `contactIds` (string[], 1-200, required). For each id, if the
+`${id}_${contactId}` execution exists and is `status: "running"`, sets it to
+`status: "stopped", stoppedReason: "manual"`. Anything else (never enrolled,
+already completed/stopped/failed) counts toward `notRunning`, not an error.
+
+Response:
+```json
+{ "data": { "stopped": 1, "notRunning": 0 } }
+```
+
+### `GET /api/agent/v1/sequences/{id}/status`
+**Scope:** `reports:read`
+
+Aggregates up to 5,000 execution docs (`MAX_DOCS`-style cap, `.select()`
+projection) for this sequence into status counts and a `stoppedReason`
+breakdown.
+
+Response, observed live at each stage of the Task 13 smoke:
+```json
+{
+  "data": {
+    "sequence": { "id": "kMPnzWtTlFlAgWnJSzqX", "name": "bridge-smoke-2 sequence", "enabled": true },
+    "counts": { "running": 0, "completed": 0, "stopped": 1, "failed": 0 },
+    "stoppedReasons": { "replied": 1 }
+  }
+}
+```
+`stoppedReasons` values: `"manual"` (via `/unenroll`), `"replied"` (via the
+inbound webhook's stop-on-reply — see below), `"opt_out"`, `"booking"`
+(shared with other recipe types), `"automation_disabled"` (QStash publish
+failed at enrollment/start time).
+
+### `GET /api/agent/v1/replies`
+**Scope:** `replies:read`
+
+Query params: `subAccountId` (required), `limit` (1-100, default 20),
+`handled` (`"false"` to filter to unhandled only — any other value or
+omitted returns all).
+
+Response, observed in the Task 13 smoke:
+```json
+{
+  "data": [
+    {
+      "id": "smoke-email-t13-...",
+      "contactId": "kHJ4OuW2tiYKyNKcgsHD",
+      "fromEmail": "bridge-smoke-2+t13@example.com",
+      "subject": "Re: Smoke test",
+      "text": "Sounds good, let's talk.",
+      "handled": false,
+      "matchedBy": "email_lookup",
+      "receivedAt": { "_seconds": 1783717456, "_nanoseconds": 808000000 }
+    }
+  ]
+}
+```
+`matchedBy` is `"reply_token"` when the signed `reply+<token>@domain`
+address matched, or `"email_lookup"` when it fell back to a unique
+from-email match (or when no token was present at all). **See the
+case-sensitivity bug noted under Sequences/Replies deviations below —
+`matchedBy: "reply_token"` should be expected far more rarely than the
+design intends until that's fixed.**
+
+### `PATCH /api/agent/v1/replies/{id}`
+**Scope:** `replies:write`
+
+Body: `{ "handled": true | false }` (required, boolean). `404 NOT_FOUND` if
+the doc doesn't exist or belongs to a sub-account the key isn't allowed to
+touch (same doc-ID-resolved-tenant pattern as contacts/deals/templates).
+
+Response:
+```json
+{ "data": { "id": "smoke-email-t13-...", "handled": true } }
+```
+
+### `POST /api/webhooks/resend-inbound`
+**Not part of the `agent/v1` namespace** — this is the inbound side of
+outbound sequences, called by Resend, not by the agent. Documented here
+because it's the mechanism behind Replies/stop-on-reply above.
+
+Faces the open internet. Every request is Svix-signature-verified
+(`src/lib/webhooks/svix-verify.ts`, HMAC-SHA256 over
+`${svix-id}.${svix-timestamp}.${rawBody}` using the base64-decoded portion
+of `RESEND_INBOUND_WEBHOOK_SECRET` after its `whsec_` prefix) before any
+Firestore access.
+
+- **`503`** — `RESEND_INBOUND_WEBHOOK_SECRET` isn't set on this deployment.
+  `{ "error": "not configured" }`.
+- **`401`** — signature missing/invalid/stale (5-minute tolerance on
+  `svix-timestamp`). `{ "error": "bad signature" }`.
+- **`200`** always after that, even on internal ingestion failures — Resend
+  retries on non-2xx, and a downstream bug here must not trigger unbounded
+  retries. `{ "ok": true, "matched": boolean }` on success,
+  `{ "ok": false }` on a caught internal error, `{ "ok": true, "ignored": true }`
+  for a non-`email.received` event or an unparseable body.
+
+Matching (`matchContact`, in order):
+1. A `reply+<contactId>.<hmac12>@<INBOUND_REPLY_DOMAIN>` address in `to` —
+   verified via `verifyReplyToken` (`src/lib/automations/reply-token.ts`),
+   then confirmed against a real `contacts/{id}` doc. Wins outright over
+   the fallback below.
+2. Otherwise, a from-email lookup: exactly one contact in Firestore with
+   `email == fromEmail` (0 or 2+ matches = unmatched).
+
+On a match: writes an `email_reply` activity on the contact; stops every
+`status: "running"` execution for that contact **whose automation is
+`recipeType: "outbound_sequence"`** only (`lead_nurture` and other recipe
+types keep running — a mid-nurture reply isn't "done"), setting
+`status: "stopped", stoppedReason: "replied"` and logging an
+`automation_completed` activity; best-effort forwards a copy to the
+sub-account's `replyToEmail` if `emailIsConfigured()` and one is set. The
+inbound event is always stored as an `inbound_emails` doc (`id` = Resend's
+`email_id` when present, so a Resend redelivery of the same email
+overwrites in place and resets `handled` to `false` — a documented,
+deliberate dedupe tradeoff, not a bug).
+
+**Known gap:** the reply-token address format is
+`reply+<contactId>.<12-hex-char HMAC>@domain`
+(`buildReplyToken`/`resolveSequenceReplyTo`, `src/lib/automations/reply-token.ts`,
+`sequence-reply-to.ts`) — built by the *executor* when it sends a sequence
+step, using `AUTOMATIONS_TOKEN_SECRET`. The webhook rebuilds the same HMAC
+to verify it. **Live testing in Task 13 found the webhook's address
+extraction lowercases the entire `to` address (`extractEmail()`'s
+`.toLowerCase()`) before regex-matching the token, which corrupts the
+contact-ID portion of the token for any ID containing uppercase letters —
+i.e. nearly every Firestore auto-generated document ID.** Reproduced live
+against production Firestore: contact id `kHJ4OuW2tiYKyNKcgsHD` signs to
+HMAC12 `86b111932501`; the webhook's lowercased read of the same id
+(`khj4ouw2tiykynkcgshd`) computes `a66f947991d4` instead, so verification
+fails and the request silently falls through to the from-email fallback.
+**Effectively, `matchedBy: "reply_token"` will not occur in production for
+almost any real contact until this is fixed** — flagged as a follow-up
+task (see `.superpowers/sdd/task-13-report.md` for the full repro and fix
+suggestion); not fixed here per this task's docs-and-verification-only
+scope.
+
 ### `POST /api/agent/v1/messages/email`
 **Scope:** `sends:execute`
 
@@ -343,15 +595,29 @@ that emits this code).
 
 ## Scopes
 
-Full scope union (`src/types/service-keys.ts`); Phase 1 routes use the
-first seven, the rest are reserved for Phase 2 (sequences/replies) so the
-type doesn't churn later:
+Full scope union (`src/types/service-keys.ts`):
 
 ```
 contacts:read, contacts:write, deals:write, templates:read, templates:write,
 sends:execute, reports:read, sequences:write, sequences:enroll,
 replies:read, replies:write
 ```
+
+The last four (`sequences:write`, `sequences:enroll`, `replies:read`,
+`replies:write`) were reserved placeholders through Phase 1; Phase 2 wires
+them up to the Sequences and Replies endpoints above.
+
+## Environment variables (Phase 2 additions)
+
+| Var | Required for | Behavior when unset |
+|---|---|---|
+| `RESEND_INBOUND_WEBHOOK_SECRET` | Verifying `POST /api/webhooks/resend-inbound` signatures | Webhook returns `503 { "error": "not configured" }` on every request — no inbound replies are ingested, so stop-on-reply never fires |
+| `INBOUND_REPLY_DOMAIN` | Building `reply+<token>@<domain>` addresses (executor send path, `resolveSequenceReplyTo`) | Sequence sends fall back to the sub-account's plain `replyToEmail` (or provider default) — replies still land in the inbox, but the webhook can't token-match them (falls to from-email lookup only) |
+| `AUTOMATIONS_TOKEN_SECRET` | Signing/verifying reply tokens (`reply-token.ts`) — same secret already used for unsubscribe links | If unset or under 16 chars, `buildReplyToken`/`verifyReplyToken` both degrade to "no token" rather than throwing — sends use the plain reply-to, and the webhook only ever matches by from-email |
+
+All three already exist as local-dev-only additions during Task 13 (never
+committed — `.env.local` is gitignored); see `docs/OUTBOUND_SEQUENCES.md`
+for the production Vercel setup.
 
 ## Key management (for operators)
 
@@ -407,6 +673,36 @@ throws `ALREADY_EXISTS` if the doc id is taken) as the true uniqueness
 guard, then create the contact doc only after the sentinel create succeeds.
 Firestore enforces document-id uniqueness atomically regardless of query
 races, so this closes the gap the current implementation accepts.
+
+**`fireTriggers`' compound query needs no composite index (confirmed live).**
+`tag_added`/`form_submit` matching (`src/lib/automations/triggers.ts`)
+queries `automations` on `subAccountId ==`, `enabled ==`, and
+`trigger.type ==` — three equality clauses, no range/array-contains mixed
+in. The Task 13 smoke fired this query live against production Firestore
+(tagging a real contact, which calls `fireTagAddedTriggers` →
+`fireTriggers`) and it returned cleanly with no `FAILED_PRECONDITION` —
+Firestore serves multi-equality queries without a composite index. No
+index was created or needed.
+
+**QStash is unconfigured in local dev by design — enrollment can't be
+smoke-tested end-to-end without it.** `QSTASH_TOKEN` (and the signing keys)
+are blank in `.env.local` on this project intentionally
+(`src/lib/automations/qstash.ts`: *"keeps local dev workable without live
+QStash credentials, at the cost of automations not firing"*). Consequence
+for `enrollContact`: when `qstashIsConfigured()` is false, a *first-time*
+enrollment always deletes its own execution doc and returns `"failed"` —
+there's no way to observe a genuine `"enrolled"` outcome locally. The Task
+13 smoke worked around this by seeding an `automation_executions` doc
+directly via the Admin SDK (simulating what a working-QStash environment
+produces) before exercising the tag-trigger and manual-enroll paths — both
+then legitimately hit the real `ref.create()` collision and return
+`"already_enrolled"` through the actual route code, which is what the
+`enrolled: 0, alreadyEnrolled: 1` responses shown above reflect. This
+proves the idempotency/collision logic and the confirm-gate for real; it
+does not exercise a fresh `publishStep` call succeeding. That path is
+covered by the mocked-QStash unit tests in
+`src/lib/automations/__tests__/sequence-engine.test.ts` and
+`sequences-enroll.test.ts`, not by this live smoke.
 
 **Unrelated dev-server noise.** During the Task 14 smoke, the local dev
 server logged a recurring `gitpage/heartbeat` fetch failure
