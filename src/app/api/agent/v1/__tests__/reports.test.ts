@@ -45,4 +45,44 @@ describe("agent reports summary", () => {
       valueByStage: { qualified: 997 },
     });
   });
+
+  it("returns 400 VALIDATION_FAILED when subAccountId is missing", async () => {
+    const res = await GET(
+      new Request("http://test/api/agent/v1/reports/summary", {
+        headers: { authorization: `Bearer ${KEY}` },
+      }),
+    );
+    expect(res.status).toBe(400);
+    const { error } = await res.json();
+    expect(error.code).toBe("VALIDATION_FAILED");
+  });
+
+  it("buckets null pipelineStage and missing stageId under 'none'", async () => {
+    fakeDb.doc("contacts/c4").set({ subAccountId: "subMain", pipelineStage: null, emailOptedOut: false, tags: [] });
+    fakeDb.doc("deals/d2").set({ subAccountId: "subMain", value: 100 });
+    const res = await GET(
+      new Request("http://test/api/agent/v1/reports/summary?subAccountId=subMain", {
+        headers: { authorization: `Bearer ${KEY}` },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data.contacts.byStage.none).toBe(1);
+    expect(data.deals.byStage.none).toBe(1);
+    expect(data.deals.valueByStage.none).toBe(100);
+  });
+
+  it("counts non-numeric deal values as 0 without poisoning the stage sum", async () => {
+    fakeDb.doc("deals/d2").set({ subAccountId: "subMain", stageId: "won", value: "997" });
+    fakeDb.doc("deals/d3").set({ subAccountId: "subMain", stageId: "won", value: 500 });
+    const res = await GET(
+      new Request("http://test/api/agent/v1/reports/summary?subAccountId=subMain", {
+        headers: { authorization: `Bearer ${KEY}` },
+      }),
+    );
+    expect(res.status).toBe(200);
+    const { data } = await res.json();
+    expect(data.deals.byStage.won).toBe(2);
+    expect(data.deals.valueByStage.won).toBe(500);
+  });
 });

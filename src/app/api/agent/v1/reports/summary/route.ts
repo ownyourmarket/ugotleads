@@ -19,44 +19,50 @@ export async function GET(request: Request) {
   });
   if (access instanceof NextResponse) return access;
 
-  const db = getAdminDb();
-  const [contactsSnap, dealsSnap] = await Promise.all([
-    db
-      .collection("contacts")
-      .where("subAccountId", "==", subAccountId)
-      .select("pipelineStage", "emailOptedOut")
-      .limit(MAX_DOCS)
-      .get(),
-    db
-      .collection("deals")
-      .where("subAccountId", "==", subAccountId)
-      .select("stageId", "value")
-      .limit(MAX_DOCS)
-      .get(),
-  ]);
+  try {
+    const db = getAdminDb();
+    const [contactsSnap, dealsSnap] = await Promise.all([
+      db
+        .collection("contacts")
+        .where("subAccountId", "==", subAccountId)
+        .select("pipelineStage", "emailOptedOut")
+        .limit(MAX_DOCS)
+        .get(),
+      db
+        .collection("deals")
+        .where("subAccountId", "==", subAccountId)
+        .select("stageId", "value")
+        .limit(MAX_DOCS)
+        .get(),
+    ]);
 
-  const byStage: Record<string, number> = {};
-  let emailOptedOut = 0;
-  for (const d of contactsSnap.docs) {
-    const c = d.data();
-    const stage = (c.pipelineStage as string) ?? "none";
-    byStage[stage] = (byStage[stage] ?? 0) + 1;
-    if (c.emailOptedOut === true) emailOptedOut++;
+    const byStage: Record<string, number> = {};
+    let emailOptedOut = 0;
+    for (const d of contactsSnap.docs) {
+      const c = d.data();
+      const stage = (c.pipelineStage as string) ?? "none";
+      byStage[stage] = (byStage[stage] ?? 0) + 1;
+      if (c.emailOptedOut === true) emailOptedOut++;
+    }
+
+    const dealsByStage: Record<string, number> = {};
+    const valueByStage: Record<string, number> = {};
+    for (const d of dealsSnap.docs) {
+      const deal = d.data();
+      const stage = (deal.stageId as string) ?? "none";
+      dealsByStage[stage] = (dealsByStage[stage] ?? 0) + 1;
+      const value = typeof deal.value === "number" && Number.isFinite(deal.value) ? deal.value : 0;
+      valueByStage[stage] = (valueByStage[stage] ?? 0) + value;
+    }
+
+    return NextResponse.json({
+      data: {
+        contacts: { total: contactsSnap.size, byStage, emailOptedOut },
+        deals: { total: dealsSnap.size, byStage: dealsByStage, valueByStage },
+      },
+    });
+  } catch (err) {
+    console.error("[agent reports] summary failed", err);
+    return agentError("INTERNAL_ERROR", "Failed to compute summary.", 500);
   }
-
-  const dealsByStage: Record<string, number> = {};
-  const valueByStage: Record<string, number> = {};
-  for (const d of dealsSnap.docs) {
-    const deal = d.data();
-    const stage = (deal.stageId as string) ?? "none";
-    dealsByStage[stage] = (dealsByStage[stage] ?? 0) + 1;
-    valueByStage[stage] = (valueByStage[stage] ?? 0) + ((deal.value as number) ?? 0);
-  }
-
-  return NextResponse.json({
-    data: {
-      contacts: { total: contactsSnap.size, byStage, emailOptedOut },
-      deals: { total: dealsSnap.size, byStage: dealsByStage, valueByStage },
-    },
-  });
 }

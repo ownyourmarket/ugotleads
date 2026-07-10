@@ -9,7 +9,8 @@ export type AgentErrorCode =
   | "NOT_FOUND"
   | "CONTACT_OPTED_OUT"
   | "CONFIRM_MISMATCH"
-  | "SEND_FAILED";
+  | "SEND_FAILED"
+  | "INTERNAL_ERROR";
 
 export function agentError(
   code: AgentErrorCode,
