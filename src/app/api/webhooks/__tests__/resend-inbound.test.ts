@@ -1,6 +1,7 @@
 import { createHmac, randomBytes, randomUUID } from "node:crypto";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fakeDb, resetFakeDb } from "@/test/fake-admin";
+import { buildReplyToken } from "@/lib/automations/reply-token";
 
 vi.mock("@/lib/firebase/admin", async () => {
   const { fakeDb } = await import("@/test/fake-admin");
@@ -47,6 +48,7 @@ beforeEach(() => {
   sendEmailMock.mockClear();
   secretB64 = randomBytes(24).toString("base64");
   process.env.RESEND_INBOUND_WEBHOOK_SECRET = `whsec_${secretB64}`;
+  process.env.AUTOMATIONS_TOKEN_SECRET = "test-secret-please-ignore-0123456789";
 
   fakeDb.doc("subAccounts/subMain").set({ agencyId: "ag1", replyToEmail: "star@myusa.com" });
   fakeDb.doc("contacts/c1").set({
@@ -89,13 +91,14 @@ describe("POST /api/webhooks/resend-inbound", () => {
   });
 
   it("ingests a reply matched by plus-token, stops only the outbound sequence, forwards a copy", async () => {
+    const token = buildReplyToken("c1")!;
     const res = await POST(
       signedRequest({
         type: "email.received",
         data: {
           email_id: "re_123",
           from: "Pat Prospect <prospect@ex.com>",
-          to: ["reply+c1@hey.ugotleads.io"],
+          to: [`reply+${token}@hey.ugotleads.io`],
           subject: "Re: Quick question",
           text: "Sounds interesting, call me",
         },
@@ -166,6 +169,29 @@ describe("POST /api/webhooks/resend-inbound", () => {
       subAccountId: null,
       agencyId: null,
     });
+  });
+
+  it("falls through to from-email fallback on a bad-hmac reply token", async () => {
+    const res = await POST(
+      signedRequest({
+        type: "email.received",
+        data: {
+          email_id: "re_badhmac",
+          // Well-formed shape (dot + 12 hex chars) but the hmac is wrong —
+          // verifyReplyToken must reject it, and since the from-email
+          // matches no contact, the reply ends up unmatched (not an
+          // error, not a false match).
+          from: "unknown@nowhere.com",
+          to: ["reply+c1.000000000000@hey.ugotleads.io"],
+          subject: "spoofed?",
+          text: "hi",
+        },
+      }),
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).matched).toBe(false);
+    const doc = (await fakeDb.doc("inbound_emails/re_badhmac").get()).data();
+    expect(doc).toMatchObject({ contactId: null, matchedBy: null });
   });
 
   it("ignores non-received event types", async () => {

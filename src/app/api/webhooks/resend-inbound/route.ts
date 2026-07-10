@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { verifySvixSignature } from "@/lib/webhooks/svix-verify";
+import { verifyReplyToken } from "@/lib/automations/reply-token";
 import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
 import type { InboundEmailDoc } from "@/types/inbound-emails";
 
@@ -67,9 +68,13 @@ interface ContactMatch {
 }
 
 /**
- * Behavior 5: reply-token address wins outright (verified against a real
- * contact); otherwise fall back to a unique from-email lookup. Zero or
- * ambiguous (>1) from-email hits leave the reply unmatched.
+ * Behavior 5: reply-token address wins outright (HMAC-verified, then
+ * checked against a real contact); otherwise fall back to a unique
+ * from-email lookup. Zero or ambiguous (>1) from-email hits leave the
+ * reply unmatched. An invalid/tampered HMAC is indistinguishable from "no
+ * token present" — it falls through to the from-email fallback exactly
+ * like an unmatched address, never treated as an error. No legacy plain
+ * contact-ID format is accepted (feature is unreleased).
  */
 async function matchContact(
   db: FirebaseFirestore.Firestore,
@@ -78,18 +83,19 @@ async function matchContact(
 ): Promise<ContactMatch | null> {
   let tokenCandidate: string | null = null;
   for (const addr of toAddresses) {
-    const m = /^reply\+([A-Za-z0-9]+)@/i.exec(addr);
+    const m = /^reply\+([A-Za-z0-9]+\.[a-f0-9]{12})@/i.exec(addr);
     if (m) {
       tokenCandidate = m[1];
       break;
     }
   }
-  if (tokenCandidate) {
-    const snap = await db.doc(`contacts/${tokenCandidate}`).get();
+  const verifiedContactId = tokenCandidate ? verifyReplyToken(tokenCandidate) : null;
+  if (verifiedContactId) {
+    const snap = await db.doc(`contacts/${verifiedContactId}`).get();
     if (snap.exists) {
       const data = snap.data() as Record<string, unknown> | undefined;
       return {
-        contactId: tokenCandidate,
+        contactId: verifiedContactId,
         matchedBy: "reply_token",
         subAccountId: (data?.subAccountId as string | undefined) ?? null,
         agencyId: (data?.agencyId as string | undefined) ?? null,

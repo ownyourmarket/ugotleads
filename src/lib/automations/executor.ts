@@ -7,6 +7,7 @@ import { injectTracking } from "@/lib/comms/tracking";
 import { sendSms, smsIsConfigured } from "@/lib/comms/twilio";
 import { resolveMergeTags } from "./merge-tags";
 import { publishStep } from "./qstash";
+import { resolveSequenceReplyTo } from "./sequence-reply-to";
 import { buildUnsubscribeUrl } from "./unsubscribe-token";
 import type {
   AutomationDoc,
@@ -313,14 +314,13 @@ export async function executeStep(input: ExecuteStepInput): Promise<void> {
         ctx: "automation",
         ref: input.executionId,
       });
-      // Reply-To is the sub-account's nominated address — but only when
-      // the recipient is the lead/contact. Owner-notify steps go to a
-      // static address (the owner themselves); routing their reply back
-      // to the sub-account inbox is pointless.
-      const replyTo =
-        step.recipient.kind === "contact"
-          ? subAccount?.replyToEmail ?? undefined
-          : undefined;
+      const replyTo = resolveSequenceReplyTo({
+        recipeType: automation.recipeType,
+        recipientKind: step.recipient.kind,
+        contactId: contact.id,
+        subAccountReplyTo: subAccount?.replyToEmail ?? null,
+        inboundDomain: process.env.INBOUND_REPLY_DOMAIN ?? null,
+      });
       await sendEmail({
         to: recipientAddress,
         subject: resolvedSubject || "(no subject)",
