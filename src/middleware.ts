@@ -42,6 +42,9 @@ const PUBLIC_PATHS = [
   // Firebase Auth. Auth checks happen inside each route/page.
   "/affiliate",
   "/api/affiliate",
+  // Agent API — machine callers with service keys. Session middleware is
+  // bypassed; every route authenticates itself via requireServiceAuth().
+  "/api/agent",
 ];
 
 /**
