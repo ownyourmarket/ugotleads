@@ -18,6 +18,12 @@ export async function POST(request: Request) {
   if (!body || typeof body.subAccountId !== "string" || !body.subAccountId) {
     return agentError("VALIDATION_FAILED", "subAccountId is required.", 400);
   }
+  if (
+    body.tags !== undefined &&
+    (!Array.isArray(body.tags) || body.tags.some((t) => typeof t !== "string"))
+  ) {
+    return agentError("VALIDATION_FAILED", "tags must be an array of strings.", 400);
+  }
 
   const access = await requireServiceAuth(request, {
     scope: "contacts:write",
@@ -25,8 +31,8 @@ export async function POST(request: Request) {
   });
   if (access instanceof NextResponse) return access;
 
-  const email = body.email?.trim().toLowerCase() ?? "";
-  const phone = body.phone?.trim() ?? "";
+  const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+  const phone = typeof body.phone === "string" ? body.phone.trim() : "";
   if (!email && !phone) {
     return agentError("VALIDATION_FAILED", "A valid email or a phone number is required.", 400);
   }
@@ -36,28 +42,33 @@ export async function POST(request: Request) {
 
   return withIdempotency(request, access.keyId, async () => {
     const db = getAdminDb();
-    if (email) {
-      const dup = await db
-        .collection("contacts")
-        .where("subAccountId", "==", access.subAccountId)
-        .where("email", "==", email)
-        .limit(1)
-        .get();
-      if (!dup.empty) {
-        return {
-          status: 409,
-          body: {
-            error: {
-              code: "VALIDATION_FAILED",
-              message: "A contact with this email already exists in the sub-account.",
-              details: { existingId: dup.docs[0].id },
-            },
-          },
-        };
+    const created = await db.runTransaction(async (tx) => {
+      if (email) {
+        const dup = await tx.get(
+          db.collection("contacts")
+            .where("subAccountId", "==", access.subAccountId)
+            .where("email", "==", email)
+            .limit(1),
+        );
+        if (!dup.empty) return { duplicateId: dup.docs[0].id as string };
       }
+      const ref = db.collection("contacts").doc();
+      tx.set(ref, buildContactDoc(access, body));
+      return { id: ref.id };
+    });
+    if ("duplicateId" in created) {
+      return {
+        status: 409,
+        body: {
+          error: {
+            code: "VALIDATION_FAILED",
+            message: "A contact with this email already exists in the sub-account.",
+            details: { existingId: created.duplicateId },
+          },
+        },
+      };
     }
-    const ref = await db.collection("contacts").add(buildContactDoc(access, body));
-    return { status: 201, body: { data: { id: ref.id } } };
+    return { status: 201, body: { data: { id: created.id } } };
   });
 }
 

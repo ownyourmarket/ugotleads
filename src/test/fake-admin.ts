@@ -110,6 +110,11 @@ class FakeQuery {
     await ref.set(data);
     return ref;
   }
+
+  doc(id?: string): FakeDocRef {
+    const docId = id ?? `fake${(this.db.nextId++).toString(36).padStart(6, "0")}`;
+    return new FakeDocRef(this.db, `${this.collectionPath}/${docId}`);
+  }
 }
 
 export class FakeDb {
@@ -126,13 +131,15 @@ export class FakeDb {
 
   async runTransaction<T>(
     fn: (tx: {
-      get: (ref: FakeDocRef) => Promise<FakeSnap>;
+      // Accepts a doc ref OR a query — anything with .get() (mirrors real tx.get overloads).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      get: (refOrQuery: { get(): Promise<any> }) => Promise<any>;
       set: (ref: FakeDocRef, data: DocData, opts?: { merge?: boolean }) => void;
       update: (ref: FakeDocRef, data: DocData) => void;
     }) => Promise<T>,
   ): Promise<T> {
     return fn({
-      get: (ref) => ref.get(),
+      get: (refOrQuery) => refOrQuery.get(),
       set: (ref, data, opts) => void ref.set(data, opts),
       update: (ref, data) => void ref.update(data),
     });

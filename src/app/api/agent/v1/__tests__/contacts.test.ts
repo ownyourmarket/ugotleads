@@ -91,4 +91,21 @@ describe("agent contacts", () => {
     const res = await GET(get("subAccountId=subOther"));
     expect(res.status).toBe(403);
   });
+
+  it("400s when tags contains non-string values", async () => {
+    const res = await POST(post({ subAccountId: "subMain", email: "t@ex.com", tags: [123] }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
+  });
+
+  it("403s when creating in a sub-account outside the allowlist", async () => {
+    const res = await POST(post({ subAccountId: "subOther", email: "x@ex.com" }));
+    expect(res.status).toBe(403);
+  });
+
+  it("400s when email is a non-string and no phone is given", async () => {
+    const res = await POST(post({ subAccountId: "subMain", email: 42 }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
+  });
 });
