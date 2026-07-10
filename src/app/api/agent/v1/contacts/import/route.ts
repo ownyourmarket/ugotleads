@@ -11,6 +11,7 @@ import {
   type AgentContactInput,
 } from "@/lib/agent-api/contact-defaults";
 import { requireServiceAuth } from "@/lib/auth/require-service-auth";
+import { fireTagAddedTriggers } from "@/lib/automations/tag-triggers";
 
 const MAX_ROWS = 200;
 
@@ -68,12 +69,17 @@ export const POST = withAgentRoute(async (request: Request) => {
           continue;
         }
       }
+      const rowTags = (Array.isArray(row.tags) ? row.tags : []).filter(
+        (t): t is string => typeof t === "string" && !!t.trim(),
+      );
+
       if (effectiveEmail) {
         if (seenEmails.has(effectiveEmail)) {
           skipped.push({ index: i, reason: "duplicate_email" });
           continue;
         }
         // Use transactional pattern for email-backed rows
+        const ref = db.collection("contacts").doc();
         const result = await db.runTransaction(async (tx) => {
           const dup = await tx.get(
             db.collection("contacts")
@@ -82,7 +88,6 @@ export const POST = withAgentRoute(async (request: Request) => {
               .limit(1),
           );
           if (!dup.empty) return { duplicate: true as const };
-          const ref = db.collection("contacts").doc();
           tx.set(ref, buildContactDoc(access, row));
           return { duplicate: false as const };
         });
@@ -91,9 +96,33 @@ export const POST = withAgentRoute(async (request: Request) => {
           continue;
         }
         seenEmails.add(effectiveEmail);
+        if (rowTags.length) {
+          try {
+            await fireTagAddedTriggers({
+              agencyId: access.agencyId,
+              subAccountId: access.subAccountId as string,
+              contactId: ref.id,
+              addedTags: rowTags,
+            });
+          } catch (err) {
+            console.warn("[agent contacts import] tag triggers failed", err);
+          }
+        }
       } else {
         // Phone-only rows: direct add without transaction
-        await db.collection("contacts").add(buildContactDoc(access, row));
+        const ref = await db.collection("contacts").add(buildContactDoc(access, row));
+        if (rowTags.length) {
+          try {
+            await fireTagAddedTriggers({
+              agencyId: access.agencyId,
+              subAccountId: access.subAccountId as string,
+              contactId: ref.id,
+              addedTags: rowTags,
+            });
+          } catch (err) {
+            console.warn("[agent contacts import] tag triggers failed", err);
+          }
+        }
       }
       created++;
     }

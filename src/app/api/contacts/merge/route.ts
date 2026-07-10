@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import type { MemberStatus, Role } from "@/types";
+import { fireTagAddedTriggers } from "@/lib/automations/tag-triggers";
 
 interface CallerClaims {
   status?: MemberStatus;
@@ -152,10 +153,21 @@ export async function POST(request: Request) {
 
   // Update tags on the keep contact.
   if (mergedTags.size > (keepData.tags?.length ?? 0)) {
+    const finalTags = [...mergedTags];
     await db.doc(`contacts/${keepId}`).update({
-      tags: [...mergedTags],
+      tags: finalTags,
       updatedAt: FieldValue.serverTimestamp(),
     });
+    try {
+      await fireTagAddedTriggers({
+        agencyId,
+        subAccountId,
+        contactId: keepId,
+        addedTags: finalTags,
+      });
+    } catch (err) {
+      console.warn("[contacts/merge] tag triggers failed", err);
+    }
   }
 
   return NextResponse.json({

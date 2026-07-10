@@ -7,6 +7,11 @@ vi.mock("@/lib/firebase/admin", async () => {
   return { getAdminDb: () => fakeDb, getAdminAuth: () => ({}) };
 });
 
+const fireTagsMock = vi.fn(async (_args: unknown) => {});
+vi.mock("@/lib/automations/tag-triggers", () => ({
+  fireTagAddedTriggers: (args: unknown) => fireTagsMock(args),
+}));
+
 import { GET, PATCH } from "@/app/api/agent/v1/contacts/[id]/route";
 
 let KEY: string;
@@ -19,6 +24,7 @@ beforeEach(() => {
     allowedSubAccounts: ["subMain"], scopes: ["contacts:read", "contacts:write"], status: "active",
   });
   KEY = gen.key;
+  fireTagsMock.mockClear();
   fakeDb.doc("contacts/c1").set({
     name: "Ann", email: "a@ex.com", phone: "", company: "", tags: ["box1"],
     pipelineStage: "new", agencyId: "ag1", subAccountId: "subMain",
@@ -107,5 +113,13 @@ describe("agent contact detail", () => {
       { params: Promise.resolve({ id: "c1" }) },
     );
     expect((await after.json()).data.name).toBe("Ann");
+  });
+
+  it("fires tag_added only for tags actually added by PATCH", async () => {
+    // c1 already has ["box1"]
+    await PATCH(...patch("c1", { addTags: ["box1", "warm"] }));
+    expect(fireTagsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ contactId: "c1", addedTags: ["warm"] }),
+    );
   });
 });

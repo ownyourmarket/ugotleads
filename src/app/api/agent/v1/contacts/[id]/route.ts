@@ -11,6 +11,7 @@ import {
   subAccountAllowed,
 } from "@/lib/auth/require-service-auth";
 import { PIPELINE_STAGES } from "@/types/deals";
+import { fireTagAddedTriggers } from "@/lib/automations/tag-triggers";
 
 async function loadAuthorizedContact(
   request: Request,
@@ -107,6 +108,7 @@ export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
 
   // Tags: read-modify-write (intentionally no FieldValue.arrayUnion — we
   // already hold the doc, and plain arrays are testable + ordered).
+  let actuallyAdded: string[] = [];
   if (body.addTags || body.removeTags) {
     const current = (contact.tags as string[]) ?? [];
     const removeSet = new Set((body.removeTags ?? []).map((t) => t.trim().slice(0, 50)));
@@ -117,6 +119,7 @@ export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
       if (t && !removeSet.has(t) && !next.includes(t)) next.push(t);
     }
     update.tags = next;
+    actuallyAdded = next.filter((t) => !current.includes(t));
   }
 
   const stageChanged =
@@ -124,6 +127,19 @@ export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
   if (stageChanged) update.pipelineStage = body.pipelineStage;
 
   await ref.update(update);
+
+  if (actuallyAdded.length > 0) {
+    try {
+      await fireTagAddedTriggers({
+        agencyId: contact.agencyId as string,
+        subAccountId: contact.subAccountId as string,
+        contactId: id,
+        addedTags: actuallyAdded,
+      });
+    } catch (err) {
+      console.warn("[agent contacts] tag triggers failed", err);
+    }
+  }
 
   if (stageChanged) {
     await getAdminDb()

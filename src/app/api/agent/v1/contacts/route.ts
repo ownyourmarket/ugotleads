@@ -11,6 +11,7 @@ import {
   type AgentContactInput,
 } from "@/lib/agent-api/contact-defaults";
 import { requireServiceAuth } from "@/lib/auth/require-service-auth";
+import { fireTagAddedTriggers } from "@/lib/automations/tag-triggers";
 
 export const POST = withAgentRoute(async (request: Request) => {
   const body = (await request.json().catch(() => null)) as
@@ -69,6 +70,23 @@ export const POST = withAgentRoute(async (request: Request) => {
         },
       };
     }
+
+    const createdTags = (Array.isArray(body.tags) ? body.tags : []).filter(
+      (t): t is string => typeof t === "string" && !!t.trim(),
+    );
+    if (createdTags.length) {
+      try {
+        await fireTagAddedTriggers({
+          agencyId: access.agencyId,
+          subAccountId: access.subAccountId as string,
+          contactId: created.id,
+          addedTags: createdTags,
+        });
+      } catch (err) {
+        console.warn("[agent contacts] tag triggers failed", err);
+      }
+    }
+
     return { status: 201, body: { data: { id: created.id } } };
   });
 });

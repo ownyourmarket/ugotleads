@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import type { MemberStatus, Role } from "@/types";
+import { fireTagAddedTriggers } from "@/lib/automations/tag-triggers";
 
 interface CallerClaims {
   status?: MemberStatus;
@@ -108,6 +109,14 @@ export async function POST(request: Request) {
         updated++;
       }
       await batch.commit();
+    }
+
+    for (const id of contactIds) {
+      try {
+        await fireTagAddedTriggers({ agencyId, subAccountId, contactId: id, addedTags: [trimmed] });
+      } catch (err) {
+        console.warn("[contacts/bulk] tag triggers failed", err);
+      }
     }
 
     return NextResponse.json({ ok: true, updated });

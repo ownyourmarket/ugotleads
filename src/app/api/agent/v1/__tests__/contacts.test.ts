@@ -7,6 +7,11 @@ vi.mock("@/lib/firebase/admin", async () => {
   return { getAdminDb: () => fakeDb, getAdminAuth: () => ({}) };
 });
 
+const fireTagsMock = vi.fn(async (_args: unknown) => {});
+vi.mock("@/lib/automations/tag-triggers", () => ({
+  fireTagAddedTriggers: (args: unknown) => fireTagsMock(args),
+}));
+
 import { POST, GET } from "@/app/api/agent/v1/contacts/route";
 
 let KEY: string;
@@ -43,6 +48,7 @@ describe("agent contacts", () => {
   beforeEach(() => {
     resetFakeDb();
     seedKey();
+    fireTagsMock.mockClear();
   });
 
   it("creates a contact with agent-stamped defaults", async () => {
@@ -107,5 +113,12 @@ describe("agent contacts", () => {
     const res = await POST(post({ subAccountId: "subMain", email: 42 }));
     expect(res.status).toBe(400);
     expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
+  });
+
+  it("fires tag_added triggers for tags on create", async () => {
+    await POST(post({ subAccountId: "subMain", email: "t@ex.com", tags: ["box1", "warm"] }));
+    expect(fireTagsMock).toHaveBeenCalledWith(
+      expect.objectContaining({ subAccountId: "subMain", addedTags: ["box1", "warm"] }),
+    );
   });
 });
