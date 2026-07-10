@@ -117,6 +117,24 @@ describe("agent one-off email", () => {
     expect(after.size).toBe(beforeCount);
   });
 
+  it("404s when sending to a contact belonging to another sub-account", async () => {
+    fakeDb.doc("contacts/cOther").set({
+      name: "Foreign", email: "foreign@ex.com", subAccountId: "subOther", agencyId: "ag1",
+      tags: [], emailOptedOut: false, smsOptedOut: false,
+    });
+    const res = await POST(post({ contactId: "cOther", subject: "S", body: "B" }));
+    expect(res.status).toBe(404);
+    expect((await res.json()).error.code).toBe("NOT_FOUND");
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
+  it("400s when the subject exceeds 300 characters", async () => {
+    const res = await POST(post({ contactId: "c1", subject: "x".repeat(301), body: "B" }));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
+    expect(sendEmailMock).not.toHaveBeenCalled();
+  });
+
   it("400s on non-string contactId without crash", async () => {
     const res = await POST(post({ contactId: 42, subject: "S", body: "B" }));
     expect(res.status).toBe(400);

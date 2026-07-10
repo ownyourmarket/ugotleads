@@ -47,7 +47,10 @@ export const POST = withAgentRoute(async (request: Request) => {
   }
 
   const contactId = body.contactId;
-  const value = typeof body.value === "number" && body.value >= 0 ? body.value : 0;
+  const value =
+    typeof body.value === "number" && Number.isFinite(body.value) && body.value >= 0
+      ? body.value
+      : 0;
   // Hardening: safely extract currency only if it's a string
   const currency = typeof body.currency === "string" ? body.currency.trim() || "USD" : "USD";
 

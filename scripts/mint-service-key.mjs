@@ -22,6 +22,28 @@ if (!label || !subAccount || scopes.length === 0) {
   process.exit(1);
 }
 
+// Mirrors ServiceScope in src/types/service-keys.ts — keep in sync.
+const VALID_SCOPES = [
+  "contacts:read",
+  "contacts:write",
+  "deals:write",
+  "templates:read",
+  "templates:write",
+  "sends:execute",
+  "reports:read",
+  "sequences:write",
+  "sequences:enroll",
+  "replies:read",
+  "replies:write",
+];
+for (const scope of scopes) {
+  if (!VALID_SCOPES.includes(scope)) {
+    console.error(`Unknown scope: "${scope}"`);
+    console.error(`Valid scopes: ${VALID_SCOPES.join(", ")}`);
+    process.exit(1);
+  }
+}
+
 // Minimal .env.local loader (no dotenv dependency).
 const env = { ...process.env };
 try {

@@ -115,6 +115,28 @@ describe("agent contact detail", () => {
     expect((await after.json()).data.name).toBe("Ann");
   });
 
+  it("409s when patching email to one already used by another contact in the sub-account", async () => {
+    fakeDb.doc("contacts/c2").set({
+      name: "Bea", email: "taken@ex.com", phone: "", company: "", tags: [],
+      pipelineStage: "new", agencyId: "ag1", subAccountId: "subMain",
+      emailOptedOut: false, smsOptedOut: false,
+    });
+    const res = await PATCH(...patch("c1", { email: "taken@ex.com" }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body.error.code).toBe("VALIDATION_FAILED");
+    expect(body.error.details.existingId).toBe("c2");
+  });
+
+  it("400s when clearing email on a contact with no phone", async () => {
+    const res = await PATCH(...patch("c1", { email: "" }));
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe("VALIDATION_FAILED");
+    const stored = await fakeDb.doc("contacts/c1").get();
+    expect(stored.data()?.email).toBe("a@ex.com");
+  });
+
   it("fires tag_added only for tags actually added by PATCH", async () => {
     // c1 already has ["box1"]
     await PATCH(...patch("c1", { addTags: ["box1", "warm"] }));

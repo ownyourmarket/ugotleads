@@ -15,6 +15,8 @@ import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
 import { recordSend } from "@/lib/comms/usage";
 
 const DAILY_SEND_CAP = 100;
+const MAX_SUBJECT_LEN = 300;
+const MAX_BODY_LEN = 100_000;
 
 export const POST = withAgentRoute(async (request: Request) => {
   if (!emailIsConfigured()) {
@@ -31,6 +33,12 @@ export const POST = withAgentRoute(async (request: Request) => {
   const text = typeof body?.body === "string" ? body.body.trim() : undefined;
   if (!contactId || !subject || !text) {
     return agentError("VALIDATION_FAILED", "contactId, subject, and body are required.", 400);
+  }
+  if (subject.length > MAX_SUBJECT_LEN) {
+    return agentError("VALIDATION_FAILED", `subject must be ${MAX_SUBJECT_LEN} characters or fewer.`, 400);
+  }
+  if (text.length > MAX_BODY_LEN) {
+    return agentError("VALIDATION_FAILED", `body must be ${MAX_BODY_LEN} characters or fewer.`, 400);
   }
 
   const access = await requireServiceAuth(request, { scope: "sends:execute" });

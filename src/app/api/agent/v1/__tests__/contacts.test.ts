@@ -115,6 +115,14 @@ describe("agent contacts", () => {
     expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
   });
 
+  it("400s on an unknown pipelineStage", async () => {
+    const res = await POST(
+      post({ subAccountId: "subMain", email: "stage@ex.com", pipelineStage: "galaxy" }),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
+  });
+
   it("fires tag_added triggers for tags on create", async () => {
     await POST(post({ subAccountId: "subMain", email: "t@ex.com", tags: ["box1", "warm"] }));
     expect(fireTagsMock).toHaveBeenCalledWith(

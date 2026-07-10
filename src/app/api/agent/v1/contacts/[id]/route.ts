@@ -99,6 +99,33 @@ export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
   if (loaded instanceof NextResponse) return loaded;
   const { access, ref, contact } = loaded;
 
+  if (typeof body.email === "string") {
+    const nextEmail = body.email.trim().toLowerCase();
+    const currentEmail = (contact.email as string | undefined) ?? "";
+    if (nextEmail === "") {
+      const effectivePhone =
+        typeof body.phone === "string" ? body.phone.trim() : ((contact.phone as string | undefined) ?? "");
+      if (!effectivePhone) {
+        return agentError("VALIDATION_FAILED", "Contact must keep an email or a phone.", 400);
+      }
+    } else if (nextEmail !== currentEmail) {
+      const dup = await getAdminDb()
+        .collection("contacts")
+        .where("subAccountId", "==", contact.subAccountId)
+        .where("email", "==", nextEmail)
+        .limit(1)
+        .get();
+      if (!dup.empty && dup.docs[0].id !== id) {
+        return agentError(
+          "VALIDATION_FAILED",
+          "A contact with this email already exists in the sub-account.",
+          409,
+          { existingId: dup.docs[0].id },
+        );
+      }
+    }
+  }
+
   const update: Record<string, unknown> = { updatedAt: FieldValue.serverTimestamp() };
   // Hardening: guard non-string inputs with typeof check
   if (typeof body.name === "string") update.name = body.name.trim();

@@ -8,7 +8,7 @@ vi.mock("@/lib/firebase/admin", async () => {
 });
 
 import { GET, POST } from "@/app/api/agent/v1/templates/route";
-import { PATCH } from "@/app/api/agent/v1/templates/[id]/route";
+import { GET as GET_BY_ID, PATCH } from "@/app/api/agent/v1/templates/[id]/route";
 
 let KEY: string;
 
@@ -98,6 +98,60 @@ describe("agent templates", () => {
         method: "PATCH",
         headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
         body: JSON.stringify({ subject: "" }),
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
+  });
+
+  it("404s when getting a template belonging to another sub-account", async () => {
+    fakeDb.doc("message_templates/tOther").set({
+      agencyId: "ag1", subAccountId: "subOther", type: "email",
+      name: "Foreign", subject: "S", body: VALID_EMAIL_BODY,
+    });
+    const res = await GET_BY_ID(
+      new Request("http://test/x", { headers: { authorization: `Bearer ${KEY}` } }),
+      { params: Promise.resolve({ id: "tOther" }) },
+    );
+    expect(res.status).toBe(404);
+    expect((await res.json()).error.code).toBe("NOT_FOUND");
+  });
+
+  it("400s when listing with an unknown type query param", async () => {
+    const res = await GET(
+      new Request("http://test/api/agent/v1/templates?subAccountId=subMain&type=fax", {
+        headers: { authorization: `Bearer ${KEY}` },
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
+  });
+
+  it("400s when creating a template with a name longer than 200 characters", async () => {
+    const res = await POST(
+      post({
+        subAccountId: "subMain",
+        type: "email",
+        name: "x".repeat(201),
+        subject: "S",
+        body: VALID_EMAIL_BODY,
+      }),
+    );
+    expect(res.status).toBe(400);
+    expect((await res.json()).error.code).toBe("VALIDATION_FAILED");
+  });
+
+  it("400s when patching a template body longer than 100,000 characters", async () => {
+    const createRes = await POST(
+      post({ subAccountId: "subMain", type: "email", name: "E", subject: "S", body: VALID_EMAIL_BODY }),
+    );
+    const { id } = (await createRes.json()).data;
+    const res = await PATCH(
+      new Request("http://test/x", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        body: JSON.stringify({ body: "x".repeat(100_001) }),
       }),
       { params: Promise.resolve({ id }) },
     );

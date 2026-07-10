@@ -52,4 +52,12 @@ describe("fireTagAddedTriggers", () => {
     await fireTagAddedTriggers({ agencyId: "ag1", subAccountId: "subMain", contactId: "c2", addedTags: ["box1"] });
     expect((await fakeDb.doc("automation_executions/autoA_c2").get()).exists).toBe(false);
   });
+
+  it("normalizes tags to their 50-char truncation before matching (parity with buildContactDoc)", async () => {
+    const truncated = "a".repeat(50);
+    const overlong = "a".repeat(60);
+    seedSequenceAutomation("autoA", truncated);
+    await fireTagAddedTriggers({ agencyId: "ag1", subAccountId: "subMain", contactId: "c1", addedTags: [overlong] });
+    expect((await fakeDb.doc("automation_executions/autoA_c1").get()).exists).toBe(true);
+  });
 });

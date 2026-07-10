@@ -49,7 +49,9 @@ export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
   if (body.title !== undefined && typeof body.title === "string" && body.title.trim()) {
     update.title = body.title.trim();
   }
-  if (typeof body.value === "number" && body.value >= 0) update.value = body.value;
+  if (typeof body.value === "number" && Number.isFinite(body.value) && body.value >= 0) {
+    update.value = body.value;
+  }
   if (body.priority !== undefined) update.priority = body.priority;
   // Hardening: null clears the reason; only strings (trimmed) are stored; other types ignored
   if (body.lostReason === null) {

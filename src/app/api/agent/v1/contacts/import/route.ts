@@ -12,6 +12,7 @@ import {
 } from "@/lib/agent-api/contact-defaults";
 import { requireServiceAuth } from "@/lib/auth/require-service-auth";
 import { fireTagAddedTriggers } from "@/lib/automations/tag-triggers";
+import { PIPELINE_STAGES } from "@/types/deals";
 
 const MAX_ROWS = 200;
 
@@ -48,6 +49,15 @@ export const POST = withAgentRoute(async (request: Request) => {
         skipped.push({ index: i, reason: "invalid_row" });
         continue;
       }
+      if (
+        typeof row.pipelineStage === "string" &&
+        row.pipelineStage !== "" &&
+        !PIPELINE_STAGES.some((s) => s.id === row.pipelineStage)
+      ) {
+        skipped.push({ index: i, reason: "invalid_pipeline_stage" });
+        continue;
+      }
+
       const email = typeof row.email === "string" ? row.email.trim().toLowerCase() : "";
       const phone = typeof row.phone === "string" ? row.phone.trim() : "";
 

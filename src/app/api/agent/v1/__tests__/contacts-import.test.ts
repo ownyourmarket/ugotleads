@@ -88,6 +88,19 @@ describe("agent contacts import", () => {
     expect(all.docs[0].data()?.email).toBe("");
   });
 
+  it("skips a row with an unknown pipelineStage with reason invalid_pipeline_stage", async () => {
+    const res = await POST(
+      post({
+        subAccountId: "subMain",
+        contacts: [{ name: "Bad Stage", phone: "+14045550102", pipelineStage: "galaxy" }],
+      }),
+    );
+    expect(res.status).toBe(201);
+    const { created, skipped } = (await res.json()).data;
+    expect(created).toBe(0);
+    expect(skipped).toEqual([{ index: 0, reason: "invalid_pipeline_stage" }]);
+  });
+
   it("skips a row with only a numeric email field as missing_email_and_phone", async () => {
     const res = await POST(
       post({

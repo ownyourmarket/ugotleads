@@ -11,6 +11,10 @@ import {
 } from "@/lib/auth/require-service-auth";
 import { validateEmailBody } from "@/lib/automations/merge-tags";
 
+const MAX_NAME_LEN = 200;
+const MAX_SUBJECT_LEN = 300;
+const MAX_BODY_LEN = 100_000;
+
 async function loadAuthorizedTemplate(
   request: Request,
   id: string,
@@ -59,6 +63,15 @@ export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
     body?: string;
   } | null;
   if (!body) return agentError("VALIDATION_FAILED", "Invalid JSON body.", 400);
+  if (typeof body.name === "string" && body.name.length > MAX_NAME_LEN) {
+    return agentError("VALIDATION_FAILED", `name must be ${MAX_NAME_LEN} characters or fewer.`, 400);
+  }
+  if (typeof body.subject === "string" && body.subject.length > MAX_SUBJECT_LEN) {
+    return agentError("VALIDATION_FAILED", `subject must be ${MAX_SUBJECT_LEN} characters or fewer.`, 400);
+  }
+  if (typeof body.body === "string" && body.body.length > MAX_BODY_LEN) {
+    return agentError("VALIDATION_FAILED", `body must be ${MAX_BODY_LEN} characters or fewer.`, 400);
+  }
 
   const loaded = await loadAuthorizedTemplate(request, id, "templates:write");
   if (loaded instanceof NextResponse) return loaded;

@@ -12,6 +12,7 @@ import {
 } from "@/lib/agent-api/contact-defaults";
 import { requireServiceAuth } from "@/lib/auth/require-service-auth";
 import { fireTagAddedTriggers } from "@/lib/automations/tag-triggers";
+import { PIPELINE_STAGES } from "@/types/deals";
 
 export const POST = withAgentRoute(async (request: Request) => {
   const body = (await request.json().catch(() => null)) as
@@ -25,6 +26,17 @@ export const POST = withAgentRoute(async (request: Request) => {
     (!Array.isArray(body.tags) || body.tags.some((t) => typeof t !== "string"))
   ) {
     return agentError("VALIDATION_FAILED", "tags must be an array of strings.", 400);
+  }
+  if (
+    typeof body.pipelineStage === "string" &&
+    body.pipelineStage !== "" &&
+    !PIPELINE_STAGES.some((s) => s.id === body.pipelineStage)
+  ) {
+    return agentError(
+      "VALIDATION_FAILED",
+      `Unknown pipelineStage. Valid: ${PIPELINE_STAGES.map((s) => s.id).join(", ")}.`,
+      400,
+    );
   }
 
   const access = await requireServiceAuth(request, {

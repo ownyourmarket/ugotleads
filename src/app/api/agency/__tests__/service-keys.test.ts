@@ -7,6 +7,7 @@ vi.mock("@/lib/firebase/admin", async () => {
     getAdminDb: () => fakeDb,
     getAdminAuth: () => ({
       getUser: async (uid: string) => {
+        if (uid === "rejecting1") throw new Error("user not found");
         if (uid === "owner1")
           return { customClaims: { status: "active", agencyId: "ag1", agencyRole: "owner" } };
         return { customClaims: { status: "active", agencyId: "ag1", agencyRole: "staff" } };
@@ -47,6 +48,23 @@ describe("service key management", () => {
     const stored = await fakeDb.doc(`agencyServiceKeys/${body.data.id}`).get();
     expect(stored.data()?.keyHash).toBeDefined();
     expect(stored.data()?.key).toBeUndefined(); // plaintext never stored
+  });
+
+  it("401s when the x-user-uid header is missing", async () => {
+    const req = new Request("http://test/api/agency/service-keys", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ label: "x", allowedSubAccounts: ["subMain"], scopes: ["contacts:write"] }),
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+  });
+
+  it("401s when getUser rejects for the given uid", async () => {
+    const res = await POST(
+      mintReq("rejecting1", { label: "x", allowedSubAccounts: ["subMain"], scopes: ["contacts:write"] }),
+    );
+    expect(res.status).toBe(401);
   });
 
   it("rejects non-owners with 403", async () => {

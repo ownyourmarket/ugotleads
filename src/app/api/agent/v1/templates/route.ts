@@ -8,11 +8,19 @@ import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
 import { requireServiceAuth } from "@/lib/auth/require-service-auth";
 import { validateEmailBody } from "@/lib/automations/merge-tags";
 
+const MAX_NAME_LEN = 200;
+const MAX_SUBJECT_LEN = 300;
+const MAX_BODY_LEN = 100_000;
+
 export const GET = withAgentRoute(async (request: Request) => {
   const url = new URL(request.url);
   const subAccountId = url.searchParams.get("subAccountId");
   if (!subAccountId) {
     return agentError("VALIDATION_FAILED", "subAccountId query param is required.", 400);
+  }
+  const type = url.searchParams.get("type");
+  if (type !== null && type !== "email" && type !== "sms") {
+    return agentError("VALIDATION_FAILED", 'type must be "email" or "sms".', 400);
   }
   const access = await requireServiceAuth(request, {
     scope: "templates:read",
@@ -23,7 +31,6 @@ export const GET = withAgentRoute(async (request: Request) => {
   let q = getAdminDb()
     .collection("message_templates")
     .where("subAccountId", "==", subAccountId);
-  const type = url.searchParams.get("type");
   if (type) q = q.where("type", "==", type);
 
   const snap = await q.limit(100).get();
@@ -58,7 +65,16 @@ export const POST = withAgentRoute(async (request: Request) => {
       400,
     );
   }
+  if (name.length > MAX_NAME_LEN) {
+    return agentError("VALIDATION_FAILED", `name must be ${MAX_NAME_LEN} characters or fewer.`, 400);
+  }
+  if (templateBody.length > MAX_BODY_LEN) {
+    return agentError("VALIDATION_FAILED", `body must be ${MAX_BODY_LEN} characters or fewer.`, 400);
+  }
   const subject = typeof body.subject === "string" ? body.subject.trim() : null;
+  if (subject && subject.length > MAX_SUBJECT_LEN) {
+    return agentError("VALIDATION_FAILED", `subject must be ${MAX_SUBJECT_LEN} characters or fewer.`, 400);
+  }
   if (body.type === "email") {
     if (!subject) {
       return agentError("VALIDATION_FAILED", "subject is required for email templates.", 400);

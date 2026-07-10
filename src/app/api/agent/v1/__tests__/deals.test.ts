@@ -48,6 +48,32 @@ describe("agent deals", () => {
     expect(deal.createdByUid).toMatch(/^agent:/);
   });
 
+  it("guards against a non-finite value (JSON exponent overflow to Infinity) on create and update", async () => {
+    const createRes = await POST(
+      new Request("http://test/api/agent/v1/deals", {
+        method: "POST",
+        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        body: '{"subAccountId":"subMain","contactId":"c1","title":"D","value":1e400}',
+      }),
+    );
+    expect(createRes.status).toBe(201);
+    const { id } = (await createRes.json()).data;
+    let deal = (await fakeDb.doc(`deals/${id}`).get()).data()!;
+    expect(deal.value).toBe(0);
+
+    const patchRes = await PATCH(
+      new Request("http://test/x", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        body: '{"value":1e400}',
+      }),
+      { params: Promise.resolve({ id }) },
+    );
+    expect(patchRes.status).toBe(200);
+    deal = (await fakeDb.doc(`deals/${id}`).get()).data()!;
+    expect(deal.value).toBe(0);
+  });
+
   it("404s when the contact is missing or in another sub-account", async () => {
     const res = await POST(post({ subAccountId: "subMain", contactId: "ghost", title: "X" }));
     expect(res.status).toBe(404);
@@ -106,6 +132,24 @@ describe("agent deals", () => {
     expect(res.status).toBe(200);
     const deal = (await fakeDb.doc(`deals/${id}`).get()).data()!;
     expect(deal.lostReason).toBe(null);
+  });
+
+  it("404s when patching a deal belonging to another sub-account", async () => {
+    fakeDb.doc("deals/dOther").set({
+      title: "Foreign", value: 0, currency: "USD", contactId: "cOther",
+      stageId: "new", priority: "medium", agencyId: "ag1", subAccountId: "subOther",
+      lostReason: null,
+    });
+    const res = await PATCH(
+      new Request("http://test/x", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${KEY}`, "content-type": "application/json" },
+        body: JSON.stringify({ title: "Hijack" }),
+      }),
+      { params: Promise.resolve({ id: "dOther" }) },
+    );
+    expect(res.status).toBe(404);
+    expect((await res.json()).error.code).toBe("NOT_FOUND");
   });
 
   it("trims a string lostReason", async () => {
