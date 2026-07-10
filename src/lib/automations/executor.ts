@@ -41,11 +41,14 @@ interface PlannedStep {
  * Map a recipe config to its ordered step plan. Phase 2 only ships
  * `leadSms`; Phase 3 will append `leadEmail` and `ownerNotify` here.
  */
-function planSteps(automation: AutomationDoc): PlannedStep[] {
+export function planSteps(automation: AutomationDoc): PlannedStep[] {
   switch (automation.recipeType) {
     case "instant_response":
       return planInstantResponse(automation.config as InstantResponseConfig);
     case "lead_nurture":
+    case "outbound_sequence":
+      // Identical step machinery — delays absolute-from-enrollment,
+      // sorted + converted to relative in planLeadNurture.
       return planLeadNurture(automation.config as LeadNurtureConfig);
     default:
       return [];

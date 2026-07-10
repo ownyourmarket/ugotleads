@@ -81,7 +81,7 @@ export async function fireTriggers(input: FireTriggersInput): Promise<void> {
   }
 }
 
-interface StartExecutionInput {
+export interface StartExecutionInput {
   agencyId: string;
   subAccountId: string;
   automation: AutomationDoc;
@@ -170,7 +170,8 @@ function computeFirstStepDelay(automation: AutomationDoc): number | null {
       return firstInstantResponseDelay(
         automation.config as InstantResponseConfig,
       );
-    case "lead_nurture": {
+    case "lead_nurture":
+    case "outbound_sequence": {
       const cfg = automation.config as LeadNurtureConfig;
       if (!cfg.steps?.length) return null;
       return Math.min(...cfg.steps.map((s) => Math.max(0, s.delaySeconds)));
@@ -190,4 +191,78 @@ function firstInstantResponseDelay(
   if (config.ownerNotify) candidates.push(0);
   if (candidates.length === 0) return null;
   return Math.min(...candidates);
+}
+
+export type EnrollOutcome = "enrolled" | "already_enrolled" | "no_steps" | "failed";
+
+/**
+ * Idempotent-forever enrollment for outbound sequences. Deterministic
+ * execution id `${automationId}_${contactId}` + Firestore create() means a
+ * contact can never be enrolled twice in the same sequence — not while
+ * running, not after completion, not after a stop. This is the
+ * anti-double-email guarantee and what makes tag catch-up sync safe to
+ * re-run.
+ */
+export async function enrollContact(input: StartExecutionInput): Promise<EnrollOutcome> {
+  const db = getAdminDb();
+  const { agencyId, subAccountId, automation, contactId } = input;
+
+  const firstStepDelay = computeFirstStepDelay(automation);
+  if (firstStepDelay === null) return "no_steps";
+
+  const ref = db
+    .collection("automation_executions")
+    .doc(`${automation.id}_${contactId}`);
+  const baseExecution: Omit<ExecutionDoc, "id"> = {
+    agencyId,
+    subAccountId,
+    automationId: automation.id,
+    contactId,
+    status: "running",
+    currentStepIndex: 0,
+    nextStepDueAt: null,
+    qstashMessageId: null,
+    history: [],
+    startedAt: FieldValue.serverTimestamp() as unknown as null,
+    completedAt: null,
+    stoppedReason: null,
+  };
+
+  try {
+    await ref.create({ id: ref.id, ...baseExecution });
+  } catch (err) {
+    if ((err as { code?: number }).code === 6) return "already_enrolled";
+    console.error("[enrollContact] create failed", err);
+    return "failed";
+  }
+
+  if (!qstashIsConfigured()) {
+    console.warn("[enrollContact] QStash not configured — enrollment created but not scheduled.");
+    await ref.update({ status: "failed", stoppedReason: "automation_disabled" });
+    return "failed";
+  }
+
+  const result = await publishStep({
+    executionId: ref.id,
+    stepIndex: 0,
+    delaySeconds: firstStepDelay,
+  });
+  if (!result) {
+    await ref.update({ status: "failed", stoppedReason: "automation_disabled" });
+    return "failed";
+  }
+  await ref.update({ qstashMessageId: result.messageId });
+
+  try {
+    await db.collection(`contacts/${contactId}/activities`).add({
+      type: "automation_started",
+      content: `Automation "${automation.name}" started.`,
+      createdBy: "automation",
+      meta: { automationId: automation.id, executionId: ref.id },
+      createdAt: FieldValue.serverTimestamp(),
+    });
+  } catch (err) {
+    console.warn("[enrollContact] activity write failed", err);
+  }
+  return "enrolled";
 }
