@@ -91,6 +91,13 @@ describe("agent contact detail", () => {
     expect(body.error.code).toBe("VALIDATION_FAILED");
   });
 
+  it("does not crash on non-string email, leaves it unchanged (hardening)", async () => {
+    const res = await PATCH(...patch("c1", { email: 42 }));
+    expect(res.status).toBe(200);
+    const stored = await fakeDb.doc("contacts/c1").get();
+    expect(stored.data()?.email).toBe("a@ex.com");
+  });
+
   it("does not crash on non-string name, leaves it unchanged (hardening)", async () => {
     const res = await PATCH(...patch("c1", { name: 42 }));
     expect(res.status).toBe(200);

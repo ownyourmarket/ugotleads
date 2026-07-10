@@ -76,7 +76,7 @@ export async function PATCH(
       400,
     );
   }
-  if (body.email !== undefined && body.email !== "" && !isValidEmail(body.email.trim().toLowerCase())) {
+  if (typeof body.email === "string" && body.email !== "" && !isValidEmail(body.email.trim().toLowerCase())) {
     return agentError("VALIDATION_FAILED", "Email format is invalid.", 400);
   }
 
@@ -107,7 +107,7 @@ export async function PATCH(
   // already hold the doc, and plain arrays are testable + ordered).
   if (body.addTags || body.removeTags) {
     const current = (contact.tags as string[]) ?? [];
-    const removeSet = new Set((body.removeTags ?? []).map((t) => t.trim()));
+    const removeSet = new Set((body.removeTags ?? []).map((t) => t.trim().slice(0, 50)));
     const next = current.filter((t) => !removeSet.has(t));
     for (const raw of body.addTags ?? []) {
       const t = raw.trim().slice(0, 50);
