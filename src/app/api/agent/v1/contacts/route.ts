@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { agentError } from "@/lib/agent-api/errors";
+import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
 import { withIdempotency } from "@/lib/agent-api/idempotency";
 import {
   buildContactDoc,
@@ -11,7 +12,7 @@ import {
 } from "@/lib/agent-api/contact-defaults";
 import { requireServiceAuth } from "@/lib/auth/require-service-auth";
 
-export async function POST(request: Request) {
+export const POST = withAgentRoute(async (request: Request) => {
   const body = (await request.json().catch(() => null)) as
     | (AgentContactInput & { subAccountId?: string })
     | null;
@@ -40,7 +41,7 @@ export async function POST(request: Request) {
     return agentError("VALIDATION_FAILED", "Email format is invalid.", 400);
   }
 
-  return withIdempotency(request, access.keyId, async () => {
+  return withIdempotency(request, access.keyId, "contacts:create", async () => {
     const db = getAdminDb();
     const created = await db.runTransaction(async (tx) => {
       if (email) {
@@ -70,9 +71,9 @@ export async function POST(request: Request) {
     }
     return { status: 201, body: { data: { id: created.id } } };
   });
-}
+});
 
-export async function GET(request: Request) {
+export const GET = withAgentRoute(async (request: Request) => {
   const url = new URL(request.url);
   const subAccountId = url.searchParams.get("subAccountId");
   if (!subAccountId) {
@@ -114,4 +115,4 @@ export async function GET(request: Request) {
     };
   });
   return NextResponse.json({ data });
-}
+});

@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { agentError } from "@/lib/agent-api/errors";
+import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
 import {
   requireServiceAuth,
   subAccountAllowed,
@@ -28,10 +29,10 @@ async function loadAuthorizedTemplate(
   return { access, ref, template };
 }
 
-export async function GET(
-  request: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
+export const GET = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
+  request,
+  ctx,
+) => {
   const { id } = await ctx.params;
   const loaded = await loadAuthorizedTemplate(request, id, "templates:read");
   if (loaded instanceof NextResponse) return loaded;
@@ -45,12 +46,12 @@ export async function GET(
       body: template.body,
     },
   });
-}
+});
 
-export async function PATCH(
-  request: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
+export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
+  request,
+  ctx,
+) => {
   const { id } = await ctx.params;
   const body = (await request.json().catch(() => null)) as {
     name?: string;
@@ -82,4 +83,4 @@ export async function PATCH(
 
   await ref.update(update);
   return NextResponse.json({ data: { id } });
-}
+});

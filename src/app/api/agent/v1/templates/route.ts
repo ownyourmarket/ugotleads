@@ -4,10 +4,11 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { agentError } from "@/lib/agent-api/errors";
+import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
 import { requireServiceAuth } from "@/lib/auth/require-service-auth";
 import { validateEmailBody } from "@/lib/automations/merge-tags";
 
-export async function GET(request: Request) {
+export const GET = withAgentRoute(async (request: Request) => {
   const url = new URL(request.url);
   const subAccountId = url.searchParams.get("subAccountId");
   if (!subAccountId) {
@@ -31,9 +32,9 @@ export async function GET(request: Request) {
     return { id: d.id, type: t.type, name: t.name, subject: t.subject ?? null, body: t.body };
   });
   return NextResponse.json({ data });
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withAgentRoute(async (request: Request) => {
   const body = (await request.json().catch(() => null)) as {
     subAccountId?: string;
     type?: string;
@@ -84,4 +85,4 @@ export async function POST(request: Request) {
     updatedAt: FieldValue.serverTimestamp(),
   });
   return NextResponse.json({ data: { id: ref.id } }, { status: 201 });
-}
+});

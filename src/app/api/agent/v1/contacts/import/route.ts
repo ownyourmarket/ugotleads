@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { agentError } from "@/lib/agent-api/errors";
+import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
 import { withIdempotency } from "@/lib/agent-api/idempotency";
 import {
   buildContactDoc,
@@ -13,7 +14,7 @@ import { requireServiceAuth } from "@/lib/auth/require-service-auth";
 
 const MAX_ROWS = 200;
 
-export async function POST(request: Request) {
+export const POST = withAgentRoute(async (request: Request) => {
   const body = (await request.json().catch(() => null)) as {
     subAccountId?: string;
     contacts?: AgentContactInput[];
@@ -33,7 +34,7 @@ export async function POST(request: Request) {
   if (access instanceof NextResponse) return access;
 
   const contacts = body.contacts;
-  return withIdempotency(request, access.keyId, async () => {
+  return withIdempotency(request, access.keyId, "contacts:import", async () => {
     const db = getAdminDb();
     let created = 0;
     const skipped: { index: number; reason: string }[] = [];
@@ -99,4 +100,4 @@ export async function POST(request: Request) {
 
     return { status: 201, body: { data: { created, skipped } } };
   });
-}
+});

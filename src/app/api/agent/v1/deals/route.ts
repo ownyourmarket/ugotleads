@@ -4,11 +4,12 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { agentError } from "@/lib/agent-api/errors";
+import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
 import { withIdempotency } from "@/lib/agent-api/idempotency";
 import { requireServiceAuth } from "@/lib/auth/require-service-auth";
 import { DEAL_PRIORITIES, PIPELINE_STAGES } from "@/types/deals";
 
-export async function POST(request: Request) {
+export const POST = withAgentRoute(async (request: Request) => {
   const body = (await request.json().catch(() => null)) as {
     subAccountId?: string;
     contactId?: string;
@@ -50,7 +51,7 @@ export async function POST(request: Request) {
   // Hardening: safely extract currency only if it's a string
   const currency = typeof body.currency === "string" ? body.currency.trim() || "USD" : "USD";
 
-  return withIdempotency(request, access.keyId, async () => {
+  return withIdempotency(request, access.keyId, "deals:create", async () => {
     const ref = await db.collection("deals").add({
       title,
       value,
@@ -68,4 +69,4 @@ export async function POST(request: Request) {
     });
     return { status: 201, body: { data: { id: ref.id } } };
   });
-}
+});

@@ -21,6 +21,7 @@ const TTL_MS = 24 * 60 * 60 * 1000;
 export async function withIdempotency(
   request: Request,
   keyId: string,
+  scope: string,
   handler: () => Promise<AgentHandlerResult>,
   opts?: { preflight?: () => Promise<NextResponse | null> },
 ): Promise<NextResponse> {
@@ -35,7 +36,7 @@ export async function withIdempotency(
   }
 
   const db = getAdminDb();
-  const docId = `${keyId}_${createHash("sha256").update(idemKey).digest("hex").slice(0, 32)}`;
+  const docId = `${keyId}_${createHash("sha256").update(`${scope}\n${idemKey}`).digest("hex").slice(0, 32)}`;
   const ref = db.doc(`agentIdempotency/${docId}`);
 
   const snap = await ref.get();

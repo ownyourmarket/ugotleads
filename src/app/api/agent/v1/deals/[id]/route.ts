@@ -4,16 +4,17 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { agentError } from "@/lib/agent-api/errors";
+import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
 import {
   requireServiceAuth,
   subAccountAllowed,
 } from "@/lib/auth/require-service-auth";
 import { DEAL_PRIORITIES, PIPELINE_STAGES, getStage } from "@/types/deals";
 
-export async function PATCH(
-  request: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
+export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
+  request,
+  ctx,
+) => {
   const { id } = await ctx.params;
   const body = (await request.json().catch(() => null)) as {
     title?: string;
@@ -76,4 +77,4 @@ export async function PATCH(
 
   const after = await ref.get();
   return NextResponse.json({ data: { id, stageId: after.data()?.stageId } });
-}
+});

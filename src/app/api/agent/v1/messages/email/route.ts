@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { agentError } from "@/lib/agent-api/errors";
+import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
 import { enforceDailyCap } from "@/lib/agent-api/caps";
 import { withIdempotency } from "@/lib/agent-api/idempotency";
 import {
@@ -15,7 +16,7 @@ import { recordSend } from "@/lib/comms/usage";
 
 const DAILY_SEND_CAP = 100;
 
-export async function POST(request: Request) {
+export const POST = withAgentRoute(async (request: Request) => {
   if (!emailIsConfigured()) {
     return agentError("SEND_FAILED", "Email is not configured on this deployment.", 503);
   }
@@ -53,6 +54,7 @@ export async function POST(request: Request) {
   return withIdempotency(
     request,
     access.keyId,
+    "messages:email",
     async () => {
       const subSnap = await db
         .doc(`subAccounts/${contact.subAccountId as string}`)
@@ -95,4 +97,4 @@ export async function POST(request: Request) {
     },
     { preflight: () => enforceDailyCap(access.keyId, "sends", DAILY_SEND_CAP) },
   );
-}
+});

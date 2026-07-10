@@ -4,6 +4,7 @@ import { NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { agentError } from "@/lib/agent-api/errors";
+import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
 import { isValidEmail } from "@/lib/agent-api/contact-defaults";
 import {
   requireServiceAuth,
@@ -30,10 +31,10 @@ async function loadAuthorizedContact(
   return { access, ref, contact };
 }
 
-export async function GET(
-  request: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
+export const GET = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
+  request,
+  ctx,
+) => {
   const { id } = await ctx.params;
   const loaded = await loadAuthorizedContact(request, id, "contacts:read");
   if (loaded instanceof NextResponse) return loaded;
@@ -52,12 +53,12 @@ export async function GET(
       subAccountId: contact.subAccountId,
     },
   });
-}
+});
 
-export async function PATCH(
-  request: Request,
-  ctx: { params: Promise<{ id: string }> },
-) {
+export const PATCH = withAgentRoute<{ params: Promise<{ id: string }> }>(async (
+  request,
+  ctx,
+) => {
   const { id } = await ctx.params;
   const body = (await request.json().catch(() => null)) as {
     name?: string;
@@ -140,4 +141,4 @@ export async function PATCH(
   return NextResponse.json({
     data: { id, tags: a.tags, pipelineStage: a.pipelineStage },
   });
-}
+});
