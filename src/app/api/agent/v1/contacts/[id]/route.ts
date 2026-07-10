@@ -24,7 +24,8 @@ async function loadAuthorizedContact(
   if (!snap.exists) return agentError("NOT_FOUND", "Contact not found.", 404);
   const contact = snap.data() as Record<string, unknown>;
   if (!subAccountAllowed(access, contact.subAccountId as string)) {
-    return agentError("SUB_ACCOUNT_FORBIDDEN", "Key cannot access this sub-account.", 403);
+    // Doc-ID-resolved foreign tenant: 404, not 403 — don't reveal existence.
+    return agentError("NOT_FOUND", "Contact not found.", 404);
   }
   return { access, ref, contact };
 }

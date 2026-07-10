@@ -59,4 +59,45 @@ describe("agent contacts import", () => {
     const res = await POST(post({ subAccountId: "subMain", contacts: rows }));
     expect(res.status).toBe(400);
   });
+
+  it("skips a null row as invalid_row without crashing, and still processes the rest", async () => {
+    const res = await POST(
+      post({
+        subAccountId: "subMain",
+        contacts: [null, { name: "Good", phone: "+14045550199" }],
+      }),
+    );
+    expect(res.status).toBe(201);
+    const { created, skipped } = (await res.json()).data;
+    expect(created).toBe(1);
+    expect(skipped).toEqual([{ index: 0, reason: "invalid_row" }]);
+  });
+
+  it("imports a row with a numeric email field, storing email as empty string, without crashing", async () => {
+    const res = await POST(
+      post({
+        subAccountId: "subMain",
+        contacts: [{ email: 42, phone: "+14045550101" }],
+      }),
+    );
+    expect(res.status).toBe(201);
+    const { created, skipped } = (await res.json()).data;
+    expect(created).toBe(1);
+    expect(skipped).toEqual([]);
+    const all = await fakeDb.collection("contacts").get();
+    expect(all.docs[0].data()?.email).toBe("");
+  });
+
+  it("skips a row with only a numeric email field as missing_email_and_phone", async () => {
+    const res = await POST(
+      post({
+        subAccountId: "subMain",
+        contacts: [{ email: 42 }],
+      }),
+    );
+    expect(res.status).toBe(201);
+    const { created, skipped } = (await res.json()).data;
+    expect(created).toBe(0);
+    expect(skipped).toEqual([{ index: 0, reason: "missing_email_and_phone" }]);
+  });
 });

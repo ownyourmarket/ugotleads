@@ -42,24 +42,31 @@ export async function POST(request: Request) {
 
     for (let i = 0; i < contacts.length; i++) {
       const row = contacts[i];
-      const email = row.email?.trim().toLowerCase() ?? "";
-      const phone = row.phone?.trim() ?? "";
+      if (!row || typeof row !== "object") {
+        skipped.push({ index: i, reason: "invalid_row" });
+        continue;
+      }
+      const email = typeof row.email === "string" ? row.email.trim().toLowerCase() : "";
+      const phone = typeof row.phone === "string" ? row.phone.trim() : "";
 
       if (!email && !phone) {
         skipped.push({ index: i, reason: "missing_email_and_phone" });
         continue;
       }
       // Same rule as the CSV importer: a malformed email on a phone-backed
-      // row is dropped (row imports); without a phone it's a skip.
+      // row is dropped (row imports); without a phone it's a skip. A
+      // non-string email field (e.g. a number) behaves as absent — `email`
+      // above is already "" in that case, so it never reaches this branch.
+      let effectiveEmail = email;
       if (email && !isValidEmail(email)) {
         if (phone) {
           row.email = "";
+          effectiveEmail = "";
         } else {
           skipped.push({ index: i, reason: "invalid_email" });
           continue;
         }
       }
-      const effectiveEmail = row.email?.trim().toLowerCase() ?? "";
       if (effectiveEmail) {
         if (seenEmails.has(effectiveEmail)) {
           skipped.push({ index: i, reason: "duplicate_email" });

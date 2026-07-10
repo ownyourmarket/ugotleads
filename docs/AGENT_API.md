@@ -26,9 +26,23 @@ Authorization: Bearer ugl_<40-hex-chars>
 Keys are minted per-agency, scoped to specific permissions (`scopes`) and a
 specific list of sub-accounts (`allowedSubAccounts`). A key that is missing,
 malformed, unknown, or revoked returns `401 INVALID_KEY`. A key that lacks
-the scope required by the endpoint returns `403 SCOPE_MISSING`. A key used
-against a sub-account it isn't allowed to touch returns
-`403 SUB_ACCOUNT_FORBIDDEN`.
+the scope required by the endpoint returns `403 SCOPE_MISSING`.
+
+404/403 semantics for sub-account access are deliberately different
+depending on how the sub-account is determined:
+
+- An explicit `subAccountId` passed in the request body or query string
+  (e.g. `POST /contacts`, `GET /contacts`, `POST /contacts/import`) that
+  falls outside the key's `allowedSubAccounts` returns
+  `403 SUB_ACCOUNT_FORBIDDEN` — the caller named a specific sub-account it
+  isn't allowed to touch, so there's nothing to hide.
+- An object ID that resolves to a document belonging to a different tenant
+  (e.g. `GET/PATCH /contacts/{id}`, `PATCH /deals/{id}`, `GET/PATCH
+  /templates/{id}`, the contact lookup inside `POST /messages/email`)
+  returns `404 NOT_FOUND` instead of `403` — indistinguishable from the ID
+  simply not existing. This prevents using the API to enumerate valid
+  object IDs belonging to other agencies/sub-accounts by timing a 403 vs.
+  404 response.
 
 ## Response envelope
 
@@ -92,6 +106,15 @@ Mutating endpoints that create records (`POST /contacts`, `POST
   transaction wrapping it). Acceptable for a single orchestrator caller; not
   safe for a fleet of concurrent callers sharing one key.
 
+**Warning:** an `Idempotency-Key` is scoped per service key, but *not* per
+endpoint — the storage key is `{keyId}_{sha256(idempotencyKey)}`, with no
+route or path segment mixed in. Reusing the same `Idempotency-Key` value
+across two different endpoints (or even two different logical actions on
+the same endpoint) will replay the *wrong* cached response on the second
+call instead of running it. Always generate a fresh, unique key per logical
+action (a UUID per operation is the simplest safe pattern) — never reuse
+one key as a general "this agent run" identifier across multiple calls.
+
 ## Endpoints
 
 ### `POST /api/agent/v1/contacts`
@@ -151,9 +174,9 @@ Response, observed in smoke test (`?subAccountId=...&tag=bridge-smoke`):
 ### `GET /api/agent/v1/contacts/{id}`
 **Scope:** `contacts:read`
 
-Returns the full contact record including `subAccountId`. 404s if the doc
-doesn't exist; 403 `SUB_ACCOUNT_FORBIDDEN` if it exists but the key isn't
-allowed on its sub-account.
+Returns the full contact record including `subAccountId`. `404 NOT_FOUND`
+if the doc doesn't exist, or exists but belongs to a sub-account the key
+isn't allowed to touch (see the 404/403 semantics note above).
 
 ### `PATCH /api/agent/v1/contacts/{id}`
 **Scope:** `contacts:write`
@@ -254,8 +277,9 @@ Response `201`:
 ### `GET /api/agent/v1/templates/{id}`
 **Scope:** `templates:read`
 
-Returns one template. `404 NOT_FOUND` / `403 SUB_ACCOUNT_FORBIDDEN` follow
-the same pattern as contacts/deals.
+Returns one template. `404 NOT_FOUND` if the doc doesn't exist or belongs
+to a sub-account the key isn't allowed to touch (same pattern as
+contacts/deals).
 
 ### `PATCH /api/agent/v1/templates/{id}`
 **Scope:** `templates:write`
@@ -277,11 +301,14 @@ template/merge-tag resolution happens in this route). Sends immediately via
 Resend using the sub-account's `replyToEmail` if set.
 
 Guards, in order: `503 SEND_FAILED` if email isn't configured on this
-deployment; `404 NOT_FOUND` if the contact doesn't exist; `403
-SUB_ACCOUNT_FORBIDDEN` if the key can't access the contact's sub-account;
+deployment; `404 NOT_FOUND` if the contact doesn't exist *or* belongs to a
+sub-account the key isn't allowed to touch (see 404/403 semantics above);
 `400 VALIDATION_FAILED` if the contact has no email; `409
-CONTACT_OPTED_OUT` if `emailOptedOut: true`; `429 CAP_EXCEEDED` at 100
-sends/key/day; `502 SEND_FAILED` if the provider call itself throws.
+CONTACT_OPTED_OUT` if `emailOptedOut: true`. Idempotency replay is checked
+next — a replayed `Idempotency-Key` returns the cached response without
+re-running any of the following checks. Only then: `429 CAP_EXCEEDED` at
+100 sends/key/day (never cached — always retryable once capacity frees
+up); `502 SEND_FAILED` if the provider call itself throws.
 
 On success, writes an `email_sent` activity on the contact and records send
 usage via `recordSend`.
@@ -387,3 +414,22 @@ server logged a recurring `gitpage/heartbeat` fetch failure
 /api/v1/leadstack/heartbeat`) on an unrelated background interval. It is
 pre-existing and unrelated to the agent-api routes added in this phase —
 noted here for completeness, not something this task fixed.
+
+**`reports/summary` under-reports beyond 5,000 docs.** The route reads at
+most `MAX_DOCS` (5,000) documents per collection (contacts, deals) per
+sub-account. Totals, `byStage`, and `valueByStage` are computed only over
+that capped read — for a sub-account with more than 5,000 contacts or
+deals, the reported totals will be lower than the true count with no
+indication in the response that the result was truncated. Fine for Phase 1
+scale; revisit with real pagination/aggregation if a sub-account approaches
+the cap.
+
+## Notes / Deviations
+
+- **Daily send cap is a hardcoded constant, not per-key config.** The
+  original spec sketched the daily send cap as a value stored on each
+  service key's document (so different keys/agencies could have different
+  limits). The Phase 1 implementation (`DAILY_SEND_CAP` in
+  `src/app/api/agent/v1/messages/email/route.ts`) hardcodes it to 100
+  sends/key/day for every key, with no per-key override. Revisit in Phase 2
+  if per-agency or per-key limits are needed.

@@ -88,6 +88,35 @@ describe("agent one-off email", () => {
     expect(sendEmailMock).not.toHaveBeenCalled();
   });
 
+  it("replays a cached send even after the cap is later reached (replay runs before the cap check)", async () => {
+    const first = await POST(post({ contactId: "c1", subject: "S", body: "B" }, "s1"));
+    expect(first.status).toBe(200);
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+
+    const day = new Date().toISOString().slice(0, 10);
+    fakeDb.doc(`agencyServiceKeys/key1/usage/${day}`).set({ sends: 100 });
+
+    const replay = await POST(post({ contactId: "c1", subject: "S", body: "B" }, "s1"));
+    expect(replay.status).toBe(200);
+    expect(replay.headers.get("x-idempotent-replay")).toBe("true");
+    expect(sendEmailMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not cache a fresh request blocked by the cap", async () => {
+    const day = new Date().toISOString().slice(0, 10);
+    fakeDb.doc(`agencyServiceKeys/key1/usage/${day}`).set({ sends: 100 });
+
+    const before = await fakeDb.collection("agentIdempotency").get();
+    const beforeCount = before.size;
+
+    const res = await POST(post({ contactId: "c1", subject: "S", body: "B" }, "s2"));
+    expect(res.status).toBe(429);
+    expect(sendEmailMock).not.toHaveBeenCalled();
+
+    const after = await fakeDb.collection("agentIdempotency").get();
+    expect(after.size).toBe(beforeCount);
+  });
+
   it("400s on non-string contactId without crash", async () => {
     const res = await POST(post({ contactId: 42, subject: "S", body: "B" }));
     expect(res.status).toBe(400);

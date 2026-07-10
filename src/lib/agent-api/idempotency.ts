@@ -22,9 +22,14 @@ export async function withIdempotency(
   request: Request,
   keyId: string,
   handler: () => Promise<AgentHandlerResult>,
+  opts?: { preflight?: () => Promise<NextResponse | null> },
 ): Promise<NextResponse> {
   const idemKey = request.headers.get("idempotency-key");
   if (!idemKey) {
+    if (opts?.preflight) {
+      const blocked = await opts.preflight();
+      if (blocked) return blocked;
+    }
     const r = await handler();
     return NextResponse.json(r.body, { status: r.status });
   }
@@ -42,6 +47,14 @@ export async function withIdempotency(
         headers: { "x-idempotent-replay": "true" },
       });
     }
+  }
+
+  // Replay missed (fresh key or expired entry): run the preflight check
+  // (e.g. daily cap) before the handler. A blocked preflight is never
+  // cached — it must remain retryable once capacity frees up.
+  if (opts?.preflight) {
+    const blocked = await opts.preflight();
+    if (blocked) return blocked;
   }
 
   const r = await handler();

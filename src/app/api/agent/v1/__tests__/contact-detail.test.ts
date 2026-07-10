@@ -51,12 +51,13 @@ describe("agent contact detail", () => {
     expect((await res.json()).data.name).toBe("Ann");
   });
 
-  it("403s for a contact outside the allowlist and 404s for missing", async () => {
-    const forbidden = await GET(
+  it("404s for a contact outside the allowlist (indistinguishable from missing)", async () => {
+    const foreign = await GET(
       new Request("http://test/x", { headers: { authorization: `Bearer ${KEY}` } }),
       { params: Promise.resolve({ id: "cForeign" }) },
     );
-    expect(forbidden.status).toBe(403);
+    expect(foreign.status).toBe(404);
+    expect((await foreign.json()).error.code).toBe("NOT_FOUND");
     const missing = await GET(
       new Request("http://test/x", { headers: { authorization: `Bearer ${KEY}` } }),
       { params: Promise.resolve({ id: "nope" }) },

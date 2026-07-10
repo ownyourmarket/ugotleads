@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { NextResponse } from "next/server";
 import { fakeDb, resetFakeDb } from "@/test/fake-admin";
 
 vi.mock("@/lib/firebase/admin", async () => {
@@ -45,6 +46,36 @@ describe("withIdempotency", () => {
     await withIdempotency(req("abc"), "key1", handler);
     await withIdempotency(req("abc"), "key2", handler);
     expect(calls).toBe(2);
+  });
+
+  it("a preflight returning a response short-circuits the handler and stores nothing", async () => {
+    let calls = 0;
+    const handler = async () => ({ status: 200, body: { data: { n: ++calls } } });
+    const preflight = vi.fn(async () => NextResponse.json({ error: { code: "CAP_EXCEEDED" } }, { status: 429 }));
+
+    const res = await withIdempotency(req("fresh-key"), "key1", handler, { preflight });
+    expect(res.status).toBe(429);
+    expect(calls).toBe(0);
+    expect(preflight).toHaveBeenCalledTimes(1);
+
+    // Nothing should be stored — a blocked preflight must remain retryable.
+    const all = await fakeDb.collection("agentIdempotency").get();
+    expect(all.size).toBe(0);
+  });
+
+  it("preflight is not called on a replay hit", async () => {
+    let calls = 0;
+    const handler = async () => ({ status: 200, body: { data: { n: ++calls } } });
+    const preflight = vi.fn(async () => null);
+
+    await withIdempotency(req("replay-key"), "key1", handler, { preflight });
+    expect(preflight).toHaveBeenCalledTimes(1);
+
+    const res = await withIdempotency(req("replay-key"), "key1", handler, { preflight });
+    expect(res.headers.get("x-idempotent-replay")).toBe("true");
+    expect(calls).toBe(1);
+    // Preflight only ran once — on the fresh call, not the replay.
+    expect(preflight).toHaveBeenCalledTimes(1);
   });
 });
 

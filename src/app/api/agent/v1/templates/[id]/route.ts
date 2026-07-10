@@ -22,7 +22,8 @@ async function loadAuthorizedTemplate(
   if (!snap.exists) return agentError("NOT_FOUND", "Template not found.", 404);
   const template = snap.data() as Record<string, unknown>;
   if (!subAccountAllowed(access, template.subAccountId as string)) {
-    return agentError("SUB_ACCOUNT_FORBIDDEN", "Key cannot access this sub-account.", 403);
+    // Doc-ID-resolved foreign tenant: 404, not 403 — don't reveal existence.
+    return agentError("NOT_FOUND", "Template not found.", 404);
   }
   return { access, ref, template };
 }

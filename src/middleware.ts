@@ -144,5 +144,9 @@ export const config = {
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
     "/api/login",
     "/api/logout",
+    // Image-extension exclusion above would otherwise let a path like
+    // /api/agency/service-keys/foo.png skip middleware entirely. All /api
+    // routes must always run through middleware.
+    "/api/:path*",
   ],
 };
