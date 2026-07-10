@@ -139,8 +139,20 @@ All Admin-SDK-backed (today's CRM writes are client-side Firestore SDK governed 
   (ordered steps, `delaySeconds` from enrollment) — reuses `planSteps()` machinery.
 - `StoppedReason` gains `"replied"`.
 - Enrollment: `sequences/[id]/enroll` calls `startExecution()` per contact (the same
-  path `fireTriggers()` uses). `tag_added` trigger fires from the tag-write paths
-  (agent API tag route + bulk tag route) via `fireTriggers()`.
+  path `fireTriggers()` uses).
+- **Enrollment is idempotent:** at most one execution per (automationId, contactId),
+  ever — contacts with an existing execution (running, completed, or stopped) are
+  skipped and reported in `skipped[]`. This is the anti-double-email guarantee and
+  makes every enroll call safely re-runnable.
+- **`tag_added` coverage (decided 2026-07-09):** fires live via `fireTriggers()`
+  from all **server-side** tag-write paths — `api/contacts/bulk` (how the dashboard
+  bulk-tags), `api/contacts/merge`, and every agent-API route that writes tags.
+  Client-SDK tag writes (single-contact form, CSV import dialog) do not fire live;
+  instead the `enroll {tag}` endpoint doubles as a **catch-up sync** (scan current
+  tag members, enroll anyone missing — safe because enrollment is idempotent), and
+  the suit's daily pipeline-review workflow calls it. Cloud Functions Firestore
+  triggers were considered and rejected for v1: a second deploy pipeline + Blaze
+  billing to close a gap the daily sync already closes.
 - Existing kill switches unchanged: `automation.enabled`, `automationsPaused`,
   per-channel opt-out, send-window deferral.
 
@@ -152,14 +164,13 @@ All Admin-SDK-backed (today's CRM writes are client-side Firestore SDK governed 
   contact's `messages`/activities (`type: "email_reply"`, subject + text) → **stop
   all running `outbound_sequence` executions for that contact**
   (`stoppedReason: "replied"`).
-- **Verification task for planning (phase 2):** confirm Resend inbound email support
-  and required DNS (MX on `hey.ugotleads.io`). Sequence emails set `replyTo` to the
-  ingest address (with `subAccount.replyToEmail` kept in the loop via forward or CC
-  strategy decided in phase 2 planning).
-- **Fallback if Resend inbound is unavailable:** a suit-side scheduled tool checks
-  the reply inbox (Gmail) and calls `PATCH /api/agent/v1/contacts/[id]` +
-  `sequences/[id]/unenroll` to mark replied. Stop-on-reply ships either way; only
-  the transport differs.
+- **Resend inbound CONFIRMED (Star, 2026-07-09):** Resend supports receiving email —
+  an `email.received` webhook event delivers a structured JSON payload (content,
+  HTML, headers, attachments) to an endpoint; routing works on a `.resend.app`
+  domain or a custom domain. Phase 2 tasks: set up inbound routing/DNS for
+  `hey.ugotleads.io`, verify the webhook signature, and set sequence emails'
+  `replyTo` to the ingest address (with `subAccount.replyToEmail` kept in the loop
+  via a forward/CC strategy decided in phase 2 planning).
 
 ## 5. Suit-side components (`~/.claude`)
 
@@ -240,11 +251,8 @@ does not block the current week's revenue motion.
 
 ## 11. Open questions (tracked into phase planning)
 
-1. Resend inbound email availability + DNS requirements for `hey.ugotleads.io`
-   (phase 2; fallback documented in 4.4).
-2. `tag_added` trigger: fire on agent-API tag writes only, or also on dashboard/CSV
-   tag writes (client-side Firestore writes can't call `fireTriggers()` — may need a
-   Firestore trigger function or acceptance that dashboard tags don't auto-enroll in
-   v1). Default: agent-API + bulk-route writes only in v1, documented.
-3. Reply-to strategy when ingest address is active: forward-to-human vs CC vs
+1. Reply-to strategy when the ingest address is active: forward-to-human vs CC vs
    inbox-check hybrid (phase 2).
+
+*(Resolved 2026-07-09: Resend inbound is supported — see 4.4. `tag_added` coverage
+decided — see 4.3.)*
