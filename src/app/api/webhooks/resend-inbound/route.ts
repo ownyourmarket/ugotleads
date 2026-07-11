@@ -6,6 +6,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { verifySvixSignature } from "@/lib/webhooks/svix-verify";
 import { verifyReplyToken } from "@/lib/automations/reply-token";
 import { emailIsConfigured, sendEmail } from "@/lib/comms/resend";
+import { htmlToText } from "@/lib/comms/html-to-text";
 import type { InboundEmailDoc } from "@/types/inbound-emails";
 
 export const dynamic = "force-dynamic";
@@ -308,10 +309,17 @@ export async function POST(request: Request) {
             | null
             | undefined;
           if (replyToEmail) {
+            // Reply-To is the PROSPECT's address so a staff "Reply" goes
+            // straight to them — NOT the reply+token inbound address,
+            // which would just loop the staff reply back into this
+            // webhook (nothing relays onward to the contact). text falls
+            // back to html for senders that omit the plain part (Gmail).
             await sendEmail({
               to: replyToEmail,
               subject: `[Reply] ${subject}`,
-              text,
+              text: text || htmlToText(html),
+              ...(html ? { html } : {}),
+              ...(fromEmail ? { replyTo: fromEmail } : {}),
             });
           }
         } catch (err) {

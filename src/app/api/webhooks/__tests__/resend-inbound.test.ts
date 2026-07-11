@@ -141,7 +141,42 @@ describe("POST /api/webhooks/resend-inbound", () => {
     expect(acts.docs.some((d) => d.data()?.type === "email_reply")).toBe(true);
 
     expect(sendEmailMock).toHaveBeenCalledWith(
-      expect.objectContaining({ to: "star@myusa.com" })
+      expect.objectContaining({
+        to: "star@myusa.com",
+        text: "Sounds interesting, call me",
+        // Staff hitting "Reply" on the forward must reach the prospect —
+        // never the reply+token inbound address (that would loop the
+        // staff reply straight back into this webhook).
+        replyTo: "prospect@ex.com",
+      })
+    );
+  });
+
+  it("forwards an html-only reply with a text fallback and the original html", async () => {
+    const token = buildReplyToken("C1aB2xY")!;
+    const res = await POST(
+      signedRequest({
+        type: "email.received",
+        data: {
+          email_id: "re_html_1",
+          from: "Pat Prospect <prospect@ex.com>",
+          to: [`reply+${token}@hey.ugotleads.io`],
+          subject: "Re: Quick question",
+          // Gmail-style: html part only, no text part (observed live 2026-07-11).
+          html: "<div dir=\"ltr\">Yes — let&#39;s talk <b>Tuesday</b>.<br></div>",
+        },
+      })
+    );
+    expect(res.status).toBe(200);
+    expect((await res.json()).matched).toBe(true);
+
+    expect(sendEmailMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: "star@myusa.com",
+        text: "Yes — let's talk Tuesday.",
+        html: "<div dir=\"ltr\">Yes — let&#39;s talk <b>Tuesday</b>.<br></div>",
+        replyTo: "prospect@ex.com",
+      })
     );
   });
 
