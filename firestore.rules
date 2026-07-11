@@ -795,6 +795,16 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /pe_gpts/{id} {
+      allow read:   if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write:  if false;   // server-validated ref arrays — API only
+    }
+
+    match /pe_gpt_sessions/{id} {
+      allow read:   if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow write:  if false;   // server-appended chat turns — API only
+    }
+
     // ai_runs/{id}  — Admin SDK writes only
     match /ai_runs/{id} {
       allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
