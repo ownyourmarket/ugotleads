@@ -5,6 +5,7 @@ import { Plus, Pencil, Sparkles } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { useAuth } from "@/hooks/use-auth";
 import { subscribeToPePrompts, createPePrompt, updatePePrompt } from "@/lib/firestore/promptexpert";
+import { splitSlots } from "@/lib/promptexpert/slots";
 import type { PePrompt } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,20 +14,6 @@ import { Badge } from "@/components/ui/badge";
 import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
 import { toast } from "sonner";
-
-/** Split prompt text so [Variable] slots can be rendered highlighted. */
-export function splitSlots(content: string): Array<{ text: string; isSlot: boolean }> {
-  const parts: Array<{ text: string; isSlot: boolean }> = [];
-  const re = /\[([A-Za-z0-9_ ]+)\]/g;
-  let last = 0;
-  for (let m = re.exec(content); m; m = re.exec(content)) {
-    if (m.index > last) parts.push({ text: content.slice(last, m.index), isSlot: false });
-    parts.push({ text: m[0], isSlot: true });
-    last = m.index + m[0].length;
-  }
-  if (last < content.length) parts.push({ text: content.slice(last), isSlot: false });
-  return parts;
-}
 
 export default function PromptsPage() {
   const { subAccountId, agencyId, isAdmin } = useSubAccount();
