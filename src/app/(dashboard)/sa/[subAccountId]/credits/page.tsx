@@ -55,10 +55,10 @@ function BuyCreditsPanel({
                   <span className="text-sm font-medium text-muted-foreground">credits</span>
                 </p>
                 <p className="mt-1 text-lg font-semibold text-foreground">
-                  ${(pack.priceUsdCents / 100).toFixed(0)}
+                  ${(pack.priceUsdCents / 100).toFixed(pack.priceUsdCents % 100 === 0 ? 0 : 2)}
                 </p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  ≈ {Math.floor(pack.credits / SKILL_RUN_CREDIT_COST)} skill runs
+                  ≈ {Math.floor(pack.credits / SKILL_RUN_CREDIT_COST)} skill runs at {SKILL_RUN_CREDIT_COST} credits
                 </p>
               </div>
               <button
@@ -149,7 +149,10 @@ export default function CreditWalletPage() {
     } else if (topup === "cancelled") {
       toast("Checkout cancelled.");
     }
-    router.replace(pathname);
+    const params = new URLSearchParams(searchParams?.toString());
+    params.delete("topup");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
   }, [searchParams, router, pathname]);
 
   async function handleBuyPack(pack: CreditPack) {
@@ -183,30 +186,36 @@ export default function CreditWalletPage() {
     }
   }
 
+  // Wallet doc id === partner_profiles doc id === uid by convention (see
+  // use-partner-profile.ts). Fall back to the auth uid directly so a
+  // purchased wallet (written to credit_wallets/{purchaserUid} by the top-up
+  // fulfillment) is still found for users who don't have a partner profile.
+  const walletId = partnerProfile?.id ?? user?.uid ?? null;
+
   useEffect(() => {
-    if (!partnerProfile?.id) {
+    if (!walletId) {
       setWallet(null);
       setTxnLoading(false);
       return;
     }
     const u1 = subscribeToCreditWallet(
-      partnerProfile.id,
+      walletId,
       (w) => setWallet(w),
       console.error,
     );
     setTxnLoading(true);
     const u2 = subscribeToCreditTransactions(
-      partnerProfile.id,
+      walletId,
       (txns) => { setTransactions(txns); setTxnLoading(false); },
       () => setTxnLoading(false),
     );
     return () => { u1(); u2(); };
-  }, [partnerProfile?.id]);
+  }, [walletId]);
 
   const loading = partnerLoading || wallet === undefined;
 
-  // ── Not a partner ──────────────────────────────────────────────────────
-  if (!loading && !partnerProfile) {
+  // ── Not a partner, and no wallet exists either ─────────────────────────
+  if (!loading && !partnerProfile && wallet === null) {
     return (
       <div className="min-h-screen space-y-8 p-6">
         <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed py-16 text-center">
@@ -229,8 +238,8 @@ export default function CreditWalletPage() {
     );
   }
 
-  // ── No wallet yet ──────────────────────────────────────────────────────
-  if (!loading && wallet === null) {
+  // ── Has a partner profile, but wallet not initialized yet ──────────────
+  if (!loading && partnerProfile && wallet === null) {
     return (
       <div className="min-h-screen p-6 space-y-6">
         <div>
@@ -245,10 +254,11 @@ export default function CreditWalletPage() {
           <div>
             <p className="text-sm font-medium text-foreground">No credit wallet yet.</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Your wallet will appear here once your agency owner initializes it.
+              Buy a credit pack below to activate your wallet — or ask your agency owner to initialize it.
             </p>
           </div>
         </div>
+        <BuyCreditsPanel buyingPackId={buyingPackId} onBuy={handleBuyPack} />
       </div>
     );
   }
@@ -275,6 +285,19 @@ export default function CreditWalletPage() {
           Marketplace
         </Link>
       </div>
+
+      {/* No partner profile note — wallet still shown below when present */}
+      {!loading && !partnerProfile && (
+        <div className="rounded-xl border border-dashed p-4 text-xs text-muted-foreground">
+          No partner profile found. Some partner-specific features are unavailable.{" "}
+          <Link
+            href={`/sa/${subAccountId}/marketplace/partner`}
+            className="text-primary underline underline-offset-2"
+          >
+            Set up a partner profile
+          </Link>
+        </div>
+      )}
 
       {/* Loading */}
       {loading && (
