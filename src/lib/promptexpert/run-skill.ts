@@ -63,7 +63,10 @@ export async function runSkill(deps: RunSkillDeps, input: {
     triggeredByUid: input.uid, status: "running", creditsCharged: 0,
   });
 
-  // Charge ladder: master → credit-mode charge → byok/subscription uncharged.
+  // Charge ladder (decided 2026-07-11): master → free; "credit" → charged per run;
+  // "byok" → entitlement-gated, uncharged; "subscription" AND null (legacy default,
+  // see types/tenancy.ts PlanMode) → INCLUDED: uncharged, metered by the monthly
+  // token cap only. Null is a deliberate inclusion, not an accident.
   const shouldCharge = !isMaster && sub.planMode === "credit" && skill.creditCost > 0;
   let creditsCharged = 0;
   let creditTransactionId: string | null = null;

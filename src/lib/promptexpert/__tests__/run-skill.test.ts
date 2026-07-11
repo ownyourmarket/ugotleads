@@ -54,6 +54,14 @@ describe("runSkill charge ladder", () => {
     expect(deps.charge).not.toHaveBeenCalled();
   });
 
+  it("treats null planMode (legacy) as included: uncharged, run proceeds", async () => {
+    const deps = makeDeps({ loadSubAccount: async () => ({ agencyId: "ag1", planMode: null }) });
+    const r = await runSkill(deps, INPUT);
+    expect(r).toMatchObject({ ok: true, creditsCharged: 0 });
+    expect(deps.charge).not.toHaveBeenCalled();
+    expect(deps.callModel).toHaveBeenCalled();
+  });
+
   it("refunds the charge when the model call throws", async () => {
     const deps = makeDeps({ callModel: vi.fn(async () => { throw new Error("boom"); }) });
     const r = await runSkill(deps, INPUT);
