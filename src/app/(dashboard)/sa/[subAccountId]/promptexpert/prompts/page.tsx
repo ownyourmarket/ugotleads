@@ -38,6 +38,7 @@ export default function PromptsPage() {
   const [content, setContent] = useState("");
   const [category, setCategory] = useState("General");
   const [tagsRaw, setTagsRaw] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const scope = useMemo(
     () => ({ agencyId: agencyId ?? "", subAccountId }),
@@ -59,18 +60,21 @@ export default function PromptsPage() {
   }
 
   async function save() {
+    if (!user || !agencyId) { toast.error("Still loading your workspace — try again in a second."); return; }
     if (!title.trim() || !content.trim()) { toast.error("Title and content are required."); return; }
     const tags = tagsRaw.split(",").map((t) => t.trim()).filter(Boolean);
+    setSaving(true);
     try {
       if (editing) {
         await updatePePrompt(scope, editing.id, { title: title.trim(), content, category: category.trim() || "General", tags });
         toast.success("Prompt updated");
       } else {
-        await createPePrompt(scope, user!.uid, { title: title.trim(), content, category: category.trim() || "General", tags });
+        await createPePrompt(scope, user.uid, { title: title.trim(), content, category: category.trim() || "General", tags });
         toast.success("Prompt created");
       }
       setOpen(false);
     } catch { toast.error("Save failed — check your permissions and try again."); }
+    finally { setSaving(false); }
   }
 
   return (
@@ -180,10 +184,10 @@ export default function PromptsPage() {
             </div>
           </div>
           <div className="flex justify-end gap-2">
-            <Button variant="ghost" onClick={() => setOpen(false)}>
+            <Button variant="ghost" onClick={() => setOpen(false)} disabled={saving}>
               Cancel
             </Button>
-            <Button onClick={save}>Save</Button>
+            <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
           </div>
         </div>
       </SheetContent>
