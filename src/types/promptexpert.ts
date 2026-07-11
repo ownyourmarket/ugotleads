@@ -49,3 +49,47 @@ export interface PeSkill {
   createdAt: Timestamp | FieldValue | null;
   updatedAt: Timestamp | FieldValue | null;
 }
+
+export interface CreditPack {
+  id: "starter" | "growth" | "scale";
+  name: string;
+  credits: number;
+  priceUsdCents: number;   // one-time
+}
+export const CREDIT_PACKS: CreditPack[] = [
+  { id: "starter", name: "Starter", credits: 500,  priceUsdCents: 1900 },
+  { id: "growth",  name: "Growth",  credits: 2000, priceUsdCents: 4900 },
+  { id: "scale",   name: "Scale",   credits: 5000, priceUsdCents: 9900 },
+];
+
+/** Saved assistant. Collection: pe_gpts/{id}. SERVER-WRITTEN ONLY. */
+export interface PeGpt {
+  id: string;
+  agencyId: string;
+  subAccountId: string;
+  name: string;
+  description: string | null;
+  basePromptId: string | null;      // pe_prompts ref, same-tenant validated server-side
+  pinnedGemIds: string[];           // pe_gems refs, same-tenant validated
+  allowedSkillIds: string[];        // pe_skills refs (reserved for later tool-use), same-tenant validated
+  creditCostPerMessage: number;     // int >= 0, default 1
+  createdByUid: string;
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
+}
+
+export interface PeGptMessage { role: "user" | "assistant"; content: string; at: number /* epoch ms */; }
+export const PE_GPT_SESSION_MAX_MESSAGES = 40;   // ring buffer cap, oldest dropped
+
+/** Chat session. Collection: pe_gpt_sessions/{id}. SERVER-WRITTEN ONLY. */
+export interface PeGptSession {
+  id: string;
+  agencyId: string;
+  subAccountId: string;
+  gptId: string;
+  startedByUid: string;
+  messages: PeGptMessage[];         // capped at PE_GPT_SESSION_MAX_MESSAGES
+  totalCreditsCharged: number;
+  createdAt: Timestamp | FieldValue | null;
+  updatedAt: Timestamp | FieldValue | null;
+}
