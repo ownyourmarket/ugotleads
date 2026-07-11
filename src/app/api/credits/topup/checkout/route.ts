@@ -1,6 +1,7 @@
 import "server-only";
 
 import { NextResponse } from "next/server";
+import type Stripe from "stripe";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { getStripeServer } from "@/lib/stripe/server";
 import { requireSubAccountMember } from "@/lib/auth/require-tenancy";
@@ -82,46 +83,82 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "unknown_pack" }, { status: 400 });
   }
 
-  // ── Resolve the sub-account's true owning agencyId ────────────────────────
+  // ── Resolve the sub-account's true owning agencyId + wallet-binding guard ──
   // See the agencyId note above — do not trust auth.agencyId (the caller's
-  // own claim) for the metadata stamped on the Stripe session.
+  // own claim) for the metadata stamped on the Stripe session. Both reads are
+  // wrapped together since a Firestore outage should surface as one 500,
+  // distinct from a downstream Stripe failure (handled separately below).
   const db = getAdminDb();
-  const subSnap = await db.doc(`subAccounts/${subAccountId}`).get();
+  let subSnap: FirebaseFirestore.DocumentSnapshot;
+  let walletSnap: FirebaseFirestore.DocumentSnapshot;
+  try {
+    subSnap = await db.doc(`subAccounts/${subAccountId}`).get();
+    walletSnap = await db.doc(`credit_wallets/${auth.uid}`).get();
+  } catch (err) {
+    console.error("[credits/topup] Firestore read failed while preparing checkout", err);
+    return NextResponse.json({ error: "internal" }, { status: 500 });
+  }
+
   if (!subSnap.exists) {
     return NextResponse.json({ error: "Sub-account not found" }, { status: 404 });
   }
   const agencyId = (subSnap.data()?.agencyId as string | undefined) ?? "";
 
+  // Guard 4 — cross-workspace purchase trap. A credit wallet's subAccountId,
+  // once stamped, must never be silently rebound to a different sub-account
+  // (mirrors the never-overwrite rule in ensureTopupWallet, src/lib/stripe/
+  // webhooks.ts) — so refuse to even start a checkout that would attempt it.
+  if (walletSnap.exists) {
+    const boundSubAccountId =
+      (walletSnap.data()?.subAccountId as string | null | undefined) ?? null;
+    if (boundSubAccountId !== null && boundSubAccountId !== subAccountId) {
+      return NextResponse.json(
+        {
+          error: "wallet_bound_elsewhere",
+          message:
+            "Your credit wallet is attached to a different workspace. Top up from that workspace, or contact support.",
+        },
+        { status: 409 },
+      );
+    }
+  }
+
   // ── Create Stripe Checkout Session ───────────────────────────────────────
   const stripe = getStripeServer();
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 
-  const session = await stripe.checkout.sessions.create({
-    mode: "payment",
-    payment_method_types: ["card"],
-    line_items: [
-      {
-        quantity: 1,
-        price_data: {
-          currency: "usd",
-          unit_amount: pack.priceUsdCents,
-          product_data: {
-            name: `UGotLeads Credits — ${pack.name} (${pack.credits} credits)`,
+  let session: Stripe.Checkout.Session;
+  try {
+    session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          quantity: 1,
+          price_data: {
+            currency: "usd",
+            unit_amount: pack.priceUsdCents,
+            product_data: {
+              name: `UGotLeads Credits — ${pack.name} (${pack.credits} credits)`,
+            },
           },
         },
+      ],
+      success_url: `${appUrl}/sa/${subAccountId}/credits?topup=success`,
+      cancel_url: `${appUrl}/sa/${subAccountId}/credits?topup=cancelled`,
+      metadata: {
+        kind: "credit_topup",
+        packId: pack.id,
+        credits: String(pack.credits),
+        agencyId,
+        subAccountId,
+        purchaserUid: auth.uid,
       },
-    ],
-    success_url: `${appUrl}/sa/${subAccountId}/credits?topup=success`,
-    cancel_url: `${appUrl}/sa/${subAccountId}/credits?topup=cancelled`,
-    metadata: {
-      kind: "credit_topup",
-      packId: pack.id,
-      credits: String(pack.credits),
-      agencyId,
-      subAccountId,
-      purchaserUid: auth.uid,
-    },
-  });
+    });
+  } catch (err) {
+    console.error("[credits/topup] Stripe session creation failed", err);
+    return NextResponse.json({ error: "checkout_unavailable" }, { status: 502 });
+  }
 
   console.info(
     `[credits/topup/checkout] Session ${session.id} created — pack=${pack.id} subAccount=${subAccountId}`,
