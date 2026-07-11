@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Sparkles } from "lucide-react";
+import Link from "next/link";
+import { Plus, Pencil, Play, Sparkles } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { useAuth } from "@/hooks/use-auth";
 import { subscribeToPeSkills, createPeSkill, updatePeSkill } from "@/lib/firestore/promptexpert";
@@ -14,8 +15,18 @@ import { Label } from "@/components/ui/label";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from "@/components/ui/sheet";
 import { toast } from "sonner";
 
+/**
+ * Extracts `[Variable Name]` slots from a skill's system instruction, in
+ * order of first appearance and deduped. Mirrors the `splitSlots` regex
+ * from Task 5 — kept identical here since the run panel only needs the
+ * variable names, not the split segments.
+ */
+function extractVars(systemInstruction: string): string[] {
+  return [...new Set([...systemInstruction.matchAll(/\[([A-Za-z0-9_ ]+)\]/g)].map((m) => m[1]))];
+}
+
 export default function SkillsPage() {
-  const { subAccountId, agencyId, isAdmin } = useSubAccount();
+  const { subAccountId, agencyId, isAdmin, saPath } = useSubAccount();
   const { user } = useAuth();
   const [rows, setRows] = useState<PeSkill[] | null>(null);
   const [editing, setEditing] = useState<PeSkill | null>(null);
@@ -26,6 +37,16 @@ export default function SkillsPage() {
   const [outputFormat, setOutputFormat] = useState<SkillOutputFormat>("Markdown");
   const [creditCost, setCreditCost] = useState("0");
   const [saving, setSaving] = useState(false);
+
+  // Run panel state — kept separate from the create/edit Sheet above so the
+  // two flows (admin edit vs. member run) never interfere with each other.
+  const [runOpen, setRunOpen] = useState(false);
+  const [runSkillTarget, setRunSkillTarget] = useState<PeSkill | null>(null);
+  const [varValues, setVarValues] = useState<Record<string, string>>({});
+  const [running, setRunning] = useState(false);
+  const [output, setOutput] = useState<string | null>(null);
+  const [runError, setRunError] = useState<string | null>(null);
+  const [showTopUp, setShowTopUp] = useState(false);
 
   const scope = useMemo(
     () => ({ agencyId: agencyId ?? "", subAccountId }),
@@ -72,7 +93,50 @@ export default function SkillsPage() {
     finally { setSaving(false); }
   }
 
+  function openRunFor(skill: PeSkill) {
+    setRunSkillTarget(skill);
+    setVarValues({});
+    setOutput(null);
+    setRunError(null);
+    setShowTopUp(false);
+    setRunOpen(true);
+  }
+
+  async function executeRun() {
+    if (!runSkillTarget) return;
+    setRunning(true);
+    setOutput(null);
+    setRunError(null);
+    setShowTopUp(false);
+    try {
+      const res = await fetch(`/api/sub-accounts/${subAccountId}/promptexpert/run`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ skillId: runSkillTarget.id, variables: varValues }),
+      });
+      const body = await res.json();
+      if (res.ok) {
+        setOutput(body.output);
+        toast.success(`Run complete — ${body.creditsCharged} credits`);
+      } else if (res.status === 402) {
+        setRunError(`Not enough credits: you have ${body.currentBalance}, this run needs ${body.required}.`);
+        setShowTopUp(true);
+      } else if (res.status === 403) {
+        setRunError("PromptExpert is an add-on for BYOK plans — see the marketplace to unlock it.");
+      } else if (res.status === 429) {
+        setRunError("Monthly AI usage cap reached for this workspace.");
+      } else {
+        setRunError("Run failed — please try again.");
+      }
+    } catch {
+      setRunError("Network error — please try again.");
+    } finally {
+      setRunning(false);
+    }
+  }
+
   return (
+    <>
     <Sheet open={open} onOpenChange={setOpen}>
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -102,6 +166,7 @@ export default function SkillsPage() {
                 skill={skill}
                 isAdmin={isAdmin}
                 onEdit={() => openFor(skill)}
+                onRun={() => openRunFor(skill)}
               />
             ))}
           </div>
@@ -184,6 +249,67 @@ export default function SkillsPage() {
         </div>
       </SheetContent>
     </Sheet>
+
+    <Sheet open={runOpen} onOpenChange={setRunOpen}>
+      <SheetContent className="w-full sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Run: {runSkillTarget?.name}</SheetTitle>
+          <SheetDescription>
+            This run: <strong>{runSkillTarget?.creditCost ?? 0} credits</strong>
+          </SheetDescription>
+        </SheetHeader>
+        <div className="space-y-4 overflow-y-auto p-4 pt-0">
+          {runSkillTarget &&
+            extractVars(runSkillTarget.systemInstruction).map((varName) => (
+              <div key={varName} className="space-y-1.5">
+                <Label htmlFor={`run-var-${varName}`}>{varName}</Label>
+                <Input
+                  id={`run-var-${varName}`}
+                  value={varValues[varName] ?? ""}
+                  onChange={(e) =>
+                    setVarValues((v) => ({ ...v, [varName]: e.target.value }))
+                  }
+                />
+              </div>
+            ))}
+
+          {runError && (
+            <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">
+              {runError}
+              {showTopUp && (
+                <div className="mt-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    render={<Link href={saPath("/credits")} />}
+                  >
+                    Top up credits
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          <div aria-live="polite">
+            {output && (
+              <pre className="whitespace-pre-wrap rounded-md border bg-muted/40 p-4 text-sm">
+                {output}
+              </pre>
+            )}
+          </div>
+
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setRunOpen(false)} disabled={running}>
+              Close
+            </Button>
+            <Button onClick={executeRun} disabled={running}>
+              {running ? "Running…" : "Run"}
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+    </>
   );
 }
 
@@ -191,10 +317,12 @@ function SkillCard({
   skill,
   isAdmin,
   onEdit,
+  onRun,
 }: {
   skill: PeSkill;
   isAdmin: boolean;
   onEdit: () => void;
+  onRun: () => void;
 }) {
   return (
     <div className="group flex flex-col rounded-2xl border bg-card p-5 transition-all hover:border-primary/30 hover:shadow-sm">
@@ -214,14 +342,18 @@ function SkillCard({
         <Badge variant="outline">{skill.creditCost} credits / run</Badge>
       </div>
 
-      {isAdmin && (
-        <div className="mt-4 flex flex-wrap items-center gap-1.5">
+      <div className="mt-4 flex flex-wrap items-center gap-1.5">
+        <Button size="sm" onClick={onRun}>
+          <Play className="mr-1 h-3.5 w-3.5" />
+          Run
+        </Button>
+        {isAdmin && (
           <Button size="sm" variant="outline" onClick={onEdit}>
             <Pencil className="mr-1 h-3.5 w-3.5" />
             Edit
           </Button>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
