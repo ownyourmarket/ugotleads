@@ -762,6 +762,39 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    // ── PromptExpert ────────────────────────────────────────────────
+    match /pe_prompts/{id} {
+      allow read:   if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow create: if canAdminSub(request.resource.data.subAccountId, request.resource.data.agencyId);
+      allow update: if canAdminSub(resource.data.subAccountId, resource.data.agencyId)
+                    && tenantFieldsLockedOnUpdate();
+      allow delete: if false;
+    }
+
+    match /pe_gems/{id} {
+      allow read:   if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow create: if canAdminSub(request.resource.data.subAccountId, request.resource.data.agencyId)
+                    && request.resource.data.dataContent is string
+                    && request.resource.data.dataContent.size() <= 50000;
+      allow update: if canAdminSub(resource.data.subAccountId, resource.data.agencyId)
+                    && tenantFieldsLockedOnUpdate()
+                    && request.resource.data.dataContent is string
+                    && request.resource.data.dataContent.size() <= 50000;
+      allow delete: if false;
+    }
+
+    match /pe_skills/{id} {
+      allow read:   if canAccessSub(resource.data.subAccountId, resource.data.agencyId);
+      allow create: if canAdminSub(request.resource.data.subAccountId, request.resource.data.agencyId)
+                    && request.resource.data.creditCost is int
+                    && request.resource.data.creditCost >= 0;
+      allow update: if canAdminSub(resource.data.subAccountId, resource.data.agencyId)
+                    && tenantFieldsLockedOnUpdate()
+                    && request.resource.data.creditCost is int
+                    && request.resource.data.creditCost >= 0;
+      allow delete: if false;
+    }
+
     // ai_runs/{id}  — Admin SDK writes only
     match /ai_runs/{id} {
       allow read: if canAccessSub(resource.data.subAccountId, resource.data.agencyId);

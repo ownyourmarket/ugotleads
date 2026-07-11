@@ -8,5 +8,6 @@ export * from "./messages";
 export * from "./website";
 export * from "./partner";
 export * from "./products";
+export * from "./promptexpert";
 export * from "./credits";
 export * from "./ledger";
