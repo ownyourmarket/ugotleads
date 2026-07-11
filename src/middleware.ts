@@ -5,6 +5,7 @@ import { authMiddleware } from "next-firebase-auth-edge/lib/next/middleware";
 const PUBLIC_PATHS = [
   "/",
   "/login",
+  "/promptexpert",
   "/signup",
   "/terms",
   "/privacy",
