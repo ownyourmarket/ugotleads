@@ -5,6 +5,7 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { agentError } from "@/lib/agent-api/errors";
 import { withAgentRoute } from "@/lib/agent-api/route-wrapper";
 import { requireServiceAuth } from "@/lib/auth/require-service-auth";
+import { htmlToText } from "@/lib/comms/html-to-text";
 
 export const GET = withAgentRoute(async (request: Request) => {
   const url = new URL(request.url);
@@ -44,7 +45,9 @@ export const GET = withAgentRoute(async (request: Request) => {
       contactId: doc.contactId,
       fromEmail: doc.fromEmail,
       subject: doc.subject,
-      text: doc.text,
+      // Some senders (Gmail replies included) deliver html with no text
+      // part — fall back so the reply body is always readable here.
+      text: doc.text || htmlToText(doc.html as string | null),
       handled: doc.handled,
       matchedBy: doc.matchedBy,
       receivedAt: doc.receivedAt,

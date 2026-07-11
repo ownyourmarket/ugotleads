@@ -153,6 +153,39 @@ describe("agent replies", () => {
     );
   });
 
+  it("falls back to html-derived text when the text part is empty", async () => {
+    // Gmail-style reply: html only, no plain-text part (observed live 2026-07-11).
+    fakeDb.doc("inbound_emails/rHtml").set({
+      id: "rHtml",
+      agencyId: "ag1",
+      subAccountId: "subMain",
+      contactId: "c3",
+      fromEmail: "h@ex.com",
+      fromRaw: "h@ex.com",
+      to: ["test@example.com"],
+      subject: "Re: hi",
+      text: "",
+      html: '<div dir="ltr">Yes — let&#39;s talk <b>Tuesday</b>.<br></div>',
+      resendEmailId: null,
+      messageId: null,
+      handled: false,
+      matchedBy: "reply_token",
+      receivedAt: new Date("2026-01-10T14:00:00Z"),
+      createdAt: new Date("2026-01-10T14:00:00Z"),
+    });
+
+    const res = await GET(get("subAccountId=subMain"));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    const rHtml = body.data.find(
+      (d: Record<string, unknown>) => d.id === "rHtml"
+    );
+    expect(rHtml.text).toBe("Yes — let's talk Tuesday.");
+    // Docs with a real text part are untouched by the fallback.
+    const r1 = body.data.find((d: Record<string, unknown>) => d.id === "r1");
+    expect(r1.text).toBe("yes");
+  });
+
   it("filters by handled=false", async () => {
     const res = await GET(get("subAccountId=subMain&handled=false"));
     expect(res.status).toBe(200);
