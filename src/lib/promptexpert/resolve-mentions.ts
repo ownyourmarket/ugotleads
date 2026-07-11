@@ -29,16 +29,14 @@ export function resolveMentions({ content, gems, variables }: ResolveInput): Res
     }
   }
   // Any @Something left (up to end of line, or up to the next mention) matched no gem.
-  // Dedup by the mention's leading word: greedy capture can bleed trailing filler
-  // text into an earlier mention (e.g. "@Nope x @Nope"), so two matches that start
-  // with the same word are treated as the same missing gem.
-  const seenGemKeys: string[] = [];
+  // Dedup by the full trimmed phrase to preserve distinct mentions that happen
+  // to share a leading word (e.g., "@Alpha One" and "@Alpha Two" are distinct).
+  const seenGemKeys: Set<string> = new Set();
   for (const m of resolved.matchAll(/@([^\n@]+)/g)) {
-    const name = m[1].trim();
-    const key = name.split(/\s+/)[0];
-    if (!seenGemKeys.includes(key)) {
-      seenGemKeys.push(key);
-      missingGems.push(name);
+    const key = m[1].trim();
+    if (!seenGemKeys.has(key)) {
+      seenGemKeys.add(key);
+      missingGems.push(key);
     }
   }
 

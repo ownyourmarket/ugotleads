@@ -52,9 +52,16 @@ describe("resolveMentions", () => {
     expect(r.resolved).toContain("--- Context: Bio ---");
   });
 
-  it("dedupes repeated missing gem mentions", () => {
-    const r = resolveMentions({ content: "@Nope x @Nope", gems: [], variables: {} });
+  it("dedupes repeated missing gem mentions when captures are identical", () => {
+    // Newline-separated so both captures are exactly "Nope" after trim.
+    // The greedy regex /@([^\n@]+)/g stops at newline, so both match are "Nope".
+    const r = resolveMentions({ content: "x @Nope\ny @Nope", gems: [], variables: {} });
     expect(r.missingGems).toHaveLength(1);
+  });
+
+  it("keeps distinct missing mentions that share a leading word", () => {
+    const r = resolveMentions({ content: "@Alpha One and @Alpha Two", gems: [], variables: {} });
+    expect(r.missingGems).toHaveLength(2);
   });
 
   // Gem-then-variable ordering is intentional composability: a gem body
