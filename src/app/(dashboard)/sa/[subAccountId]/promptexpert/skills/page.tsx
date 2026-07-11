@@ -5,8 +5,9 @@ import Link from "next/link";
 import { Plus, Pencil, Play, Sparkles } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
 import { useAuth } from "@/hooks/use-auth";
-import { subscribeToPeSkills, createPeSkill, updatePeSkill } from "@/lib/firestore/promptexpert";
-import { SKILL_OUTPUT_FORMATS, type PeSkill, type SkillOutputFormat } from "@/types";
+import { subscribeToPeSkills, subscribeToPeGems, createPeSkill, updatePeSkill } from "@/lib/firestore/promptexpert";
+import { extractVars, gemMentionRegex } from "@/lib/promptexpert/slots";
+import { SKILL_OUTPUT_FORMATS, type PeGem, type PeSkill, type SkillOutputFormat } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -16,19 +17,30 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescri
 import { toast } from "sonner";
 
 /**
- * Extracts `[Variable Name]` slots from a skill's system instruction, in
- * order of first appearance and deduped. Mirrors the `splitSlots` regex
- * from Task 5 — kept identical here since the run panel only needs the
- * variable names, not the split segments.
+ * Variables to fill for a skill's run panel: slots in the system
+ * instruction itself, plus slots inside the data content of every gem
+ * actually @-mentioned in that instruction (gems can carry their own
+ * `[Variable]` placeholders).
  */
-function extractVars(systemInstruction: string): string[] {
-  return [...new Set([...systemInstruction.matchAll(/\[([A-Za-z0-9_ ]+)\]/g)].map((m) => m[1]))];
+function varsToFillFor(skill: PeSkill, gems: PeGem[]): string[] {
+  const mentionedGems = gems.filter((g) => gemMentionRegex(g.name).test(skill.systemInstruction));
+  const combined = [skill.systemInstruction, ...mentionedGems.map((g) => g.dataContent)].join("\n");
+  return extractVars(combined);
+}
+
+/** Formats the non-destructive "unresolved" warning shown after a run. */
+function formatUnresolvedWarning(missingVariables: string[], missingGems: string[]): string {
+  const parts: string[] = [];
+  if (missingVariables.length > 0) parts.push(`variables: [${missingVariables.join(", ")}]`);
+  if (missingGems.length > 0) parts.push(`gems: [${missingGems.join(", ")}]`);
+  return `Heads up: unresolved — ${parts.join(" / ")}`;
 }
 
 export default function SkillsPage() {
   const { subAccountId, agencyId, isAdmin, saPath } = useSubAccount();
   const { user } = useAuth();
   const [rows, setRows] = useState<PeSkill[] | null>(null);
+  const [gems, setGems] = useState<PeGem[]>([]);
   const [editing, setEditing] = useState<PeSkill | null>(null);
   const [open, setOpen] = useState(false);
   const [name, setName] = useState("");
@@ -45,6 +57,7 @@ export default function SkillsPage() {
   const [varValues, setVarValues] = useState<Record<string, string>>({});
   const [running, setRunning] = useState(false);
   const [output, setOutput] = useState<string | null>(null);
+  const [runWarning, setRunWarning] = useState<string | null>(null);
   const [runError, setRunError] = useState<string | null>(null);
   const [showTopUp, setShowTopUp] = useState(false);
 
@@ -58,6 +71,11 @@ export default function SkillsPage() {
   useEffect(() => {
     if (!agencyId || !subAccountId) return;
     return subscribeToPeSkills(scope, setRows);
+  }, [scope, agencyId, subAccountId]);
+
+  useEffect(() => {
+    if (!agencyId || !subAccountId) return;
+    return subscribeToPeGems(scope, setGems);
   }, [scope, agencyId, subAccountId]);
 
   function openFor(s: PeSkill | null) {
@@ -100,6 +118,7 @@ export default function SkillsPage() {
     setRunSkillTarget(skill);
     setVarValues({});
     setOutput(null);
+    setRunWarning(null);
     setRunError(null);
     setShowTopUp(false);
     setRunOpen(true);
@@ -110,6 +129,7 @@ export default function SkillsPage() {
     const gen = runGeneration.current;
     setRunning(true);
     setOutput(null);
+    setRunWarning(null);
     setRunError(null);
     setShowTopUp(false);
     try {
@@ -122,6 +142,13 @@ export default function SkillsPage() {
       if (res.ok) {
         if (gen !== runGeneration.current) return;
         setOutput(body.output);
+        const missingVariables: string[] = body.missingVariables ?? [];
+        const missingGems: string[] = body.missingGems ?? [];
+        setRunWarning(
+          missingVariables.length > 0 || missingGems.length > 0
+            ? formatUnresolvedWarning(missingVariables, missingGems)
+            : null,
+        );
         toast.success(`Run complete — ${body.creditsCharged} credits`);
       } else if (res.status === 402) {
         if (gen !== runGeneration.current) return;
@@ -199,6 +226,7 @@ export default function SkillsPage() {
               onChange={(e) => setName(e.target.value)}
               placeholder="Cold Email Opener"
               autoFocus
+              aria-required="true"
             />
           </div>
           <div className="space-y-1.5">
@@ -219,6 +247,7 @@ export default function SkillsPage() {
               onChange={(e) => setSystemInstruction(e.target.value)}
               placeholder="You are an expert at…"
               className="font-mono"
+              aria-required="true"
             />
             <p className="text-xs text-muted-foreground">
               Supports [Variables] and @Gem mentions.
@@ -248,7 +277,11 @@ export default function SkillsPage() {
               step={1}
               value={creditCost}
               onChange={(e) => setCreditCost(e.target.value)}
+              aria-describedby="skill-credit-cost-hint"
             />
+            <p id="skill-credit-cost-hint" className="text-xs text-muted-foreground">
+              Whole number, minimum 0 — decimals are rounded down.
+            </p>
           </div>
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setOpen(false)} disabled={saving}>
@@ -270,7 +303,7 @@ export default function SkillsPage() {
         </SheetHeader>
         <div className="space-y-4 overflow-y-auto p-4 pt-0">
           {runSkillTarget &&
-            extractVars(runSkillTarget.systemInstruction).map((varName) => (
+            varsToFillFor(runSkillTarget, gems).map((varName) => (
               <div key={varName} className="space-y-1.5">
                 <Label htmlFor={`run-var-${varName}`}>{varName}</Label>
                 <Input
@@ -302,6 +335,11 @@ export default function SkillsPage() {
           )}
 
           <div aria-live="polite">
+            {runWarning && (
+              <div className="mb-2 rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-sm text-amber-700 dark:text-amber-400">
+                {runWarning}
+              </div>
+            )}
             {output && (
               <pre className="whitespace-pre-wrap rounded-md border bg-muted/40 p-4 text-sm">
                 {output}
