@@ -98,4 +98,28 @@ describe("runSkill charge ladder", () => {
     expect(r).toMatchObject({ status: 429, error: "token_cap" });
     expect(deps.refund).toHaveBeenCalledWith(expect.objectContaining({ amount: 5 }));
   });
+
+  it("surfaces unresolved variables and gems on an otherwise-ok result", async () => {
+    const deps = makeDeps({
+      loadSkill: async () => ({ id: "sk1", subAccountId: "sa1", systemInstruction: "Do [X] and [Y] with @Nope", outputFormat: "Markdown", creditCost: 5, name: "Test" }),
+    });
+    const r = await runSkill(deps, INPUT);
+    expect(r).toMatchObject({ ok: true, missingVariables: ["Y"] });
+    if ("missingGems" in r) {
+      expect(r.missingGems.some((g) => g.includes("Nope"))).toBe(true);
+    } else {
+      throw new Error("expected an ok result with missingGems");
+    }
+  });
+
+  it("does not refund a successful run when post-success bookkeeping throws", async () => {
+    const deps = makeDeps({
+      updateRun: vi.fn(async (_runId, patch: Record<string, unknown>) => {
+        if (patch.status === "succeeded") throw new Error("firestore write failed");
+      }),
+    });
+    const r = await runSkill(deps, INPUT);
+    expect(r).toMatchObject({ ok: true, output: "OUT", creditsCharged: 5 });
+    expect(deps.refund).not.toHaveBeenCalled();
+  });
 });

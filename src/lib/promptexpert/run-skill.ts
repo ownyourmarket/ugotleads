@@ -13,12 +13,21 @@ export interface RunSkillDeps {
     | { wallet_not_found: true } | { error: true; message: string }>;
   refund(input: { agencyId: string; subAccountId: string; amount: number; referenceId: string }): Promise<void>;
   resolveAi(subAccountId: string): Promise<{ apiKey: string; recordUsage(t: number): Promise<void> }>;
-  callModel(input: { apiKey: string; system: string; outputFormat: string }): Promise<{ text: string; totalTokens: number; model: string }>;
+  callModel(input: { apiKey: string; system: string; outputFormat: string }): Promise<{
+    text: string; totalTokens: number; model: string;
+    promptTokens?: number; completionTokens?: number;
+  }>;
   masterAgencyId: string | undefined;
 }
 
 export type RunSkillResult =
-  | { ok: true; runId: string; output: string; creditsCharged: number; model: string }
+  | {
+      ok: true; runId: string; output: string; creditsCharged: number; model: string;
+      /** Variable names referenced (via `[Name]`) but not supplied in `input.variables`. */
+      missingVariables: string[];
+      /** `@Mention`s in the instruction that matched no gem. */
+      missingGems: string[];
+    }
   | { status: 402; currentBalance: number; required: number }
   | { status: 403; upsell: true }
   | { status: 404; error: string }
@@ -42,7 +51,7 @@ export async function runSkill(deps: RunSkillDeps, input: {
     return { status: 403, upsell: true };
 
   const gems = await deps.loadGems(input.subAccountId);
-  const { resolved } = resolveMentions({
+  const { resolved, missingVariables, missingGems } = resolveMentions({
     content: skill.systemInstruction, gems, variables: input.variables,
   });
 
@@ -75,7 +84,14 @@ export async function runSkill(deps: RunSkillDeps, input: {
       await deps.updateRun(runId, { status: "failed", error: c.message });
       return { status: 500, error: c.message };
     }
-    if ("ok" in c) { creditsCharged = skill.creditCost; creditTransactionId = c.transactionId; }
+    if ("ok" in c) {
+      creditsCharged = skill.creditCost; creditTransactionId = c.transactionId;
+      // Stamp the charge onto the run doc immediately — if the model call
+      // fails below, the failure-path updateRun only patches status/error,
+      // so this keeps the run forensically linked to the transaction that
+      // paid for it even when the run itself ends up "failed".
+      await deps.updateRun(runId, { creditsCharged, creditTransactionId });
+    }
     // "skipped" (duplicate operationId) ⇒ already charged for this runId; continue.
   }
 
@@ -84,12 +100,22 @@ export async function runSkill(deps: RunSkillDeps, input: {
     const result = await deps.callModel({
       apiKey: ai.apiKey, system: resolved, outputFormat: skill.outputFormat,
     });
-    await ai.recordUsage(result.totalTokens);
-    await deps.updateRun(runId, {
-      status: "succeeded", output: result.text, totalTokens: result.totalTokens,
-      model: result.model, creditsCharged, creditTransactionId,
-    });
-    return { ok: true, runId, output: result.text, creditsCharged, model: result.model };
+    // Bookkeeping after a successful model call must never turn a
+    // successful run into a reported failure. If recordUsage/updateRun
+    // throws here, log it but still return the ok result to the caller —
+    // the credit charge already succeeded and must not be refunded for a
+    // run that actually produced output.
+    try {
+      await ai.recordUsage(result.totalTokens);
+      await deps.updateRun(runId, {
+        status: "succeeded", output: result.text, totalTokens: result.totalTokens,
+        model: result.model, creditsCharged, creditTransactionId,
+        promptTokens: result.promptTokens ?? 0, completionTokens: result.completionTokens ?? 0,
+      });
+    } catch (bookkeepingErr) {
+      console.error("[promptexpert] post-success bookkeeping failed:", bookkeepingErr);
+    }
+    return { ok: true, runId, output: result.text, creditsCharged, model: result.model, missingVariables, missingGems };
   } catch (err) {
     if (creditsCharged > 0) {
       await deps.refund({
@@ -99,8 +125,10 @@ export async function runSkill(deps: RunSkillDeps, input: {
     }
     const message = err instanceof Error ? err.message : "run_failed";
     await deps.updateRun(runId, { status: "failed", error: message });
-    // Token-cap errors surface as 429 (CapExceededError is thrown by resolveAi —
-    // the route maps it; here any error name containing "Cap" also maps):
+    // Token-cap errors surface as 429. CapExceededError is thrown by
+    // deps.resolveAi (see the provider resolver); we match on the exact
+    // error name here (not a substring check) rather than importing the
+    // class, keeping this engine free of framework-specific dependencies.
     if (err instanceof Error && err.name === "CapExceededError")
       return { status: 429, error: "token_cap" };
     return { status: 500, error: message };
