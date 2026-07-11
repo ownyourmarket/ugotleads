@@ -72,6 +72,26 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
   catch { return NextResponse.json({ error: "invalid_json" }, { status: 400 }); }
   if (!body.skillId) return NextResponse.json({ error: "skillId_required" }, { status: 400 });
 
+  // Variables come straight from the client — bound their shape before they
+  // reach the engine/model prompt: plain object, string values only, capped
+  // length and key count.
+  const MAX_VARIABLE_KEYS = 50;
+  const MAX_VARIABLE_VALUE_LENGTH = 2000;
+  const rawVariables = body.variables ?? {};
+  const isPlainObject =
+    typeof rawVariables === "object" && rawVariables !== null && !Array.isArray(rawVariables);
+  if (!isPlainObject) {
+    return NextResponse.json({ error: "invalid_variables" }, { status: 400 });
+  }
+  const variableEntries = Object.entries(rawVariables);
+  const variablesValid =
+    variableEntries.length <= MAX_VARIABLE_KEYS &&
+    variableEntries.every(([, v]) => typeof v === "string" && v.length <= MAX_VARIABLE_VALUE_LENGTH);
+  if (!variablesValid) {
+    return NextResponse.json({ error: "invalid_variables" }, { status: 400 });
+  }
+  const variables = rawVariables;
+
   const db = getAdminDb();
 
   // Memoized within this request — resolveAiCallContext etc. only need it
@@ -168,14 +188,17 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
         ],
         maxTokens: PE_MAX_OUTPUT_TOKENS,
       });
-      return { text: r.text, totalTokens: r.totalTokens, model: r.model };
+      return {
+        text: r.text, totalTokens: r.totalTokens, model: r.model,
+        promptTokens: r.promptTokens, completionTokens: r.completionTokens,
+      };
     },
     masterAgencyId: process.env.MASTER_AGENCY_ID,
   };
 
   try {
     const result = await runSkill(deps, {
-      subAccountId, uid: auth.uid, skillId: body.skillId, variables: body.variables ?? {},
+      subAccountId, uid: auth.uid, skillId: body.skillId, variables,
     });
     if ("ok" in result) return NextResponse.json(result);
     if (result.status === 402) return NextResponse.json({ error: "insufficient_credits", currentBalance: result.currentBalance, required: result.required }, { status: 402 });
