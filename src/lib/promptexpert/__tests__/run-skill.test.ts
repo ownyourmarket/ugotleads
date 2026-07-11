@@ -67,4 +67,35 @@ describe("runSkill charge ladder", () => {
     const r = await runSkill(deps, INPUT);
     expect(r).toMatchObject({ status: 404 });
   });
+
+  it("returns 402 when the wallet is not found, without calling the model", async () => {
+    const deps = makeDeps({ charge: vi.fn(async () => ({ wallet_not_found: true as const })) });
+    const r = await runSkill(deps, INPUT);
+    expect(r).toMatchObject({ status: 402, currentBalance: 0, required: 5 });
+    expect(deps.callModel).not.toHaveBeenCalled();
+  });
+
+  it("continues without double-charging when the charge is skipped as a duplicate", async () => {
+    const deps = makeDeps({ charge: vi.fn(async () => ({ skipped: true as const })) });
+    const r = await runSkill(deps, INPUT);
+    expect(r).toMatchObject({ ok: true, creditsCharged: 0 });
+    expect(deps.callModel).toHaveBeenCalled();
+  });
+
+  it("returns 500 on a charge error, without calling the model or refunding", async () => {
+    const deps = makeDeps({ charge: vi.fn(async () => ({ error: true as const, message: "boom" })) });
+    const r = await runSkill(deps, INPUT);
+    expect(r).toMatchObject({ status: 500 });
+    expect(deps.callModel).not.toHaveBeenCalled();
+    expect(deps.refund).not.toHaveBeenCalled();
+  });
+
+  it("returns 429 on a token-cap error, refunding the charge already taken", async () => {
+    const deps = makeDeps({
+      resolveAi: async () => { throw Object.assign(new Error("cap"), { name: "CapExceededError" }); },
+    });
+    const r = await runSkill(deps, INPUT);
+    expect(r).toMatchObject({ status: 429, error: "token_cap" });
+    expect(deps.refund).toHaveBeenCalledWith(expect.objectContaining({ amount: 5 }));
+  });
 });

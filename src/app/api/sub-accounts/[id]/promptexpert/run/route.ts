@@ -28,6 +28,9 @@ import { runSkill, type RunSkillDeps } from "@/lib/promptexpert/run-skill";
  *    placeholders — see the report.
  */
 
+// PromptExpert generates long-form content; the SMS-tuned callAi default (400) truncates it.
+const PE_MAX_OUTPUT_TOKENS = 2048;
+
 const STATUS_MAP: Record<string, "pending" | "success" | "failed" | "timeout"> = {
   running: "pending",
   succeeded: "success",
@@ -163,6 +166,7 @@ export async function POST(request: Request, ctx: { params: Promise<{ id: string
           { role: "system", content: `${system}\n\nRespond in ${outputFormat} format only.` },
           { role: "user", content: "Execute the instruction above." },
         ],
+        maxTokens: PE_MAX_OUTPUT_TOKENS,
       });
       return { text: r.text, totalTokens: r.totalTokens, model: r.model };
     },
