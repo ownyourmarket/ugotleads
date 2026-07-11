@@ -103,14 +103,10 @@ export async function runGptMessage(deps: RunGptDeps, input: {
       const assistantMsg = { role: "assistant" as const, content: result.text, at };
       if (session) {
         const updatedMessages = [...session.messages, userMsg, assistantMsg].slice(-PE_GPT_SESSION_MAX_MESSAGES);
-        // totalCreditsCharged here is the increment for this message, not the
-        // running total — deps.appendToSession is responsible for applying it
-        // as an atomic increment (e.g. Firestore FieldValue.increment), since
-        // loadSession's contract does not surface the prior total to this
-        // pure engine.
+        // totalCreditsChargedDelta: the route MUST apply this via FieldValue.increment() — it is a per-message delta, not an absolute.
         await deps.appendToSession(session.id, {
           messages: updatedMessages,
-          totalCreditsCharged: creditsCharged,
+          totalCreditsChargedDelta: creditsCharged,
         });
       } else {
         sessionId = await deps.createSession({

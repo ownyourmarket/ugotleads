@@ -94,7 +94,32 @@ describe("runGptMessage charge ladder", () => {
     });
     const r = await runGptMessage(deps, INPUT);
     expect(r).toMatchObject({ status: 429, error: "token_cap" });
-    expect(deps.refund).toHaveBeenCalledWith(expect.objectContaining({ amount: 3 }));
+    expect(deps.refund).toHaveBeenCalledWith(
+      expect.objectContaining({ amount: 3, referenceId: "gpt_msg_msg1" })
+    );
+  });
+
+  it("new session: createSession throws → ok:true, creditsCharged set, refund NOT called, sessionId empty", async () => {
+    const deps = makeDeps({
+      createSession: vi.fn(async () => { throw new Error("firestore error"); }),
+    });
+    const inputNewSession = { ...INPUT, sessionId: null };
+    const r = await runGptMessage(deps, inputNewSession);
+    expect(r).toMatchObject({ ok: true, creditsCharged: 3, sessionId: "" });
+    expect(deps.refund).not.toHaveBeenCalled();
+  });
+
+  it("zero-cost gpt with credit mode → not charged, callModel called", async () => {
+    const deps = makeDeps({
+      loadGpt: async () => ({
+        id: "gpt1", subAccountId: "sa1", name: "Ada", basePromptId: null,
+        pinnedGemIds: [], creditCostPerMessage: 0,
+      }),
+    });
+    const r = await runGptMessage(deps, INPUT);
+    expect(r).toMatchObject({ ok: true, creditsCharged: 0 });
+    expect(deps.charge).not.toHaveBeenCalled();
+    expect(deps.callModel).toHaveBeenCalled();
   });
 
   it("404s when the gpt belongs to a different sub-account", async () => {
