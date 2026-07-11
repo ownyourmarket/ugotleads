@@ -40,7 +40,7 @@ export interface FulfillTopupDeps {
     delta: number;
     description: string;
     referenceId: string;
-  }): Promise<{ ok: true } | { error: true; message: string }>;
+  }): Promise<{ ok: true } | { skipped: true } | { error: true; message: string }>;
 }
 
 export interface TopupEvent {
@@ -100,6 +100,13 @@ export async function fulfillTopup(
 
   if ("error" in result) {
     return { error: true, message: result.message };
+  }
+
+  // Race-loser path: a concurrent Stripe webhook retry already minted this
+  // transactionId first (tx.create ALREADY_EXISTS). Treat identically to the
+  // pre-check duplicate path above — no double-mint, no error surfaced.
+  if ("skipped" in result) {
+    return { duplicate: true };
   }
 
   return { fulfilled: true };

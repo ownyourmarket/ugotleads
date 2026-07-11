@@ -92,4 +92,15 @@ describe("fulfillTopup", () => {
     expect(r).toMatchObject({ error: true });
     expect(deps.applyCredit).not.toHaveBeenCalled();
   });
+
+  it("maps a race-loser applyCredit result ({skipped:true}) to {duplicate:true}", async () => {
+    // This is the concurrent-webhook-retry path: the pre-check (findTxnByReference)
+    // saw no existing transaction, but by the time applyCredit's tx.create runs,
+    // another retry already won the mint on the same deterministic transactionId.
+    const deps = makeDeps({
+      applyCredit: vi.fn(async () => ({ skipped: true as const })),
+    });
+    const r = await fulfillTopup(deps, EVENT);
+    expect(r).toEqual({ duplicate: true });
+  });
 });

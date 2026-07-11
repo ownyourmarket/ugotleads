@@ -37,10 +37,18 @@ export interface ServerCreditDeltaInput {
   referenceId?: string | null;
   referenceType?: CreditTransaction["referenceType"];
   createdByUid?: string | null;
+  /**
+   * Deterministic id for the credit_transactions doc ⇒ atomic idempotency via
+   * tx.create (a second call with the same id fails with ALREADY_EXISTS,
+   * which maps to a { skipped: true } duplicate result instead of double-minting).
+   * Omit to get a random auto-id (no idempotency guarantee).
+   */
+  transactionId?: string;
 }
 
 export type ServerCreditDeltaResult =
   | { ok: true; newBalance: number; transactionId: string; actualDelta: number }
+  | { skipped: true; reason: "duplicate_transaction" }
   | { error: true; message: string };
 
 // ---------------------------------------------------------------------------
@@ -63,7 +71,9 @@ export async function serverApplyCreditDelta(
 
   const db = getAdminDb();
   const walletRef = db.collection("credit_wallets").doc(input.partnerProfileId);
-  const txnRef = db.collection("credit_transactions").doc();
+  const txnRef = input.transactionId
+    ? db.collection("credit_transactions").doc(input.transactionId)
+    : db.collection("credit_transactions").doc();
   const transactionId = txnRef.id;
 
   let newBalance = 0;
@@ -115,8 +125,10 @@ export async function serverApplyCreditDelta(
         tx.update(walletRef, updates);
       }
 
-      // Write the transaction record
-      tx.set(txnRef, {
+      // Write the transaction record. tx.create throws ALREADY_EXISTS (code 6)
+      // if transactionId is deterministic and a prior call already wrote it —
+      // behavior-neutral for auto-ids (fresh ids never collide).
+      tx.create(txnRef, {
         walletId: input.partnerProfileId,
         agencyId: input.agencyId,
         partnerProfileId: input.partnerProfileId,
@@ -137,6 +149,15 @@ export async function serverApplyCreditDelta(
 
     return { ok: true, newBalance, transactionId, actualDelta };
   } catch (err) {
+    // Race/replay: a deterministic transactionId already exists — another
+    // caller (or a concurrent Stripe webhook retry) won the mint first.
+    const firestoreCode = (err as { code?: number })?.code;
+    if (firestoreCode === 6) {
+      console.info(
+        `[credits] Duplicate transactionId ${transactionId} for ${input.partnerProfileId} — skipped.`,
+      );
+      return { skipped: true, reason: "duplicate_transaction" };
+    }
     const message = err instanceof Error ? err.message : "Firestore transaction failed.";
     console.error(`[credits] serverApplyCreditDelta failed for ${input.partnerProfileId}:`, err);
     return { error: true, message };

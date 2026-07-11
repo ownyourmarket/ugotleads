@@ -462,8 +462,12 @@ async function handleCreditTopup(session: Stripe.Checkout.Session): Promise<void
         description: input.description,
         referenceId: input.referenceId,
         referenceType: "stripe_event",
+        // Deterministic per checkout session ⇒ concurrent Stripe webhook
+        // retries collide on tx.create (ALREADY_EXISTS) instead of double-minting.
+        transactionId: `topup_${input.referenceId}`,
       });
       if ("error" in r) return { error: true, message: r.message };
+      if ("skipped" in r) return { skipped: true };
       return { ok: true };
     },
   };
