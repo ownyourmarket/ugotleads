@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import {
   ArrowDownCircle,
   ArrowUpCircle,
@@ -18,7 +20,66 @@ import {
   subscribeToCreditTransactions,
 } from "@/lib/firestore/credits";
 import type { CreditWallet, CreditTransaction, CreditTxnType } from "@/types/credits";
+import { CREDIT_PACKS, type CreditPack } from "@/types";
 import { cn } from "@/lib/utils";
+
+// ---------------------------------------------------------------------------
+// Buy credits panel
+// ---------------------------------------------------------------------------
+
+const SKILL_RUN_CREDIT_COST = 5;
+
+function BuyCreditsPanel({
+  buyingPackId,
+  onBuy,
+}: {
+  buyingPackId: string | null;
+  onBuy: (pack: CreditPack) => void;
+}) {
+  return (
+    <section>
+      <h2 className="mb-4 text-sm font-semibold text-foreground">Buy credits</h2>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {CREDIT_PACKS.map((pack) => {
+          const isBuying = buyingPackId === pack.id;
+          const isDisabled = buyingPackId !== null;
+          return (
+            <div
+              key={pack.id}
+              className="flex flex-col justify-between rounded-xl border bg-card p-5"
+            >
+              <div>
+                <p className="text-sm font-semibold text-foreground">{pack.name}</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">
+                  {pack.credits.toLocaleString()}{" "}
+                  <span className="text-sm font-medium text-muted-foreground">credits</span>
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  ${(pack.priceUsdCents / 100).toFixed(0)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  ≈ {Math.floor(pack.credits / SKILL_RUN_CREDIT_COST)} skill runs
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onBuy(pack)}
+                disabled={isDisabled}
+                className={cn(
+                  "mt-4 inline-flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium",
+                  "bg-primary text-primary-foreground hover:bg-primary/90",
+                  "disabled:cursor-not-allowed disabled:opacity-50",
+                )}
+              >
+                {isBuying ? "Redirecting…" : "Buy"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,6 +132,56 @@ export default function CreditWalletPage() {
   const [wallet, setWallet] = useState<CreditWallet | null | undefined>(undefined);
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   const [txnLoading, setTxnLoading] = useState(true);
+  const [buyingPackId, setBuyingPackId] = useState<string | null>(null);
+
+  // ── Top-up return toast (?topup=success|cancelled) ─────────────────────
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const topupToastShown = useRef(false);
+
+  useEffect(() => {
+    const topup = searchParams?.get("topup");
+    if (!topup || topupToastShown.current) return;
+    topupToastShown.current = true;
+    if (topup === "success") {
+      toast.success("Payment received — credits land within a minute.");
+    } else if (topup === "cancelled") {
+      toast("Checkout cancelled.");
+    }
+    router.replace(pathname);
+  }, [searchParams, router, pathname]);
+
+  async function handleBuyPack(pack: CreditPack) {
+    if (buyingPackId) return;
+    setBuyingPackId(pack.id);
+    try {
+      const res = await fetch("/api/credits/topup/checkout", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packId: pack.id, subAccountId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+        note?: string;
+      };
+      if (res.status === 503) {
+        toast.error(data.error ?? data.note ?? "Credit top-up checkout is not configured.");
+        return;
+      }
+      if (!res.ok || !data.url) {
+        toast.error("Could not start checkout — try again.");
+        return;
+      }
+      window.location.assign(data.url);
+    } catch {
+      toast.error("Could not start checkout — try again.");
+    } finally {
+      setBuyingPackId(null);
+    }
+  }
 
   useEffect(() => {
     if (!partnerProfile?.id) {
@@ -97,7 +208,7 @@ export default function CreditWalletPage() {
   // ── Not a partner ──────────────────────────────────────────────────────
   if (!loading && !partnerProfile) {
     return (
-      <div className="min-h-screen p-6">
+      <div className="min-h-screen space-y-8 p-6">
         <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed py-16 text-center">
           <Coins className="h-10 w-10 text-muted-foreground/40" />
           <div>
@@ -113,6 +224,7 @@ export default function CreditWalletPage() {
             Partner Profile
           </Link>
         </div>
+        <BuyCreditsPanel buyingPackId={buyingPackId} onBuy={handleBuyPack} />
       </div>
     );
   }
@@ -206,6 +318,9 @@ export default function CreditWalletPage() {
               </p>
             </div>
           </div>
+
+          {/* Buy credits */}
+          <BuyCreditsPanel buyingPackId={buyingPackId} onBuy={handleBuyPack} />
 
           {/* Transaction history */}
           <section>
