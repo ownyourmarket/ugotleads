@@ -10,6 +10,7 @@ import type { PeGpt } from "@/types";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
+import { toast } from "sonner";
 
 const MAX_MESSAGE_LENGTH = 4000;
 const COUNTER_THRESHOLD = 3500;
@@ -66,7 +67,14 @@ export default function GptChatPage() {
 
   useEffect(() => {
     if (!agencyId || !subAccountId) return;
-    return subscribeToPeGpts(scope, setGpts);
+    // Undeployed Firestore rules (or any other subscription failure) must
+    // fail loudly — surface it and drop the "loading" skeleton instead of
+    // leaving this screen stuck showing "Loading…" forever.
+    return subscribeToPeGpts(scope, setGpts, (err) => {
+      console.error("[promptexpert]", err);
+      toast.error("Could not load GPTs — check your access or try again.");
+      setGpts([]);
+    });
   }, [scope, agencyId, subAccountId]);
 
   useEffect(() => {
@@ -110,7 +118,13 @@ export default function GptChatPage() {
       if (gen !== generation.current) return;
 
       if (res.ok) {
-        setSessionId(typeof body.sessionId === "string" ? body.sessionId : null);
+        // "" (or any non-string) means server-side session bookkeeping
+        // degraded for this turn — keep whatever sessionId we already have
+        // rather than clearing it; the next turn simply starts fresh
+        // server-side instead of losing a still-valid session id.
+        if (typeof body.sessionId === "string" && body.sessionId) {
+          setSessionId(body.sessionId);
+        }
         setMessages((m) => [
           ...m,
           { id: newMessageId(), role: "assistant", content: body.reply ?? "" },

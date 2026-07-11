@@ -55,24 +55,43 @@ export default function GptsPage() {
 
   useEffect(() => {
     if (!agencyId || !subAccountId) return;
-    return subscribeToPeGpts(scope, setRows);
+    // Undeployed Firestore rules (or any other subscription failure) must
+    // fail loudly — surface it and drop the skeleton instead of leaving the
+    // list stuck in a permanent loading state.
+    return subscribeToPeGpts(scope, setRows, (err) => {
+      console.error("[promptexpert]", err);
+      toast.error("Could not load GPTs — check your access or try again.");
+      setRows([]);
+    });
   }, [scope, agencyId, subAccountId]);
 
   // Prompts/gems/skills are only needed to populate the admin-only builder
   // Sheet, so skip these reads entirely for non-admin members.
   useEffect(() => {
     if (!agencyId || !subAccountId || !isAdmin) return;
-    return subscribeToPePrompts(scope, setPrompts);
+    return subscribeToPePrompts(scope, setPrompts, (err) => {
+      console.error("[promptexpert]", err);
+      toast.error("Could not load prompts — check your access or try again.");
+      setPrompts([]);
+    });
   }, [scope, agencyId, subAccountId, isAdmin]);
 
   useEffect(() => {
     if (!agencyId || !subAccountId || !isAdmin) return;
-    return subscribeToPeGems(scope, setGems);
+    return subscribeToPeGems(scope, setGems, (err) => {
+      console.error("[promptexpert]", err);
+      toast.error("Could not load gems — check your access or try again.");
+      setGems([]);
+    });
   }, [scope, agencyId, subAccountId, isAdmin]);
 
   useEffect(() => {
     if (!agencyId || !subAccountId || !isAdmin) return;
-    return subscribeToPeSkills(scope, setSkills);
+    return subscribeToPeSkills(scope, setSkills, (err) => {
+      console.error("[promptexpert]", err);
+      toast.error("Could not load skills — check your access or try again.");
+      setSkills([]);
+    });
   }, [scope, agencyId, subAccountId, isAdmin]);
 
   function openFor(g: PeGpt | null) {
