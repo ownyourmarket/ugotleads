@@ -12,7 +12,10 @@
       "Bash(echo \"EXIT:$?\")",
       "Bash(git --version)",
       "Bash(stripe --version)",
-      "Bash(npx skills:*)"
+      "Bash(npx skills:*)",
+      "Bash(git add *)",
+      "Bash(git commit -q -m ' *)",
+      "mcp__bf7c680d-5fdc-5ef4-b4a0-abadb619bf0a__send_later"
     ]
   }
 }
