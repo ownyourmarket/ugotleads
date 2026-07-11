@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { Plus, Pencil, Play, Sparkles } from "lucide-react";
 import { useSubAccount } from "@/context/sub-account-context";
@@ -48,6 +48,8 @@ export default function SkillsPage() {
   const [runError, setRunError] = useState<string | null>(null);
   const [showTopUp, setShowTopUp] = useState(false);
 
+  const runGeneration = useRef(0);
+
   const scope = useMemo(
     () => ({ agencyId: agencyId ?? "", subAccountId }),
     [agencyId, subAccountId],
@@ -94,6 +96,7 @@ export default function SkillsPage() {
   }
 
   function openRunFor(skill: PeSkill) {
+    runGeneration.current += 1;
     setRunSkillTarget(skill);
     setVarValues({});
     setOutput(null);
@@ -104,6 +107,7 @@ export default function SkillsPage() {
 
   async function executeRun() {
     if (!runSkillTarget) return;
+    const gen = runGeneration.current;
     setRunning(true);
     setOutput(null);
     setRunError(null);
@@ -116,22 +120,28 @@ export default function SkillsPage() {
       });
       const body = await res.json();
       if (res.ok) {
+        if (gen !== runGeneration.current) return;
         setOutput(body.output);
         toast.success(`Run complete — ${body.creditsCharged} credits`);
       } else if (res.status === 402) {
+        if (gen !== runGeneration.current) return;
         setRunError(`Not enough credits: you have ${body.currentBalance}, this run needs ${body.required}.`);
         setShowTopUp(true);
       } else if (res.status === 403) {
+        if (gen !== runGeneration.current) return;
         setRunError("PromptExpert is an add-on for BYOK plans — see the marketplace to unlock it.");
       } else if (res.status === 429) {
+        if (gen !== runGeneration.current) return;
         setRunError("Monthly AI usage cap reached for this workspace.");
       } else {
+        if (gen !== runGeneration.current) return;
         setRunError("Run failed — please try again.");
       }
     } catch {
+      if (gen !== runGeneration.current) return;
       setRunError("Network error — please try again.");
     } finally {
-      setRunning(false);
+      if (gen === runGeneration.current) setRunning(false);
     }
   }
 
@@ -269,6 +279,7 @@ export default function SkillsPage() {
                   onChange={(e) =>
                     setVarValues((v) => ({ ...v, [varName]: e.target.value }))
                   }
+                  disabled={running}
                 />
               </div>
             ))}
