@@ -41,4 +41,30 @@ describe("resolveMentions", () => {
     const r = resolveMentions({ content: "", gems: [], variables: {} });
     expect(r).toEqual({ resolved: "", missingVariables: [], missingGems: [] });
   });
+
+  it("does not match a gem mention as a substring of a longer mention", () => {
+    const r = resolveMentions({
+      content: "See @Biography and @Bio.",
+      gems: [{ name: "Bio", dataContent: "B" }],
+      variables: {},
+    });
+    expect(r.resolved).toContain("@Biography");
+    expect(r.resolved).toContain("--- Context: Bio ---");
+  });
+
+  it("dedupes repeated missing gem mentions", () => {
+    const r = resolveMentions({ content: "@Nope x @Nope", gems: [], variables: {} });
+    expect(r.missingGems).toHaveLength(1);
+  });
+
+  // Gem-then-variable ordering is intentional composability: a gem body
+  // containing [Var] slots gets variable-substituted after expansion.
+  it("substitutes variables inside expanded gem bodies (intentional composability)", () => {
+    const r = resolveMentions({
+      content: "Use @Tpl now",
+      gems: [{ name: "Tpl", dataContent: "Greet [Name]" }],
+      variables: { Name: "Ada" },
+    });
+    expect(r.resolved).toContain("Greet Ada");
+  });
 });
