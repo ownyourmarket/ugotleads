@@ -8,6 +8,7 @@ import { signIn, doSignOut, onUser, currentUser, getIdToken, persistenceReady } 
 import { listSubAccounts, listPrompts, listGems, listSkills } from "./data.js";
 import { resolveMentions } from "./resolve-mentions.js";
 import { SLOT_RE, escapeRegExp, gemMentionRegex, extractVars, splitSlots } from "./slots.js";
+import { runSkill } from "./run.js";
 
 console.log("[PromptExpert] popup stub loaded (B2 modules wired)", {
   auth,
@@ -28,4 +29,5 @@ console.log("[PromptExpert] popup stub loaded (B2 modules wired)", {
   gemMentionRegex,
   extractVars,
   splitSlots,
+  runSkill,
 });
