@@ -102,10 +102,13 @@ async function insertText(text) {
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (!tab?.id) throw new Error("no-active-tab");
-    await chrome.tabs.sendMessage(tab.id, { type: "PE_INSERT", text });
+    const res = await chrome.tabs.sendMessage(tab.id, { type: "PE_INSERT", text });
+    if (!res?.ok) throw new Error("no-target"); // resolved {ok:false} = no editable target on the page
     showToast("Inserted");
+    return true;
   } catch {
     showToast("Open an AI chat page (ChatGPT, Claude, Gemini) to insert.", 3500);
+    return false;
   }
 }
 
@@ -185,6 +188,10 @@ function resetSelections() {
   state.runResult = null;
   state.runError = null;
   state.listError = null;
+  // Navigating away mid-run must not leave the Run button stuck disabled —
+  // the in-flight fetch (if any) is left to resolve and is ignored by the
+  // stale-guard in handleRunSkill().
+  state.running = false;
 }
 
 async function handleSignIn(email, password) {
@@ -241,6 +248,7 @@ function handleSelectSkill(id) {
   for (const v of extractVars(skill?.systemInstruction ?? "")) state.variables[v] = "";
   state.runResult = null;
   state.runError = null;
+  state.running = false; // navigating between skills must not inherit a stale "running" flag
   render();
 }
 
@@ -250,8 +258,21 @@ async function handleInsertPrompt() {
   const chosenGems = state.gems
     .filter((g) => state.selectedGemIds.has(g.id))
     .map((g) => ({ name: g.name, dataContent: g.dataContent }));
-  const { resolved } = resolveMentions({ content: prompt.content, gems: chosenGems, variables: state.variables });
-  await insertText(resolved);
+  const { resolved, missingVariables, missingGems } = resolveMentions({
+    content: prompt.content,
+    gems: chosenGems,
+    variables: state.variables,
+  });
+  const inserted = await insertText(resolved);
+  // Non-blocking: the insert already happened. Just flag anything the
+  // skills tab would have flagged (unresolved [Variable] slots or @Gem
+  // mentions with no matching gem selected).
+  if (inserted && (missingVariables.length || missingGems.length)) {
+    const notes = [];
+    if (missingVariables.length) notes.push(`variables: ${missingVariables.join(", ")}`);
+    if (missingGems.length) notes.push(`gems: ${missingGems.join(", ")}`);
+    showToast(`Heads up: unresolved — ${notes.join("; ")}`, 3500);
+  }
 }
 
 async function handleRunSkill() {
@@ -590,6 +611,7 @@ function renderSkillDetail() {
     state.selectedSkillId = null;
     state.runResult = null;
     state.runError = null;
+    state.running = false; // leaving skill detail mid-run must re-enable the Run button
     render();
   });
   wrap.querySelectorAll("input[data-var]").forEach((input) => {
