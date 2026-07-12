@@ -591,6 +591,101 @@ Response, observed in smoke test:
 Unhandled failures return `500 INTERNAL_ERROR` (the only route in Phase 1
 that emits this code).
 
+### `GET /api/agent/v1/control-plane/summary`
+**Scope:** `control_plane:read`
+
+Read-only Revenue OS health snapshot for the MyUSA OS control plane
+(spec: `myusa-founder-hq/docs/control-plane/ugotleads-control-plane-spec.md`).
+Agency-scoped — no `subAccountId` param; the key's sub-account allowlist does
+not apply. Returns bounded per-domain counts (up to 2,000 docs per collection;
+`truncated: true` when a bound is hit — counts are floors, not exact) plus the
+launch-readiness checklist computed by `src/lib/readiness/compute.ts`, the
+same code path as the owner cockpit's `GET /api/agency/readiness`, so the two
+surfaces cannot drift. Env checks reflect the deployment serving the request.
+Secrets are reported as booleans only. No PII, no BYOK key material.
+
+Response `200`:
+```json
+{
+  "data": {
+    "counts": {
+      "products": { "total": 3, "activePublic": 1 },
+      "purchases": { "total": 12, "paid": 11 },
+      "entitlements": { "total": 11, "active": 11 },
+      "partners": { "total": 2, "active": 1 },
+      "commissions": { "pending": 0 },
+      "creditWallets": { "total": 2 },
+      "partnerEvents": { "pending": 0, "failed": 0 }
+    },
+    "readiness": {
+      "env": { "isProd": true },
+      "summary": { "blockers": 0, "warnings": 1, "total": 12 },
+      "checklist": [ { "key": "stripe_keys", "label": "…", "severity": "ok", "detail": "…" } ]
+    },
+    "truncated": false
+  }
+}
+```
+
+### `GET /api/agent/v1/control-plane/issues`
+**Scope:** `control_plane:read`
+
+Read-only normalized issue rows. Runs equality-only detectors across seven
+domains and returns rows sorted severity-first (critical → warning → info),
+deterministically tie-broken by domain, code, and entity id. Strictly
+read-only: rows carry a `safe_action_url` (path into the uGotLeads admin UI,
+no tokens, no mutations) for a human to act on.
+
+Query params (all optional):
+- `domain` — one of `products`, `fulfillment`, `partners`, `commissions`,
+  `credits`, `byok`, `partner_events`
+- `severity` — one of `info`, `warning`, `critical`
+- `limit` — integer 1–200, default 50
+
+Invalid values return `400 VALIDATION_FAILED`.
+
+Issue codes by domain:
+
+| Domain | Code | Severity | Meaning |
+|---|---|---|---|
+| products | `subscription_product_missing_price` | critical (public) / warning | Active subscription product with no Stripe price ID |
+| products | `draft_product_public` | warning | Draft product flagged public |
+| fulfillment | `paid_purchase_unfulfilled` | critical | Paid purchase with no `fulfilledAt` |
+| partners | `partner_missing_referral_code` | warning | Active/approved partner without a referral code |
+| partners | `suspended_partner_pending_commissions` | warning | Suspended/terminated partner holding pending commission cents |
+| commissions | `commission_past_hold` | warning | Pending commission whose `holdUntil` has passed |
+| commissions | `commission_on_unpaid_purchase` | critical | Purchase carries a `commissionEventId` but `paymentStatus` is not `paid` |
+| credits | `wallet_negative_balance` | critical | Wallet balance below 0 (invariant break) |
+| credits | `active_partner_missing_wallet` | warning | Active partner with no `credit_wallets` doc |
+| byok | `byok_not_configured` | warning | Approved BYOK eligibility with `byokConfigured !== true` — read from `product_eligibility` safe mirrors ONLY, never `byok_keys` |
+| partner_events | `partner_event_failed` | critical | Outbox event in `failed` status |
+| partner_events | `partner_event_stuck_pending` | warning | Pending event older than 7 days or ≥5 export attempts |
+
+Response `200`:
+```json
+{
+  "data": [
+    {
+      "domain": "fulfillment",
+      "issue_code": "paid_purchase_unfulfilled",
+      "source_entity_type": "purchase",
+      "source_entity_id": "cs_…",
+      "display_name": "CRM Pro",
+      "status": "paid_unfulfilled",
+      "severity": "critical",
+      "summary": "Paid purchase of \"CRM Pro\" has no fulfillment — …",
+      "safe_action_url": "/agency/marketplace-purchases",
+      "metadata": { "hasEntitlementId": false }
+    }
+  ],
+  "total": 1,
+  "truncated": false
+}
+```
+
+`truncated: true` means either a detector query hit its 2,000-doc bound or
+`total` exceeds `limit` — treat the list as incomplete either way.
+
 ## Scopes
 
 Full scope union (`src/types/service-keys.ts`):
@@ -598,8 +693,13 @@ Full scope union (`src/types/service-keys.ts`):
 ```
 contacts:read, contacts:write, deals:write, templates:read, templates:write,
 sends:execute, reports:read, sequences:write, sequences:enroll,
-replies:read, replies:write
+replies:read, replies:write, control_plane:read
 ```
+
+`control_plane:read` gates the two read-only `/control-plane/*` routes above.
+It is agency-scoped (ignores the sub-account allowlist), exposes no secret
+values and no PII, and has no write counterpart by design — control-plane
+write-back is explicitly deferred per the MyUSA OS control plane spec.
 
 The last four (`sequences:write`, `sequences:enroll`, `replies:read`,
 `replies:write`) were reserved placeholders through Phase 1; Phase 2 wires

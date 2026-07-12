@@ -13,7 +13,8 @@ export type ServiceScope =
   | "sequences:write"
   | "sequences:enroll"
   | "replies:read"
-  | "replies:write";
+  | "replies:write"
+  | "control_plane:read";
 
 /** Top-level `agencyServiceKeys/{keyId}` document. The plaintext key is
  * shown once at mint time and never stored. */

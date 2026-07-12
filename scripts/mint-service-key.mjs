@@ -35,6 +35,7 @@ const VALID_SCOPES = [
   "sequences:enroll",
   "replies:read",
   "replies:write",
+  "control_plane:read",
 ];
 for (const scope of scopes) {
   if (!VALID_SCOPES.includes(scope)) {
