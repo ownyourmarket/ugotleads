@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { authMiddleware } from "next-firebase-auth-edge/lib/next/middleware";
+import { isBearerApiPath } from "@/lib/auth/bearer-api-paths";
 
 const PUBLIC_PATHS = [
   "/",
@@ -74,20 +75,6 @@ function isPublicPath(pathname: string): boolean {
 }
 
 /**
- * API routes that self-authenticate via an Authorization: Bearer <Firebase ID token>
- * fallback (see require-tenancy.ts). On a missing/invalid session cookie we must NOT
- * 302-redirect these to /login — let the route run and 401 itself if the bearer is bad.
- * These stay behind auth; they are NOT added to PUBLIC_PATHS (the cookie path still works).
- */
-const BEARER_API_PATTERNS: RegExp[] = [
-  /^\/api\/sub-accounts\/[^/]+\/promptexpert\/run$/,
-  /^\/api\/sub-accounts\/[^/]+\/promptexpert\/gpts\/[^/]+\/chat$/,
-];
-function isBearerApiPath(pathname: string): boolean {
-  return BEARER_API_PATTERNS.some((re) => re.test(pathname));
-}
-
-/**
  * Strip any client-supplied identity headers so a spoofed `x-user-uid` can never
  * reach a route. Only the middleware's cookie-verified handleValidToken may set them.
  */
@@ -104,7 +91,7 @@ export default function middleware(request: NextRequest) {
     !process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
     !process.env.FIREBASE_ADMIN_PROJECT_ID
   ) {
-    return NextResponse.next();
+    return passthroughWithStrippedIdentity(request);
   }
 
   return authMiddleware(request, {
@@ -144,7 +131,7 @@ export default function middleware(request: NextRequest) {
 
       // Allow public paths without authentication
       if (isPublicPath(pathname)) {
-        return NextResponse.next();
+        return passthroughWithStrippedIdentity(request);
       }
 
       if (isBearerApiPath(pathname)) {
@@ -162,7 +149,7 @@ export default function middleware(request: NextRequest) {
 
       // On error, allow public paths and redirect protected paths
       if (isPublicPath(pathname)) {
-        return NextResponse.next();
+        return passthroughWithStrippedIdentity(request);
       }
 
       if (isBearerApiPath(pathname)) {
