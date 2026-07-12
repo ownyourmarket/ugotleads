@@ -148,6 +148,16 @@ export async function POST(request: Request) {
     );
   }
 
+  if ("skipped" in result) {
+    // This route never passes a deterministic transactionId, so a duplicate
+    // should be unreachable — treat as an internal error rather than silently
+    // reporting success with no delta applied.
+    return NextResponse.json(
+      { error: "Unexpected duplicate transaction — no changes applied." },
+      { status: 500 },
+    );
+  }
+
   console.info(
     `[credits/adjust] Owner ${uid} applied ${result.actualDelta} credits to partner ${partnerProfileId} (${partner.fullName ?? "unknown"}) — new balance: ${result.newBalance}`,
   );

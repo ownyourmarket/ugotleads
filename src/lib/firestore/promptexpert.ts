@@ -15,6 +15,8 @@ import type {
   PePrompt,
   PeGem,
   PeSkill,
+  PeGpt,
+  PeGptSession,
   GemType,
   SkillOutputFormat,
 } from "@/types";
@@ -22,6 +24,8 @@ import type {
 const PE_PROMPTS = "pe_prompts";
 const PE_GEMS = "pe_gems";
 const PE_SKILLS = "pe_skills";
+const PE_GPTS = "pe_gpts";
+const PE_GPT_SESSIONS = "pe_gpt_sessions";
 
 function toMillis(v: unknown): number {
   if (!v) return 0;
@@ -80,6 +84,22 @@ export function subscribeToPeSkills(
   onError?: (err: Error) => void,
 ): Unsubscribe {
   return subscribeToCollection<PeSkill>(PE_SKILLS, scope, callback, onError);
+}
+
+export function subscribeToPeGpts(
+  scope: TenantScope,
+  callback: (rows: PeGpt[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  return subscribeToCollection<PeGpt>(PE_GPTS, scope, callback, onError);
+}
+
+export function subscribeToPeGptSessions(
+  scope: TenantScope,
+  callback: (rows: PeGptSession[]) => void,
+  onError?: (err: Error) => void,
+): Unsubscribe {
+  return subscribeToCollection<PeGptSession>(PE_GPT_SESSIONS, scope, callback, onError);
 }
 
 async function createDoc(

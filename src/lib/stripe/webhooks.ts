@@ -15,6 +15,10 @@ import { createCommissionEventForPayment } from "@/lib/commissions/create-event"
 import { grantProductEntitlement } from "@/lib/fulfillment/grant-entitlement";
 import { appendPartnerNetworkEvent } from "@/lib/partner-network/outbox";
 import type { AccessModel, ProductFamily } from "@/types/products";
+// ── Credit top-up fulfillment (Phase 3, PromptExpert) ─────────────────────
+// Mints credits when a credit_topup checkout session completes.
+import { fulfillTopup, type FulfillTopupDeps } from "@/lib/credits/topup";
+import { serverApplyCreditDelta } from "@/lib/credits/server";
 
 export async function handleCheckoutCompleted(
   session: Stripe.Checkout.Session,
@@ -41,6 +45,13 @@ export async function handleCheckoutCompleted(
   // when PARTNER_COMMISSIONS_ENABLED=true and a partner was attributed.
   if (session.metadata?.kind === "marketplace_product_purchase") {
     await handleMarketplaceProductPurchase(session);
+    return;
+  }
+
+  // Credit top-up — authenticated buyer purchasing a PromptExpert credit
+  // pack. Metadata was stamped by POST /api/credits/topup/checkout.
+  if (session.metadata?.kind === "credit_topup") {
+    await handleCreditTopup(session);
     return;
   }
 
@@ -404,6 +415,158 @@ async function handleMarketplaceProductPurchase(
       `[marketplace-purchase] Commission event error for session ${sessionId}: ${result.message}`,
     );
   }
+}
+
+// ---------------------------------------------------------------------------
+// Credit top-up — Phase 3 fulfillment
+// ---------------------------------------------------------------------------
+
+/**
+ * Handles checkout.session.completed for kind === "credit_topup".
+ *
+ * Reads the metadata stamped by POST /api/credits/topup/checkout:
+ *   { packId, credits, agencyId, subAccountId, purchaserUid }
+ *
+ * All real business logic (validation, idempotency, wallet stamping, credit
+ * mint) lives in the pure/DI'd src/lib/credits/topup.ts#fulfillTopup — this
+ * function only builds the Admin SDK-backed deps and logs the outcome.
+ * Missing metadata is logged and swallowed (never thrown) so a permanently
+ * malformed event doesn't get hammered by Stripe's retry logic.
+ */
+async function handleCreditTopup(session: Stripe.Checkout.Session): Promise<void> {
+  const sessionId = session.id;
+  const meta = session.metadata ?? {};
+
+  const packId = meta.packId ?? "";
+  const agencyId = meta.agencyId ?? "";
+  const subAccountId = meta.subAccountId ?? "";
+  const purchaserUid = meta.purchaserUid ?? "";
+  const credits = Number(meta.credits ?? "");
+
+  if (!packId || !agencyId || !subAccountId || !purchaserUid || !meta.credits) {
+    console.error(
+      `[credit-topup] Session ${sessionId} missing required metadata — skipping (never throw; Stripe would retry a permanently-bad event forever).`,
+    );
+    return;
+  }
+
+  const deps: FulfillTopupDeps = {
+    findTxnByReference: findTopupTransactionByReference,
+    ensureWallet: ensureTopupWallet,
+    applyCredit: async (input) => {
+      const r = await serverApplyCreditDelta({
+        agencyId: input.agencyId,
+        partnerProfileId: input.partnerProfileId,
+        delta: input.delta,
+        type: "purchase",
+        description: input.description,
+        referenceId: input.referenceId,
+        referenceType: "stripe_event",
+        // Deterministic per checkout session ⇒ concurrent Stripe webhook
+        // retries collide on tx.create (ALREADY_EXISTS) instead of double-minting.
+        transactionId: `topup_${input.referenceId}`,
+      });
+      if ("error" in r) return { error: true, message: r.message };
+      if ("skipped" in r) return { skipped: true };
+      return { ok: true };
+    },
+  };
+
+  const result = await fulfillTopup(deps, {
+    sessionId,
+    agencyId,
+    subAccountId,
+    purchaserUid,
+    credits,
+    packId,
+  });
+
+  if ("fulfilled" in result) {
+    console.info(
+      `[credit-topup] Session ${sessionId} fulfilled — ${credits} credits minted for ${purchaserUid} (pack ${packId}).`,
+    );
+  } else if ("duplicate" in result) {
+    console.info(
+      `[credit-topup] Session ${sessionId} — duplicate delivery, already fulfilled. No-op.`,
+    );
+  } else {
+    console.error(
+      `[credit-topup] Session ${sessionId} fulfillment error: ${result.message}`,
+    );
+  }
+}
+
+/** credit_transactions where referenceId == the checkout session id, limit 1. */
+async function findTopupTransactionByReference(referenceId: string): Promise<boolean> {
+  const snap = await getAdminDb()
+    .collection("credit_transactions")
+    .where("referenceId", "==", referenceId)
+    .limit(1)
+    .get();
+  return !snap.empty;
+}
+
+/**
+ * Create-if-missing with subAccountId STAMPED, inside a transaction. If the
+ * wallet already exists with subAccountId === null, merge-set it. If it
+ * exists with a DIFFERENT non-null subAccountId, leave it alone and log a
+ * warning — this pre-step exists specifically to neutralize the
+ * auto-create-with-null-subAccountId behavior in serverApplyCreditDelta
+ * (src/lib/credits/server.ts): by the time applyCredit runs below, the
+ * wallet is guaranteed to already exist with the correct subAccountId, so
+ * serverApplyCreditDelta's own wallet-creation branch never fires for a
+ * top-up.
+ */
+async function ensureTopupWallet(input: {
+  walletId: string;
+  agencyId: string;
+  subAccountId: string;
+}): Promise<void> {
+  const db = getAdminDb();
+  const walletRef = db.collection("credit_wallets").doc(input.walletId);
+
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(walletRef);
+
+    if (!snap.exists) {
+      tx.set(walletRef, {
+        id: input.walletId,
+        agencyId: input.agencyId,
+        partnerProfileId: input.walletId,
+        subAccountId: input.subAccountId,
+        balanceCredits: 0,
+        lifetimePurchasedCredits: 0,
+        lifetimeSpentCredits: 0,
+        lifetimeRefundedCredits: 0,
+        stripeCustomerId: null,
+        createdAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      return;
+    }
+
+    const existingSubAccountId =
+      (snap.data() as { subAccountId?: string | null } | undefined)?.subAccountId ?? null;
+
+    if (existingSubAccountId === null) {
+      tx.set(
+        walletRef,
+        { subAccountId: input.subAccountId, updatedAt: FieldValue.serverTimestamp() },
+        { merge: true },
+      );
+      return;
+    }
+
+    if (existingSubAccountId !== input.subAccountId) {
+      console.warn(
+        `[credit-topup] wallet ${input.walletId} already stamped with subAccountId ` +
+          `${existingSubAccountId} — refusing to overwrite with ${input.subAccountId}.`,
+      );
+      return;
+    }
+
+    // Already stamped with the same subAccountId — nothing to do.
+  });
 }
 
 async function handleFoundersCheckout(session: Stripe.Checkout.Session) {

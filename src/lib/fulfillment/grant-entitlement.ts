@@ -58,6 +58,38 @@ async function emitEntitlementGranted(
   }
 }
 
+/**
+ * Best-effort unlock of PromptExpert on add-on purchase. If the product id
+ * matches PROMPTEXPERT_PRODUCT_ID and the entitlement is for a sub-account,
+ * set featurePromptExpert: true. Never throws — failures are logged but don't
+ * block the entitlement grant.
+ */
+async function unlockFeaturePromptExpertIfMatching(
+  input: GrantEntitlementInput,
+  db: ReturnType<typeof getAdminDb>,
+): Promise<void> {
+  const PROMPTEXPERT_PRODUCT_ID = process.env.PROMPTEXPERT_PRODUCT_ID;
+  if (!PROMPTEXPERT_PRODUCT_ID || input.productId !== PROMPTEXPERT_PRODUCT_ID || !input.subAccountId) {
+    return;
+  }
+
+  try {
+    await db.doc(`subAccounts/${input.subAccountId}`).set(
+      { featurePromptExpert: true },
+      { merge: true },
+    );
+    console.info(
+      `[fulfillment] Unlocked featurePromptExpert for sub-account ${input.subAccountId}`,
+    );
+  } catch (err) {
+    console.warn(
+      `[fulfillment] Failed to unlock featurePromptExpert for sub-account ${input.subAccountId}:`,
+      err,
+    );
+    /* best-effort — feature-flag failures never block entitlement */
+  }
+}
+
 export interface GrantEntitlementInput {
   agencyId: string;
   customerUserId: string;
@@ -109,6 +141,7 @@ export async function grantProductEntitlement(
       });
       console.info(`[fulfillment] Re-activated entitlement ${entitlementId}`);
       await emitEntitlementGranted(input, entitlementId);
+      await unlockFeaturePromptExpertIfMatching(input, db);
       return { ok: true, entitlementId, alreadyActive: false };
     }
 
@@ -132,6 +165,7 @@ export async function grantProductEntitlement(
     });
     console.info(`[fulfillment] Granted entitlement ${entitlementId} for product ${input.productId}`);
     await emitEntitlementGranted(input, entitlementId);
+    await unlockFeaturePromptExpertIfMatching(input, db);
     return { ok: true, entitlementId, alreadyActive: false };
   } catch (err) {
     const message = err instanceof Error ? err.message : "Firestore write failed.";

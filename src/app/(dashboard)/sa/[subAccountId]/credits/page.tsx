@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { toast } from "sonner";
 import {
   ArrowDownCircle,
   ArrowUpCircle,
@@ -18,7 +20,66 @@ import {
   subscribeToCreditTransactions,
 } from "@/lib/firestore/credits";
 import type { CreditWallet, CreditTransaction, CreditTxnType } from "@/types/credits";
+import { CREDIT_PACKS, type CreditPack } from "@/types";
 import { cn } from "@/lib/utils";
+
+// ---------------------------------------------------------------------------
+// Buy credits panel
+// ---------------------------------------------------------------------------
+
+const SKILL_RUN_CREDIT_COST = 5;
+
+function BuyCreditsPanel({
+  buyingPackId,
+  onBuy,
+}: {
+  buyingPackId: string | null;
+  onBuy: (pack: CreditPack) => void;
+}) {
+  return (
+    <section>
+      <h2 className="mb-4 text-sm font-semibold text-foreground">Buy credits</h2>
+      <div className="grid gap-4 sm:grid-cols-3">
+        {CREDIT_PACKS.map((pack) => {
+          const isBuying = buyingPackId === pack.id;
+          const isDisabled = buyingPackId !== null;
+          return (
+            <div
+              key={pack.id}
+              className="flex flex-col justify-between rounded-xl border bg-card p-5"
+            >
+              <div>
+                <p className="text-sm font-semibold text-foreground">{pack.name}</p>
+                <p className="mt-2 text-2xl font-bold tabular-nums text-foreground">
+                  {pack.credits.toLocaleString()}{" "}
+                  <span className="text-sm font-medium text-muted-foreground">credits</span>
+                </p>
+                <p className="mt-1 text-lg font-semibold text-foreground">
+                  ${(pack.priceUsdCents / 100).toFixed(pack.priceUsdCents % 100 === 0 ? 0 : 2)}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  ≈ {Math.floor(pack.credits / SKILL_RUN_CREDIT_COST)} skill runs at {SKILL_RUN_CREDIT_COST} credits
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onBuy(pack)}
+                disabled={isDisabled}
+                className={cn(
+                  "mt-4 inline-flex items-center justify-center gap-1.5 rounded-lg py-2 text-sm font-medium",
+                  "bg-primary text-primary-foreground hover:bg-primary/90",
+                  "disabled:cursor-not-allowed disabled:opacity-50",
+                )}
+              >
+                {isBuying ? "Redirecting…" : "Buy"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -71,33 +132,92 @@ export default function CreditWalletPage() {
   const [wallet, setWallet] = useState<CreditWallet | null | undefined>(undefined);
   const [transactions, setTransactions] = useState<CreditTransaction[]>([]);
   const [txnLoading, setTxnLoading] = useState(true);
+  const [buyingPackId, setBuyingPackId] = useState<string | null>(null);
+
+  // ── Top-up return toast (?topup=success|cancelled) ─────────────────────
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+  const topupToastShown = useRef(false);
 
   useEffect(() => {
-    if (!partnerProfile?.id) {
+    const topup = searchParams?.get("topup");
+    if (!topup || topupToastShown.current) return;
+    topupToastShown.current = true;
+    if (topup === "success") {
+      toast.success("Payment received — credits land within a minute.");
+    } else if (topup === "cancelled") {
+      toast("Checkout cancelled.");
+    }
+    const params = new URLSearchParams(searchParams?.toString());
+    params.delete("topup");
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname);
+  }, [searchParams, router, pathname]);
+
+  async function handleBuyPack(pack: CreditPack) {
+    if (buyingPackId) return;
+    setBuyingPackId(pack.id);
+    try {
+      const res = await fetch("/api/credits/topup/checkout", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ packId: pack.id, subAccountId }),
+      });
+      const data = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+        note?: string;
+      };
+      if (res.status === 503) {
+        toast.error(data.error ?? data.note ?? "Credit top-up checkout is not configured.");
+        return;
+      }
+      if (!res.ok || !data.url) {
+        toast.error("Could not start checkout — try again.");
+        return;
+      }
+      window.location.assign(data.url);
+    } catch {
+      toast.error("Could not start checkout — try again.");
+    } finally {
+      setBuyingPackId(null);
+    }
+  }
+
+  // Wallet doc id === partner_profiles doc id === uid by convention (see
+  // use-partner-profile.ts). Fall back to the auth uid directly so a
+  // purchased wallet (written to credit_wallets/{purchaserUid} by the top-up
+  // fulfillment) is still found for users who don't have a partner profile.
+  const walletId = partnerProfile?.id ?? user?.uid ?? null;
+
+  useEffect(() => {
+    if (!walletId) {
       setWallet(null);
       setTxnLoading(false);
       return;
     }
     const u1 = subscribeToCreditWallet(
-      partnerProfile.id,
+      walletId,
       (w) => setWallet(w),
       console.error,
     );
     setTxnLoading(true);
     const u2 = subscribeToCreditTransactions(
-      partnerProfile.id,
+      walletId,
       (txns) => { setTransactions(txns); setTxnLoading(false); },
       () => setTxnLoading(false),
     );
     return () => { u1(); u2(); };
-  }, [partnerProfile?.id]);
+  }, [walletId]);
 
   const loading = partnerLoading || wallet === undefined;
 
-  // ── Not a partner ──────────────────────────────────────────────────────
-  if (!loading && !partnerProfile) {
+  // ── Not a partner, and no wallet exists either ─────────────────────────
+  if (!loading && !partnerProfile && wallet === null) {
     return (
-      <div className="min-h-screen p-6">
+      <div className="min-h-screen space-y-8 p-6">
         <div className="flex flex-col items-center gap-4 rounded-xl border border-dashed py-16 text-center">
           <Coins className="h-10 w-10 text-muted-foreground/40" />
           <div>
@@ -113,12 +233,13 @@ export default function CreditWalletPage() {
             Partner Profile
           </Link>
         </div>
+        <BuyCreditsPanel buyingPackId={buyingPackId} onBuy={handleBuyPack} />
       </div>
     );
   }
 
-  // ── No wallet yet ──────────────────────────────────────────────────────
-  if (!loading && wallet === null) {
+  // ── Has a partner profile, but wallet not initialized yet ──────────────
+  if (!loading && partnerProfile && wallet === null) {
     return (
       <div className="min-h-screen p-6 space-y-6">
         <div>
@@ -133,10 +254,11 @@ export default function CreditWalletPage() {
           <div>
             <p className="text-sm font-medium text-foreground">No credit wallet yet.</p>
             <p className="mt-1 text-xs text-muted-foreground">
-              Your wallet will appear here once your agency owner initializes it.
+              Buy a credit pack below to activate your wallet — or ask your agency owner to initialize it.
             </p>
           </div>
         </div>
+        <BuyCreditsPanel buyingPackId={buyingPackId} onBuy={handleBuyPack} />
       </div>
     );
   }
@@ -163,6 +285,19 @@ export default function CreditWalletPage() {
           Marketplace
         </Link>
       </div>
+
+      {/* No partner profile note — wallet still shown below when present */}
+      {!loading && !partnerProfile && (
+        <div className="rounded-xl border border-dashed p-4 text-xs text-muted-foreground">
+          No partner profile found. Some partner-specific features are unavailable.{" "}
+          <Link
+            href={`/sa/${subAccountId}/marketplace/partner`}
+            className="text-primary underline underline-offset-2"
+          >
+            Set up a partner profile
+          </Link>
+        </div>
+      )}
 
       {/* Loading */}
       {loading && (
@@ -206,6 +341,9 @@ export default function CreditWalletPage() {
               </p>
             </div>
           </div>
+
+          {/* Buy credits */}
+          <BuyCreditsPanel buyingPackId={buyingPackId} onBuy={handleBuyPack} />
 
           {/* Transaction history */}
           <section>
