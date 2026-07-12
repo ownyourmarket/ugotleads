@@ -23,7 +23,6 @@ import {
   Search,
   ClipboardCheck,
   ShieldCheck,
-  PenLine,
   Package,
   Award,
   Coins,
@@ -200,34 +199,6 @@ function SidebarContent() {
               >
                 <Users className="h-4 w-4" />
                 Sub-accounts
-              </Link>
-            )}
-            {agencyRole === "owner" && (
-              <Link
-                href="/agency/marketing-copy"
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  pathname.startsWith("/agency/marketing-copy")
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                <PenLine className="h-4 w-4" />
-                Copywriter
-              </Link>
-            )}
-            {agencyRole === "owner" && (
-              <Link
-                href="/agency/compliance"
-                className={cn(
-                  "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
-                  pathname.startsWith("/agency/compliance")
-                    ? "bg-primary/10 text-primary"
-                    : "text-muted-foreground hover:bg-muted hover:text-foreground",
-                )}
-              >
-                <ShieldCheck className="h-4 w-4" />
-                Compliance
               </Link>
             )}
             {agencyRole === "owner" && (
