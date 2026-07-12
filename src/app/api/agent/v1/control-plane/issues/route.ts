@@ -80,8 +80,10 @@ export const GET = withAgentRoute(async (request: Request) => {
     : result.issues;
 
   return NextResponse.json({
-    data: filtered.slice(0, limit),
-    total: filtered.length,
-    truncated: result.truncated || filtered.length > limit,
+    data: {
+      issues: filtered.slice(0, limit),
+      total: filtered.length,
+      truncated: result.truncated || filtered.length > limit,
+    },
   });
 });

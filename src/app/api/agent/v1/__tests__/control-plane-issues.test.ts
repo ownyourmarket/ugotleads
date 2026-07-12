@@ -67,10 +67,10 @@ describe("GET /api/agent/v1/control-plane/issues", () => {
     expect(res.status).toBe(200);
     const body = await res.json();
 
-    expect(body.data.length).toBe(3);
-    expect(body.total).toBe(3);
-    expect(body.truncated).toBe(false);
-    expect(body.data[0]).toMatchObject({
+    expect(body.data.issues.length).toBe(3);
+    expect(body.data.total).toBe(3);
+    expect(body.data.truncated).toBe(false);
+    expect(body.data.issues[0]).toMatchObject({
       domain: "fulfillment",
       issue_code: "paid_purchase_unfulfilled",
       source_entity_type: "purchase",
@@ -79,7 +79,7 @@ describe("GET /api/agent/v1/control-plane/issues", () => {
       safe_action_url: "/agency/marketplace-purchases",
     });
     // Contract fields present on every row.
-    for (const issue of body.data) {
+    for (const issue of body.data.issues) {
       for (const field of [
         "domain",
         "issue_code",
@@ -103,23 +103,23 @@ describe("GET /api/agent/v1/control-plane/issues", () => {
   it("filters by domain", async () => {
     const res = await GET(get("domain=partners"));
     const body = await res.json();
-    expect(body.data).toHaveLength(1);
-    expect(body.data[0].domain).toBe("partners");
+    expect(body.data.issues).toHaveLength(1);
+    expect(body.data.issues[0].domain).toBe("partners");
   });
 
   it("filters by severity", async () => {
     const res = await GET(get("severity=critical"));
     const body = await res.json();
-    expect(body.data).toHaveLength(1);
-    expect(body.data[0].severity).toBe("critical");
+    expect(body.data.issues).toHaveLength(1);
+    expect(body.data.issues[0].severity).toBe("critical");
   });
 
   it("applies limit and reports truncation", async () => {
     const res = await GET(get("limit=1"));
     const body = await res.json();
-    expect(body.data).toHaveLength(1);
-    expect(body.total).toBe(3);
-    expect(body.truncated).toBe(true);
+    expect(body.data.issues).toHaveLength(1);
+    expect(body.data.total).toBe(3);
+    expect(body.data.truncated).toBe(true);
   });
 
   it("400s on invalid domain, severity, and limit", async () => {

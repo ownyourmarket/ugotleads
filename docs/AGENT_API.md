@@ -664,22 +664,24 @@ Issue codes by domain:
 Response `200`:
 ```json
 {
-  "data": [
-    {
-      "domain": "fulfillment",
-      "issue_code": "paid_purchase_unfulfilled",
-      "source_entity_type": "purchase",
-      "source_entity_id": "cs_…",
-      "display_name": "CRM Pro",
-      "status": "paid_unfulfilled",
-      "severity": "critical",
-      "summary": "Paid purchase of \"CRM Pro\" has no fulfillment — …",
-      "safe_action_url": "/agency/marketplace-purchases",
-      "metadata": { "hasEntitlementId": false }
-    }
-  ],
-  "total": 1,
-  "truncated": false
+  "data": {
+    "issues": [
+      {
+        "domain": "fulfillment",
+        "issue_code": "paid_purchase_unfulfilled",
+        "source_entity_type": "purchase",
+        "source_entity_id": "cs_…",
+        "display_name": "CRM Pro",
+        "status": "paid_unfulfilled",
+        "severity": "critical",
+        "summary": "Paid purchase of \"CRM Pro\" has no fulfillment — …",
+        "safe_action_url": "/agency/marketplace-purchases",
+        "metadata": { "hasEntitlementId": false }
+      }
+    ],
+    "total": 1,
+    "truncated": false
+  }
 }
 ```
 
