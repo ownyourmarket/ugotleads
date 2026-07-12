@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { authMiddleware } from "next-firebase-auth-edge/lib/next/middleware";
+import { isBearerApiPath } from "@/lib/auth/bearer-api-paths";
 
 const PUBLIC_PATHS = [
   "/",
@@ -73,13 +74,24 @@ function isPublicPath(pathname: string): boolean {
   return PUBLIC_PATH_PATTERNS.some((re) => re.test(pathname));
 }
 
+/**
+ * Strip any client-supplied identity headers so a spoofed `x-user-uid` can never
+ * reach a route. Only the middleware's cookie-verified handleValidToken may set them.
+ */
+function passthroughWithStrippedIdentity(request: NextRequest): NextResponse {
+  const headers = new Headers(request.headers);
+  headers.delete("x-user-uid");
+  headers.delete("x-user-email");
+  return NextResponse.next({ request: { headers } });
+}
+
 export default function middleware(request: NextRequest) {
   // Skip auth middleware if Firebase is not configured
   if (
     !process.env.NEXT_PUBLIC_FIREBASE_API_KEY ||
     !process.env.FIREBASE_ADMIN_PROJECT_ID
   ) {
-    return NextResponse.next();
+    return passthroughWithStrippedIdentity(request);
   }
 
   return authMiddleware(request, {
@@ -119,7 +131,11 @@ export default function middleware(request: NextRequest) {
 
       // Allow public paths without authentication
       if (isPublicPath(pathname)) {
-        return NextResponse.next();
+        return passthroughWithStrippedIdentity(request);
+      }
+
+      if (isBearerApiPath(pathname)) {
+        return passthroughWithStrippedIdentity(request); // strip forged headers; route verifies the bearer itself
       }
 
       // Redirect unauthenticated users to login for protected paths
@@ -133,7 +149,11 @@ export default function middleware(request: NextRequest) {
 
       // On error, allow public paths and redirect protected paths
       if (isPublicPath(pathname)) {
-        return NextResponse.next();
+        return passthroughWithStrippedIdentity(request);
+      }
+
+      if (isBearerApiPath(pathname)) {
+        return passthroughWithStrippedIdentity(request); // strip forged headers; route verifies the bearer itself
       }
 
       const url = request.nextUrl.clone();

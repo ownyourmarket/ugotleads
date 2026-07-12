@@ -2,6 +2,7 @@ import "server-only";
 
 import { NextResponse } from "next/server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
+import { parseBearerToken } from "@/lib/auth/bearer";
 import type {
   AgencyRole,
   MemberStatus,
@@ -43,10 +44,25 @@ async function readClaims(uid: string): Promise<Claims> {
   return (record.customClaims ?? {}) as Claims;
 }
 
+async function resolveIdentity(
+  request: Request,
+): Promise<{ uid: string; email: string } | null> {
+  const header = readUidFromHeaders(request); // cookie/session path — unchanged, tried FIRST
+  if (header) return header;
+  const token = parseBearerToken(request.headers.get("authorization"));
+  if (!token) return null;
+  try {
+    const decoded = await getAdminAuth().verifyIdToken(token, true /* checkRevoked */);
+    return { uid: decoded.uid, email: decoded.email ?? "" };
+  } catch {
+    return null; // invalid/expired/revoked → treated as unauthenticated (401 downstream)
+  }
+}
+
 async function readCaller(
   request: Request,
 ): Promise<AuthedCaller | NextResponse> {
-  const headerAuth = readUidFromHeaders(request);
+  const headerAuth = await resolveIdentity(request);
   if (!headerAuth) {
     return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
   }
