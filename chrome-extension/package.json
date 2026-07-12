@@ -11,6 +11,6 @@
     "esbuild": "^0.24.0"
   },
   "dependencies": {
-    "firebase": "^12.10.0"
+    "firebase": "12.10.0"
   }
 }
