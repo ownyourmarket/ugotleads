@@ -19,7 +19,8 @@ import {
   checkSubscriptionReadiness,
   READINESS_BADGE,
 } from "@/lib/products/subscription-readiness";
-import type { Product, ProductStatus, AccessModel, ProductFamily } from "@/types/products";
+import type { Product, ProductStatus, AccessModel, ProductFamily, BundleTier } from "@/types/products";
+import { ALL_TIERS, TIER_CAPABILITIES } from "@/lib/tiers/capabilities";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -64,6 +65,7 @@ interface ProductForm {
   productFamily: ProductFamily | "";
   isPublic: boolean;
   isCommissionable: boolean;
+  includedInTiers: BundleTier[];
   stripePriceIdMonthly: string;
   stripePriceIdAnnual: string;
   creditCostPerUnit: string;
@@ -81,6 +83,7 @@ function emptyForm(): ProductForm {
     productFamily: "",
     isPublic: false,
     isCommissionable: true,
+    includedInTiers: [],
     stripePriceIdMonthly: "",
     stripePriceIdAnnual: "",
     creditCostPerUnit: "0",
@@ -99,6 +102,7 @@ function productToForm(p: Product): ProductForm {
     productFamily: p.productFamily ?? "",
     isPublic: p.isPublic,
     isCommissionable: p.isCommissionable !== false, // undefined → true
+    includedInTiers: p.includedInTiers ?? [],
     stripePriceIdMonthly: p.stripePriceIdMonthly ?? "",
     stripePriceIdAnnual: p.stripePriceIdAnnual ?? "",
     creditCostPerUnit: String(p.creditCostPerUnit ?? 0),
@@ -192,6 +196,7 @@ function ProductFormDialog({ product, agencyId, createdByUid, onClose }: Product
         productFamily: (form.productFamily as ProductFamily) || null,
         isPublic: form.status === "draft" ? false : form.isPublic,
         isCommissionable: form.isCommissionable,
+        includedInTiers: form.includedInTiers.length ? form.includedInTiers : null,
         stripePriceIdMonthly: form.stripePriceIdMonthly.trim() || null,
         stripePriceIdAnnual: form.stripePriceIdAnnual.trim() || null,
         creditCostPerUnit: Math.max(0, Number(form.creditCostPerUnit) || 0),
@@ -503,6 +508,47 @@ function ProductFormDialog({ product, agencyId, createdByUid, onClose }: Product
                 />
               </button>
             </label>
+          </div>
+
+          {/* Tier auto-bundle */}
+          <div className="space-y-3 rounded-xl border bg-muted/30 p-4">
+            <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+              Included in partner tiers
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Partners set to a checked tier receive this product automatically
+              (granted as an entitlement — no checkout). Additive only: tier
+              downgrades never auto-revoke. Only Active products are granted.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {ALL_TIERS.map((tier) => {
+                const checked = form.includedInTiers.includes(tier);
+                return (
+                  <button
+                    key={tier}
+                    type="button"
+                    role="checkbox"
+                    aria-checked={checked}
+                    onClick={() =>
+                      set(
+                        "includedInTiers",
+                        checked
+                          ? form.includedInTiers.filter((t) => t !== tier)
+                          : [...form.includedInTiers, tier],
+                      )
+                    }
+                    className={cn(
+                      "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                      checked
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground",
+                    )}
+                  >
+                    {TIER_CAPABILITIES[tier].label}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Product owner + source */}

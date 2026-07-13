@@ -154,6 +154,26 @@ export interface SubAccountDoc {
    * founders affiliate `referrals` collection.
    */
   referredByPartnerProfileId: string | null;
+  /**
+   * Set when this workspace was created BY a partner FOR one of their own
+   * clients via /api/partner/client-workspaces (the white-label resell
+   * path). Stores the partner_profiles/{uid} doc id of the reselling
+   * partner. Null / undefined = agency-owner-created workspace.
+   *
+   * The reselling partner is also written as an active "admin" member of
+   * the workspace, so all existing membership-based rules apply unchanged —
+   * this field is for attribution, listing, and the per-tier workspace
+   * count, never for access control.
+   */
+  resellerPartnerProfileId?: string | null;
+  /**
+   * White-label brand name a reselling partner puts on this workspace.
+   * When set, the dashboard sidebar shows this name (instead of the agency
+   * name) to everyone working inside the workspace — the partner's clients
+   * see the partner's brand, not UGotLeads / the agency. Null = default
+   * agency branding.
+   */
+  whiteLabelBrandName?: string | null;
 }
 
 export type AiProviderMode = "hosted" | "byok";

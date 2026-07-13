@@ -23,6 +23,7 @@ import { subscribeToAttributedPurchases } from "@/lib/firestore/marketplace-purc
 import type { Certification } from "@/types/partner";
 import type { PartnerReferral } from "@/types/credits";
 import type { MarketplacePurchase } from "@/types/marketplace";
+import { ClientWorkspacesSection } from "@/components/marketplace/client-workspaces-section";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -409,6 +410,9 @@ export default function PartnerProfilePage() {
               </p>
             )}
           </section>
+
+          {/* ---- Client workspaces (white-label resell) ---- */}
+          <ClientWorkspacesSection />
 
           {/* ---- Completed tracks ---- */}
           <section className="rounded-xl border bg-card p-5">
