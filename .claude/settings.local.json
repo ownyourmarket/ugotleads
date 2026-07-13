@@ -12,7 +12,9 @@
       "Bash(echo \"EXIT:$?\")",
       "Bash(git --version)",
       "Bash(stripe --version)",
-      "Bash(npx skills:*)"
+      "Bash(npx skills:*)",
+      "Bash(git commit -m ' *)",
+      "Bash(git add *)"
     ]
   }
 }
