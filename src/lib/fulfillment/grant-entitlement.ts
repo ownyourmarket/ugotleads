@@ -101,6 +101,11 @@ export interface GrantEntitlementInput {
   accessModel: AccessModel;
   /** Stripe session id that triggered the grant. */
   grantingSessionId: string | null;
+  /**
+   * How the entitlement was granted. Defaults to "marketplace_purchase"
+   * (the original webhook path). Tier auto-bundling passes "tier_bundle".
+   */
+  source?: "marketplace_purchase" | "tier_bundle";
 }
 
 export type GrantEntitlementResult =
@@ -156,7 +161,7 @@ export async function grantProductEntitlement(
       productFamily: input.productFamily ?? null,
       accessModel: input.accessModel,
       status: "active",
-      source: "marketplace_purchase",
+      source: input.source ?? "marketplace_purchase",
       grantingSessionId: input.grantingSessionId ?? null,
       grantedAt: FieldValue.serverTimestamp(),
       revokedAt: null,

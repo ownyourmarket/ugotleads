@@ -38,6 +38,7 @@ import { signOutUser } from "@/lib/firebase/auth";
 import { useDueTodayCount } from "@/hooks/use-due-today";
 import { useAuth } from "@/hooks/use-auth";
 import { useAgency } from "@/hooks/use-agency";
+import { useSubAccountBrand } from "@/hooks/use-sub-account-brand";
 import { Button } from "@/components/ui/button";
 import { LogoMark } from "@/components/brand/logo-mark";
 import { cn } from "@/lib/utils";
@@ -116,6 +117,9 @@ function SidebarContent() {
   const { agencyRole, memberships, loading } = useAuth();
   const agency = useAgency();
   const activeSubId = activeSubAccountFromPath(pathname);
+  // White-label: inside a reseller-branded workspace, the partner's brand
+  // name replaces the agency name + logo so their clients see their brand.
+  const whiteLabelBrand = useSubAccountBrand(activeSubId);
   const subRoot = activeSubId ? `/sa/${activeSubId}` : null;
 
   // When no sub-account is active (agency-level pages), fall back to the
@@ -138,19 +142,27 @@ function SidebarContent() {
     <div className="flex h-full flex-col">
       <div className="flex h-16 items-center border-b px-6">
         <Link href="/" className="flex items-center gap-2 text-xl font-bold">
-          {agency.logoUrl ? (
-            // Custom agency logo. Constrained to 24px tall, auto width;
-            // the agency hosts the asset so we render whatever they paste.
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={agency.logoUrl}
-              alt={agency.name}
-              className="h-6 w-auto max-w-[120px] object-contain"
-            />
+          {whiteLabelBrand ? (
+            // Reseller-branded workspace: show the partner's brand name only
+            // (no agency logo/mark) so their clients see their brand.
+            <span className="truncate">{whiteLabelBrand}</span>
           ) : (
-            <LogoMark size={20} idSuffix="-sidebar" />
+            <>
+              {agency.logoUrl ? (
+                // Custom agency logo. Constrained to 24px tall, auto width;
+                // the agency hosts the asset so we render whatever they paste.
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={agency.logoUrl}
+                  alt={agency.name}
+                  className="h-6 w-auto max-w-[120px] object-contain"
+                />
+              ) : (
+                <LogoMark size={20} idSuffix="-sidebar" />
+              )}
+              <span className="truncate">{agency.name}</span>
+            </>
           )}
-          <span className="truncate">{agency.name}</span>
         </Link>
       </div>
 

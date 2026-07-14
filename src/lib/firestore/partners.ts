@@ -119,7 +119,7 @@ export async function updatePartnerProfile(
     PartnerProfile,
     | "status" | "tier" | "accessModel" | "territory" | "city" | "state"
     | "phone" | "displayName" | "subAccountId" | "activeTrackId"
-    | "completedTrackIds" | "referralCode"
+    | "completedTrackIds" | "referralCode" | "maxClientWorkspacesOverride"
     | "stripeSubscriptionId" | "approvedByUid" | "approvedAt" | "internalNotes"
   >>,
 ): Promise<void> {

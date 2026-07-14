@@ -11,6 +11,14 @@ export type AccessModel = "credit" | "subscription" | "byok";
 export type ProductStatus = "draft" | "active" | "archived";
 
 /**
+ * Partner tier a product can be bundled into.
+ * Mirrors PartnerTier from partner.ts — duplicated here because partner.ts
+ * already imports AccessModel from this file (a direct import would be
+ * circular). Keep the two unions in sync.
+ */
+export type BundleTier = "community" | "operator" | "certified" | "elite";
+
+/**
  * The product family a product belongs to.
  * Encodes which brand/entity offers the product and what category it falls under.
  *
@@ -68,6 +76,14 @@ export interface Product {
   setupFeeCents: number;
   /** Visible in the partner marketplace when true. */
   isPublic: boolean;
+  /**
+   * Tier auto-bundling: partner tiers whose members receive this product
+   * automatically (a product_entitlements grant with source "tier_bundle")
+   * when they are set to — or created at — one of these tiers.
+   * Null / empty / undefined (pre-existing docs) = not bundled into any tier.
+   * Only status "active" products are granted; drafts are skipped.
+   */
+  includedInTiers?: BundleTier[] | null;
   /**
    * Controls what a partner must complete before they can sell / earn from
    * this product. Undefined on pre-existing docs is treated as
@@ -199,8 +215,13 @@ export interface ProductEntitlement {
   /** Denormalized from the product at grant time. */
   accessModel: AccessModel;
   status: EntitlementStatus;
-  /** How this entitlement was granted. Extensible for future sources. */
-  source: "marketplace_purchase";
+  /**
+   * How this entitlement was granted.
+   * - "marketplace_purchase" — checkout.session.completed webhook
+   * - "tier_bundle" — auto-granted because the customer's partner tier
+   *   includes this product (Product.includedInTiers)
+   */
+  source: "marketplace_purchase" | "tier_bundle";
   /** Stripe checkout session id that granted this entitlement. Null if granted another way. */
   grantingSessionId: string | null;
   grantedAt: Timestamp | FieldValue | null;

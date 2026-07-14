@@ -61,6 +61,13 @@ export interface PartnerProfile {
    * this field — treat as "not yet assigned".
    */
   referralCode: string | null;
+  /**
+   * Per-partner override of the tier's default client-workspace allowance
+   * (see src/lib/tiers/capabilities.ts). Null / undefined = use the tier
+   * default. Set by the agency owner to grant extra (or fewer) workspaces
+   * without changing the partner's tier.
+   */
+  maxClientWorkspacesOverride?: number | null;
   lifetimeCommissionCents: number;
   pendingCommissionCents: number;
   approvedByUid: string | null;

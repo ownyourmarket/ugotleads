@@ -36,6 +36,7 @@ import type { PartnerReferral } from "@/types/credits";
 import type { CommissionEvent } from "@/types/credits";
 import type { MarketplacePurchase } from "@/types/marketplace";
 import type { ProductEligibility, Product } from "@/types/products";
+import { TIER_CAPABILITIES } from "@/lib/tiers/capabilities";
 import { cn } from "@/lib/utils";
 
 // ---------------------------------------------------------------------------
@@ -161,6 +162,11 @@ function PartnerDetailPanel({
   const [codeInput, setCodeInput] = useState(partner.referralCode ?? "");
   const [editingNotes, setEditingNotes] = useState(false);
   const [notesInput, setNotesInput] = useState(partner.internalNotes ?? "");
+  const [workspaceOverrideInput, setWorkspaceOverrideInput] = useState(
+    partner.maxClientWorkspacesOverride != null
+      ? String(partner.maxClientWorkspacesOverride)
+      : "",
+  );
   const [saving, setSaving] = useState(false);
 
   function showToast(msg: string) {
@@ -188,12 +194,29 @@ function PartnerDetailPanel({
   }
 
   // ---- Tier change ----
+  // Goes through the server route (not a client Firestore write) so the
+  // tier-bundle auto-grant — a server-only product_entitlements write —
+  // always runs with the tier change.
   async function handleTierChange(tier: PartnerTier) {
     if (tier === partner.tier) return;
     setSaving(true);
     try {
-      await updatePartnerProfile(partner.id, { tier });
-      showToast(`Tier set to ${TIER_LABELS[tier]}.`);
+      const res = await fetch(`/api/agency/partners/${partner.id}/tier`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        showToast(data.error ?? "Tier change failed.");
+        return;
+      }
+      const grantedCount = data.bundle?.granted?.length ?? 0;
+      showToast(
+        grantedCount > 0
+          ? `Tier set to ${TIER_LABELS[tier]} — ${grantedCount} bundled product${grantedCount === 1 ? "" : "s"} granted.`
+          : `Tier set to ${TIER_LABELS[tier]}.`,
+      );
     } finally {
       setSaving(false);
     }
@@ -232,6 +255,29 @@ function PartnerDetailPanel({
     await updatePartnerProfile(partner.id, { referralCode: newCode });
     setCodeInput(newCode);
     showToast(`Code regenerated: ${newCode}`);
+  }
+
+  // ---- Client-workspace allowance override ----
+  async function handleSaveWorkspaceOverride() {
+    const trimmed = workspaceOverrideInput.trim();
+    const parsed = trimmed === "" ? null : Math.floor(Number(trimmed));
+    if (parsed !== null && (!Number.isFinite(parsed) || parsed < 0)) {
+      showToast("Enter a whole number ≥ 0, or leave blank for the tier default.");
+      return;
+    }
+    setSaving(true);
+    try {
+      await updatePartnerProfile(partner.id, {
+        maxClientWorkspacesOverride: parsed,
+      });
+      showToast(
+        parsed === null
+          ? "Workspace allowance reset to tier default."
+          : `Workspace allowance set to ${parsed}.`,
+      );
+    } finally {
+      setSaving(false);
+    }
   }
 
   // ---- Internal notes ----
@@ -424,6 +470,41 @@ function PartnerDetailPanel({
                     ))}
                   </select>
                   <ChevronDown className="pointer-events-none absolute right-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                </div>
+                <p className="mt-2 text-[11px] text-muted-foreground">
+                  Changing the tier auto-grants every product bundled into it
+                  (Product Manager → &quot;Included in partner tiers&quot;).
+                  Downgrades never auto-revoke.
+                </p>
+
+                {/* Client-workspace allowance */}
+                <div className="mt-4 border-t pt-3">
+                  <label className="mb-1 block text-[11px] font-medium uppercase tracking-wider text-muted-foreground">
+                    Client workspaces
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min={0}
+                      value={workspaceOverrideInput}
+                      onChange={(e) => setWorkspaceOverrideInput(e.target.value)}
+                      placeholder={`Tier default: ${TIER_CAPABILITIES[partner.tier].maxClientWorkspaces}`}
+                      className="w-full rounded-lg border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+                    />
+                    <button
+                      type="button"
+                      disabled={saving}
+                      onClick={handleSaveWorkspaceOverride}
+                      className="flex-shrink-0 rounded-lg border px-3 py-2 text-xs font-medium text-muted-foreground hover:bg-muted disabled:opacity-60"
+                    >
+                      Save
+                    </button>
+                  </div>
+                  <p className="mt-1 text-[11px] text-muted-foreground">
+                    How many white-label workspaces this partner can create for
+                    their own clients. Blank = use the tier default (
+                    {TIER_CAPABILITIES[partner.tier].maxClientWorkspaces}).
+                  </p>
                 </div>
               </section>
 
@@ -899,6 +980,16 @@ function CreatePartnerModal({ agencyId, createdByUid, onClose }: CreatePartnerMo
         approvedAt: null,
         internalNotes: null,
       });
+
+      // Apply the tier's product bundle for the new partner. Best-effort —
+      // the profile exists either way, and the owner can re-run the grant by
+      // re-selecting the tier in the detail panel.
+      void fetch(`/api/agency/partners/${trimUid}/tier`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tier, applyBundleOnly: true }),
+      }).catch(() => {});
+
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Create failed.");
