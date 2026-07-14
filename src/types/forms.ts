@@ -170,6 +170,58 @@ export function contactFormFields(): FormField[] {
   ];
 }
 
+/**
+ * Fields for the funnel lead-capture preset (used by the one-click funnel
+ * route). Low-friction by design: name + email required, phone optional,
+ * no company and no message — funnel visitors bounce on long forms.
+ */
+export function funnelFormFields(): FormField[] {
+  return [
+    {
+      id: "name",
+      type: "text",
+      label: "Full name",
+      placeholder: "Jane Doe",
+      required: true,
+      options: [],
+      mapsTo: "name",
+    },
+    {
+      id: "email",
+      type: "email",
+      label: "Email",
+      placeholder: "jane@example.com",
+      required: true,
+      options: [],
+      mapsTo: "email",
+    },
+    {
+      id: "phone",
+      type: "phone",
+      label: "Phone",
+      placeholder: "+1 555 000 0000",
+      required: false,
+      options: [],
+      mapsTo: "phone",
+    },
+  ];
+}
+
+/**
+ * Settings for the funnel preset: leads land at the top of the pipeline
+ * with a deal attached (a funnel lead is revenue-intent by definition) and
+ * are tagged "funnel" so reports can split funnel traffic from plain forms.
+ */
+export function funnelFormSettings(): FormSettings {
+  return {
+    ...defaultFormSettings(),
+    autoTags: ["form", "funnel"],
+    createDeal: true,
+    dealTitleTemplate: "Funnel lead — {name}",
+    thankYouMessage: "Thanks — you're in! Watch your inbox for next steps.",
+  };
+}
+
 export function contactFormSettings(): FormSettings {
   return {
     ...defaultFormSettings(),
