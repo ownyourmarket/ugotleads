@@ -33,6 +33,7 @@ import {
   DollarSign,
   TrendingUp,
   Sparkles,
+  CandlestickChart,
 } from "lucide-react";
 import { signOutUser } from "@/lib/firebase/auth";
 import { useDueTodayCount } from "@/hooks/use-due-today";
@@ -77,6 +78,7 @@ const SUB_ACCOUNT_NAV: NavItem[] = [
   { href: "/website", label: "Website", icon: Globe, enabled: true },
   { href: "/automations", label: "Automations", icon: Zap, enabled: true },
   { href: "/ai-agents", label: "AI Agents", icon: Bot, enabled: true },
+  { href: "/trading", label: "Trading OS", icon: CandlestickChart, enabled: true },
   { href: "/promptexpert", label: "PromptExpert", icon: Sparkles, enabled: true },
   { href: "/approvals", label: "Approvals", icon: ClipboardCheck, enabled: true },
   { href: "/social", label: "Social", icon: Share2, enabled: true },

@@ -60,6 +60,8 @@ const PUBLIC_PATHS = [
 const PUBLIC_PATH_PATTERNS: RegExp[] = [
   // gitpage build poll: /api/sub-accounts/{id}/website/poll
   /^\/api\/sub-accounts\/[^/]+\/website\/poll$/,
+  // Trading OS run poll: /api/sub-accounts/{id}/trading/poll
+  /^\/api\/sub-accounts\/[^/]+\/trading\/poll$/,
 ];
 
 function isPublicPath(pathname: string): boolean {

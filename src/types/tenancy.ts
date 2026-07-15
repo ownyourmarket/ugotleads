@@ -73,6 +73,15 @@ export interface SubAccountDoc {
    */
   outboundVoiceEnabledByAgency?: boolean;
   /**
+   * Agency-level gate for LIVE (real-money) self-directed brokerage
+   * connections in the Trading OS module. Defaults to `false`/undefined
+   * (explicit allowlist). Read `=== true`. Paper connections never require
+   * this; only flipping a broker connection to `mode: "live"` does. The
+   * platform still never places discretionary trades — this only lets a
+   * user link their OWN live brokerage account once they're comfortable.
+   */
+  liveTradingEnabledByAgency?: boolean;
+  /**
    * Generic booking-page URL surfaced via the {{bookingLink}} merge tag in
    * email + SMS templates. Calendly is the canonical case but any URL works
    * (Cal.com, TidyCal, SavvyCal, Stripe Payment Link, etc.). Null when the
