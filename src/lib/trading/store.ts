@@ -10,6 +10,9 @@ import {
   type TradingRunStatus,
   type TradingRunType,
   type TradingRiskLevel,
+  type BrokerConnection,
+  type BrokerProvider,
+  type BrokerConnectionMode,
 } from "@/types/trading";
 
 /**
@@ -150,4 +153,79 @@ export async function settleTradingRun(
     resultSummaryMd: fields.resultSummaryMd ?? null,
     error: fields.error ?? null,
   });
+}
+
+// ============================================================
+// Broker connections (non-secret metadata only — creds live on the service)
+// ============================================================
+
+function brokersCollection(subAccountId: string): string {
+  return `subAccounts/${subAccountId}/brokerConnections`;
+}
+
+export async function listBrokerConnections(
+  subAccountId: string,
+): Promise<BrokerConnection[]> {
+  const snap = await getAdminDb()
+    .collection(brokersCollection(subAccountId))
+    .get();
+  return snap.docs.map(
+    (d) => ({ id: d.id, ...d.data() }) as BrokerConnection,
+  );
+}
+
+export interface CreateBrokerInput {
+  agencyId: string;
+  subAccountId: string;
+  createdByUid: string;
+  provider: BrokerProvider;
+  mode: BrokerConnectionMode;
+}
+
+/** Creates the connection row (pre-connect) and returns its id. */
+export async function createBrokerConnection(
+  input: CreateBrokerInput,
+): Promise<string> {
+  const ref = getAdminDb()
+    .collection(brokersCollection(input.subAccountId))
+    .doc();
+  const doc: Omit<BrokerConnection, "id"> = {
+    agencyId: input.agencyId,
+    subAccountId: input.subAccountId,
+    createdByUid: input.createdByUid,
+    provider: input.provider,
+    mode: input.mode,
+    accountLabel: null,
+    connected: false,
+    createdAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+  await ref.set(doc);
+  return ref.id;
+}
+
+export async function markBrokerConnected(
+  subAccountId: string,
+  brokerId: string,
+  accountLabel: string | null,
+): Promise<void> {
+  await getAdminDb()
+    .doc(`${brokersCollection(subAccountId)}/${brokerId}`)
+    .set(
+      {
+        connected: true,
+        accountLabel,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+}
+
+export async function deleteBrokerConnection(
+  subAccountId: string,
+  brokerId: string,
+): Promise<void> {
+  await getAdminDb()
+    .doc(`${brokersCollection(subAccountId)}/${brokerId}`)
+    .delete();
 }

@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { formatRelativeTime, toDate } from "@/lib/format";
 import { TradingDisclaimer } from "@/components/trading/trading-disclaimer";
+import { BrokerSection } from "@/components/trading/broker-section";
 import type {
   TradingProfile,
   TradingRun,
@@ -130,6 +131,7 @@ export default function TradingOverviewPage() {
             profile={profile}
             isAdmin={isAdmin}
           />
+          <BrokerSection subAccountId={subAccountId} />
           <RunList runs={runs} saPath={saPath} />
         </>
       )}

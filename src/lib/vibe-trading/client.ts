@@ -190,6 +190,91 @@ export async function pollRun(jobId: string): Promise<PollRunResult> {
   };
 }
 
+// ============================================================
+// Broker connections (self-directed)
+// ============================================================
+
+/**
+ * COMPLIANCE + SECURITY: the broker API credentials are a secret. uGotLeads
+ * NEVER stores them in Firestore. We forward them once to the Vibe service,
+ * which holds them in its own vault keyed by connectionId, and we persist
+ * only non-secret status metadata. The platform never places discretionary
+ * trades — a live connection just links the user's OWN account so they can
+ * self-direct; paper connections drive the paper-trading sandbox.
+ */
+export interface RegisterBrokerInput {
+  subAccountId: string;
+  connectionId: string;
+  provider: "alpaca";
+  mode: "paper" | "live";
+  /** Alpaca key id (not secret alone, but treated as one). */
+  apiKeyId: string;
+  /** Alpaca secret key — forwarded, never persisted by us. */
+  apiSecret: string;
+}
+
+export interface RegisterBrokerResult {
+  /** Display-only label the service derived (e.g. masked account number). */
+  accountLabel: string | null;
+}
+
+export async function registerBrokerConnection(
+  input: RegisterBrokerInput,
+): Promise<RegisterBrokerResult> {
+  const { baseUrl, apiKey } = requireConfig();
+
+  const res = await fetch(`${baseUrl}/v1/brokers`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      subAccountId: input.subAccountId,
+      connectionId: input.connectionId,
+      provider: input.provider,
+      mode: input.mode,
+      apiKeyId: input.apiKeyId,
+      apiSecret: input.apiSecret,
+    }),
+    signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+  });
+
+  const body = await safeJson(res);
+  if (!res.ok) {
+    throw new VibeTradingError(
+      `Broker connect failed (${res.status}): ${extractError(body)}`,
+      res.status,
+    );
+  }
+  return {
+    accountLabel:
+      typeof body.accountLabel === "string" ? body.accountLabel : null,
+  };
+}
+
+export async function revokeBrokerConnection(
+  connectionId: string,
+): Promise<void> {
+  const { baseUrl, apiKey } = requireConfig();
+  const res = await fetch(
+    `${baseUrl}/v1/brokers/${encodeURIComponent(connectionId)}`,
+    {
+      method: "DELETE",
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+    },
+  );
+  // 404 = already gone on the service side; treat as success (idempotent).
+  if (!res.ok && res.status !== 404) {
+    const body = await safeJson(res);
+    throw new VibeTradingError(
+      `Broker revoke failed (${res.status}): ${extractError(body)}`,
+      res.status,
+    );
+  }
+}
+
 async function safeJson(res: Response): Promise<Record<string, unknown>> {
   try {
     return (await res.json()) as Record<string, unknown>;
