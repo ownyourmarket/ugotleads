@@ -167,6 +167,43 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Trading OS — shared risk profile + per-run results + broker links.
+      // Profile at tradingAgent/profile; each research/backtest job at
+      // tradingRuns/{runId}; self-directed broker links at
+      // brokerConnections/{brokerId}. Sub-account members can READ so the
+      // workspace hydrates + streams live via onSnapshot. ALL writes go
+      // through /api/sub-accounts/[id]/trading/* (Admin SDK) so the server
+      // validates the risk profile, enforces mode != "live" in Phase A,
+      // gates on the disclaimer, and stamps tenancy before persisting.
+      match /tradingAgent/{docId} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+      }
+      match /tradingRuns/{runId} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+        match /artifacts/{artifactId} {
+          allow read: if canAccessSub(
+            subAccountId,
+            get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+          );
+          allow write: if false;
+        }
+      }
+      match /brokerConnections/{brokerId} {
+        allow read: if canAccessSub(
+          subAccountId,
+          get(/databases/$(database)/documents/subAccounts/$(subAccountId)).data.agencyId
+        );
+        allow write: if false;
+      }
+
       // AI Social Content Generator batches. Written server-side only
       // (the generate + step routes use the Admin SDK). Sub-account
       // members can READ so the UI can subscribe via onSnapshot and

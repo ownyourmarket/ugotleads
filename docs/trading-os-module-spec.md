@@ -1,14 +1,33 @@
 # Trading OS Module — Build Plan / Module Spec
 
-**Status:** Draft for review — no code written yet.
+**Status:** Phase A scaffolded in this branch — pending the Vibe service + review.
 **Owner:** Star Riley / MyUSA
 **Prepared by:** Code Engineer + Founder-Operator Advisor + Compliance Reviewer (SOUL agents)
 **Repo:** `ownyourmarket/ugotleads`
 **Branch:** `claude/vibe-trading-hedge-fund-tgjhiy`
 
-> This is a plan document, not an implementation. It exists so Star can review the
-> shape, scope, and — most importantly — the **regulatory line** before we commit
-> a single line of code. Nothing here ships until it's approved.
+> The spec below is the design. Phase A (the uGotLeads-side integration) is now
+> **built on this branch** — types, service client, Firestore model + rules, API
+> routes, and the `/sa/[id]/trading` UI. It stays inert until the external Vibe
+> service is stood up and its env vars are set (disables cleanly, 503 + friendly
+> message when unconfigured). Phase B remains lawyer-gated and unbuilt.
+
+## Decisions locked (build kickoff)
+
+1. **Host: Railway.** Chosen over Fly.io because the Vibe service is meant to be
+   one node in a broader platform of self-hosted, multi-use services (n8n +
+   agentic workflows + SaaS). Railway's project-with-many-services model, official
+   n8n template, and managed persistent Postgres/Redis make it the better substrate
+   for that than Fly's edge/ops-heavy `fly.toml` + volumes model. Fly wins on global
+   low-latency edge — not what this workload needs.
+2. **Broker scope: paper now, self-directed live later.** Phase A ships
+   `research_only` + `paper` modes. The data model already carries a
+   `brokerConnections` concept and a `live` mode so users can later **connect and
+   log into their OWN brokerage account** (Alpaca first) and place trades
+   **themselves**. That self-directed path stays software-side — the user pulls the
+   trigger, the agent never does — which is distinct from us trading for them
+   (that's Phase B). `live` is gated behind an agency flag +
+   an explicit per-user broker connection and is not selectable from the Phase A UI.
 
 ---
 
@@ -356,14 +375,15 @@ any return/income numbers to the pricing without the earnings disclaimer.
 
 ---
 
-## 11. Open decisions for Star
+## 11. Decisions — status
 
-1. **Vibe hosting** — Fly.io vs Railway vs a dedicated box? (affects the infra step)
-2. **Broker connections in Phase A** — read-only history import only, or also
-   paper-trading? (both stay inside Lane A; live is Phase B)
-3. **Pricing** — module add-on vs new tier?
-4. **Phase B intent** — do we want me to draft the *lawyer brief* (requirements
-   doc) now, in parallel, so counsel can start? (No code — just the brief.)
+1. **Vibe hosting** — ✅ **Railway** (see "Decisions locked" up top).
+2. **Broker connections** — ✅ **paper now + self-directed live later** (see above).
+3. **Pricing** — ⏳ still open. Recommend a module add-on or a new "Trading/Wealth OS"
+   tier above Territory Partner ($497/mo). No return/income numbers without the
+   earnings disclaimer.
+4. **Phase B lawyer brief** — ⏳ open. Say the word and I'll draft the requirements
+   doc to hand securities counsel (no code).
 
 ---
 
