@@ -12,16 +12,18 @@
 #   bash update-from-vendor.sh                  # refresh vendor + report
 #   bash update-from-vendor.sh <upstream-url>   # first run: adds remote
 #
-# Recommended upstream URL: your fork (syncable + cloud-accessible)
-#   https://github.com/ownyourmarket/leadstack-agency.git
-# or the source repo directly (requires local gh auth):
-#   https://github.com/Claude-Code-Pro-Camp/leadstack-agency.git
+# Upstream is the private mirror https://github.com/ownyourmarket/leadstack-agency
+# (forking is disabled on the source repo). When run on a machine with
+# gh auth to the source repo, this script first refreshes the mirror
+# from the true vendor source; in cloud sessions that step is skipped
+# and the mirror is used as-is.
 #
-# Config (override via env): UPSTREAM_BRANCH=main
+# Config (override via env): UPSTREAM_BRANCH=main  SOURCE_URL=<vendor source>
 # ============================================================
 
 set -e
 
+SOURCE_URL="${SOURCE_URL:-https://github.com/Claude-Code-Pro-Camp/leadstack-agency.git}"
 UPSTREAM_BRANCH="${UPSTREAM_BRANCH:-main}"
 
 GREEN='\033[0;32m'; YELLOW='\033[1;33m'; RED='\033[0;31m'; NC='\033[0m'
@@ -38,7 +40,19 @@ if ! git remote get-url upstream > /dev/null 2>&1; then
   log "Added upstream remote: $1"
 fi
 
-# ── 2. Fetch upstream → update vendor branch (clean mirror) ─
+# ── 2. Refresh mirror from the true vendor source (best effort) ─
+# Needs gh/git auth to the source repo — succeeds locally, skipped in cloud.
+if git fetch "$SOURCE_URL" "$UPSTREAM_BRANCH" 2>/dev/null; then
+  if git push upstream "FETCH_HEAD:refs/heads/$UPSTREAM_BRANCH" 2>/dev/null; then
+    log "Mirror refreshed from vendor source"
+  else
+    warn "Fetched vendor source but could not push to mirror — push manually"
+  fi
+else
+  warn "Vendor source unreachable from here — using mirror as-is"
+fi
+
+# ── 3. Fetch upstream → update vendor branch (clean mirror) ─
 git fetch upstream "$UPSTREAM_BRANCH"
 log "Fetched upstream/$UPSTREAM_BRANCH"
 
@@ -54,7 +68,7 @@ log "vendor branch updated to upstream/$UPSTREAM_BRANCH ($(git rev-parse --short
 git push origin vendor 2>/dev/null && log "vendor pushed to origin" || \
   warn "Could not push vendor to origin — push it manually when convenient"
 
-# ── 3. Report what changed upstream (NO auto-merge) ─────────
+# ── 4. Report what changed upstream (NO auto-merge) ─────────
 echo ""
 echo "Upstream delta vs main (top-level dirs):"
 git diff --stat main vendor -- ':!pnpm-lock.yaml' | tail -1
