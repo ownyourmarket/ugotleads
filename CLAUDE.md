@@ -955,6 +955,30 @@ Next hardening surface (when scheduled): per-assistant secrets + HMAC body signa
 
 ---
 
+## Vendor Update Workflow (upstream: Claude-Code-Pro-Camp/leadstack-agency)
+
+This repo began as a **squashed snapshot** of upstream `leadstack-agency`
+(root commit `cca8961`, 2026-05-24) — the histories are unrelated and this
+deployment has diverged by hundreds of files. Vendor updates are therefore
+**selectively ported, never blind-merged**.
+
+**Rules:**
+1. `upstream` remote points at the vendor repo; `vendor` branch is a clean
+   mirror of it — **never commit customizations to `vendor`**
+2. Refresh the mirror and get an upstream-delta report with
+   `bash update-from-vendor.sh` (first run takes the upstream URL as arg)
+3. Port a wanted upstream feature onto a branch off `main` (cherry-pick or
+   re-implement), decoupling anything scoped out of this deployment — the
+   "Voice Port — Stubbed Integration Points" section above is the model
+4. Each port/customization = one `.patch` file in `patches/` plus a row in
+   the Patch Registry (`patches/README.md`) — intent, files touched, design
+   decisions. The registry row is the re-apply spec when a patch fails.
+
+**Claude prompt when a patch fails:** "Reapply my customizations using the
+Patch Registry in patches/README.md as the spec."
+
+---
+
 ## Platform layers — do not cross
 
 - **MyUSA Founder HQ** = internal founder command center (login, dashboards,
